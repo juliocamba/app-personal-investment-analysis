@@ -1,0 +1,55 @@
+companies:
+  - ticker: AAPL
+    name: Apple Inc.
+    exchange: NASDAQ
+    country: US
+    currency: USD
+    reporting_currency: USD
+    cik: "0000320193"
+    sector: Technology
+    industry: Consumer Electronics
+    active: true
+
+  - ticker: MSFT
+    name: Microsoft Corporation
+    exchange: NASDAQ
+    country: US
+    currency: USD
+    reporting_currency: USD
+    cik: "0000789019"
+    sector: Technology
+    industry: Software
+    active: true
+
+  - ticker: GOOGL
+    name: Alphabet Inc.
+    exchange: NASDAQ
+    country: US
+    currency: USD
+    reporting_currency: USD
+    cik: "0001652044"
+    sector: Technology
+    industry: Internet Content & Information
+    active: true
+
+  - ticker: JNJ
+    name: Johnson & Johnson
+    exchange: NYSE
+    country: US
+    currency: USD
+    reporting_currency: USD
+    cik: "0000200406"
+    sector: Healthcare
+    industry: Drug Manufacturers - General
+    active: true
+
+  - ticker: KO
+    name: The Coca-Cola Company
+    exchange: NYSE
+    country: US
+    currency: USD
+    reporting_currency: USD
+    cik: "0000021344"
+    sector: Consumer Defensive
+    industry: Beverages - Non-Alcoholic
+    active: true

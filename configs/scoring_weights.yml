@@ -1,0 +1,12 @@
+rule_score_weights:
+  valuation: 0.40
+  quality: 0.25
+  balance_sheet: 0.15
+  news: 0.10
+  market_regime: 0.10
+
+qualitative_weights:
+  moat: 0.35
+  management: 0.25
+  risks: 0.25
+  governance: 0.15

@@ -1,0 +1,15 @@
+defaults:
+  explicit_forecast_years: 5
+  terminal_growth_floor: 0.01
+  terminal_growth_cap: 0.03
+  tax_rate_fallback: 0.25
+  discount_rate_fallback: 0.09
+  scenario_weights:
+    bear: 0.25
+    base: 0.50
+    bull: 0.25
+  margin_of_safety:
+    strong_buy: 0.15
+    buy: 0.10
+  revenue_growth_cap: 0.30
+  ebit_margin_cap: 0.50

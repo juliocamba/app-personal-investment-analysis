@@ -1,0 +1,20 @@
+name: Deploy Frontend
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "frontend/**"
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    # Cloudflare Pages deployment is configured separately via the Cloudflare
+    # dashboard or wrangler. This workflow is a placeholder for Phase 8.
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Frontend deploy placeholder
+        run: echo "Frontend deployment — implemented in Phase 8."

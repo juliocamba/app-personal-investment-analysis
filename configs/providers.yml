@@ -1,0 +1,59 @@
+# Provider configuration
+# Set enabled: false for providers you do not have API keys for.
+
+providers:
+  fmp:
+    name: Financial Modeling Prep
+    base_url: https://financialmodelingprep.com/stable
+    enabled: true
+    rate_limit_per_minute: 300
+    retry_attempts: 3
+    timeout_seconds: 30
+
+  finnhub:
+    name: Finnhub
+    base_url: https://finnhub.io/api/v1
+    enabled: false
+    rate_limit_per_minute: 60
+    retry_attempts: 3
+    timeout_seconds: 30
+
+  alpha_vantage:
+    name: Alpha Vantage
+    base_url: https://www.alphavantage.co/query
+    enabled: false
+    rate_limit_per_minute: 5
+    retry_attempts: 3
+    timeout_seconds: 30
+
+  twelve_data:
+    name: Twelve Data
+    base_url: https://api.twelvedata.com
+    enabled: false
+    rate_limit_per_minute: 8
+    retry_attempts: 3
+    timeout_seconds: 30
+
+  sec_edgar:
+    name: SEC EDGAR
+    base_url: https://data.sec.gov
+    enabled: true
+    rate_limit_per_minute: 10
+    retry_attempts: 3
+    timeout_seconds: 60
+
+  ecb:
+    name: European Central Bank
+    base_url: https://data-api.ecb.europa.eu/service
+    enabled: true
+    rate_limit_per_minute: 60
+    retry_attempts: 3
+    timeout_seconds: 30
+
+  gdelt:
+    name: GDELT Project
+    base_url: https://api.gdeltproject.org/api/v2
+    enabled: false
+    rate_limit_per_minute: 60
+    retry_attempts: 3
+    timeout_seconds: 30

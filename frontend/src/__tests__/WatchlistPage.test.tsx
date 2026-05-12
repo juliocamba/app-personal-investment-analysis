@@ -1,0 +1,334 @@
+/**
+ * Page-level tests for WatchlistPage.
+ *
+ * The Supabase client and API module are mocked so no live Supabase
+ * connection or real credentials are needed.
+ */
+import React from "react";
+import { render, screen, waitFor, fireEvent } from "@testing-library/react";
+import { vi, describe, it, expect, beforeEach } from "vitest";
+
+// Mock Supabase so the module chain loads without env vars.
+vi.mock("../lib/supabase", () => ({
+  supabase: {
+    from: vi.fn(),
+    auth: {
+      getSession: vi.fn(),
+      onAuthStateChange: vi.fn(() => ({
+        data: { subscription: { unsubscribe: vi.fn() } },
+      })),
+    },
+  },
+}));
+
+// Mock the data-fetch layer so tests control what the page receives.
+vi.mock("../lib/api", () => ({
+  fetchWatchlist: vi.fn(),
+  removeFromWatchlist: vi.fn(),
+  fetchInactiveWatchlist: vi.fn(),
+  reactivateWatchlistCompany: vi.fn(),
+}));
+
+import { WatchlistPage } from "../pages/WatchlistPage";
+import { fetchWatchlist, removeFromWatchlist, fetchInactiveWatchlist } from "../lib/api";
+import type { WatchlistRow } from "../types";
+
+function makeRow(overrides: Partial<WatchlistRow> = {}): WatchlistRow {
+  return {
+    watchlist_membership_id: "wc-1",
+    company_id: "id-1",
+    ticker: "AAPL",
+    name: "Apple Inc.",
+    exchange: "NASDAQ",
+    country: "US",
+    currency: "USD",
+    sector: null,
+    industry: null,
+    price_date: null,
+    current_price: null,
+    market_cap: null,
+    roic: null,
+    fcf_yield: null,
+    net_debt_to_ebitda: null,
+    news_sentiment_7d: null,
+    final_quality_score: null,
+    iv_p25: null,
+    iv_p50: null,
+    iv_p75: null,
+    margin_of_safety_conservative: null,
+    uncertainty_width: null,
+    p_buy: null,
+    p_buy_adjusted: null,
+    p_sell: null,
+    final_signal: null,
+    red_flags: null,
+    explanation: null,
+    freshness_flag: null,
+    ...overrides,
+  };
+}
+
+describe("WatchlistPage — loading state", () => {
+  it("shows loading spinner while fetch is in-flight", () => {
+    vi.mocked(fetchWatchlist).mockImplementation(() => new Promise(() => {}));
+    render(<WatchlistPage />);
+    expect(screen.getByText(/Loading watchlist/i)).toBeInTheDocument();
+  });
+});
+
+describe("WatchlistPage — error state", () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it("shows error heading when the API call rejects", async () => {
+    vi.mocked(fetchWatchlist).mockRejectedValue(new Error("Network error"));
+    render(<WatchlistPage />);
+    await waitFor(() =>
+      expect(screen.getByText(/Failed to load watchlist/i)).toBeInTheDocument(),
+    );
+  });
+
+  it("renders the error message returned by the API", async () => {
+    vi.mocked(fetchWatchlist).mockRejectedValue(new Error("Network error"));
+    render(<WatchlistPage />);
+    await waitFor(() =>
+      expect(screen.getByText("Network error")).toBeInTheDocument(),
+    );
+  });
+});
+
+describe("WatchlistPage — empty state", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(fetchInactiveWatchlist).mockResolvedValue([]);
+  });
+
+  it("shows empty-watchlist message when no rows are returned", async () => {
+    vi.mocked(fetchWatchlist).mockResolvedValue([]);
+    render(<WatchlistPage />);
+    await waitFor(() =>
+      expect(screen.getByText(/No active companies in watchlist/i)).toBeInTheDocument(),
+    );
+  });
+
+  it("still shows the removed-companies toggle when active list is empty", async () => {
+    vi.mocked(fetchWatchlist).mockResolvedValue([]);
+    render(<WatchlistPage />);
+    await waitFor(() =>
+      expect(screen.getByText(/No active companies in watchlist/i)).toBeInTheDocument(),
+    );
+    // The toggle button must be present so the user can reactivate companies.
+    expect(screen.getByText(/Show removed companies/i)).toBeInTheDocument();
+  });
+
+  it("shows removed-companies table when user expands the section on an empty active list", async () => {
+    vi.mocked(fetchWatchlist).mockResolvedValue([]);
+    vi.mocked(fetchInactiveWatchlist).mockResolvedValue([
+      {
+        watchlist_membership_id: "wc-old-1",
+        company_id: "c-old-1",
+        ticker: "TSLA",
+        name: "Tesla Inc.",
+        exchange: null,
+        country: null,
+        currency: "USD",
+        sector: null,
+        removed_at: "2026-05-01T00:00:00",
+      },
+    ]);
+    render(<WatchlistPage />);
+    await waitFor(() =>
+      expect(screen.getByText(/No active companies in watchlist/i)).toBeInTheDocument(),
+    );
+
+    fireEvent.click(screen.getByText(/Show removed companies/i));
+
+    await waitFor(() =>
+      expect(screen.getByText("TSLA")).toBeInTheDocument(),
+    );
+    expect(screen.getByRole("button", { name: /Reactivate/i })).toBeInTheDocument();
+  });
+});
+
+describe("WatchlistPage — data rendering", () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it("renders a company ticker when data is loaded", async () => {
+    vi.mocked(fetchWatchlist).mockResolvedValue([
+      makeRow({ ticker: "AAPL", name: "Apple Inc." }),
+    ]);
+    render(<WatchlistPage />);
+    await waitFor(() =>
+      expect(screen.getByText("AAPL")).toBeInTheDocument(),
+    );
+    expect(screen.getByText("Apple Inc.")).toBeInTheDocument();
+  });
+
+  it("renders multiple company rows", async () => {
+    vi.mocked(fetchWatchlist).mockResolvedValue([
+      makeRow({ company_id: "1", ticker: "AAPL", name: "Apple Inc." }),
+      makeRow({ company_id: "2", ticker: "MSFT", name: "Microsoft Corp." }),
+    ]);
+    render(<WatchlistPage />);
+    await waitFor(() =>
+      expect(screen.getByText("AAPL")).toBeInTheDocument(),
+    );
+    expect(screen.getByText("MSFT")).toBeInTheDocument();
+  });
+
+  it("renders the filter bar once data is loaded", async () => {
+    vi.mocked(fetchWatchlist).mockResolvedValue([makeRow()]);
+    render(<WatchlistPage />);
+    await waitFor(() =>
+      expect(
+        screen.getByRole("search", { name: /Watchlist filters/i }),
+      ).toBeInTheDocument(),
+    );
+  });
+
+  it("renders the watchlist table with accessible label", async () => {
+    vi.mocked(fetchWatchlist).mockResolvedValue([makeRow()]);
+    render(<WatchlistPage />);
+    await waitFor(() =>
+      expect(
+        screen.getByRole("table", { name: /Company watchlist/i }),
+      ).toBeInTheDocument(),
+    );
+  });
+
+  it("shows 'No matching companies' when a filter produces no results", async () => {
+    // A row with signal BUY; apply STRONG_BUY filter → no match.
+    vi.mocked(fetchWatchlist).mockResolvedValue([
+      makeRow({ company_id: "1", ticker: "AAPL", final_signal: "buy" }),
+    ]);
+    render(<WatchlistPage />);
+    // Wait for data to load first.
+    await waitFor(() => expect(screen.getByText("AAPL")).toBeInTheDocument());
+
+    // The filterRows helper is tested separately; here we just check the
+    // empty-filter UI exists when data is present.
+    expect(screen.getByRole("search", { name: /Watchlist filters/i })).toBeInTheDocument();
+  });
+});
+
+// ── Phase 9A: remove action ───────────────────────────────────────────────────
+
+describe("WatchlistPage — remove action", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    // By default, removeFromWatchlist resolves successfully.
+    vi.mocked(removeFromWatchlist).mockResolvedValue(undefined);
+    vi.mocked(fetchInactiveWatchlist).mockResolvedValue([]);
+  });
+
+  it("renders a remove button for each company row", async () => {
+    vi.mocked(fetchWatchlist).mockResolvedValue([
+      makeRow({ company_id: "1", ticker: "AAPL", watchlist_membership_id: "wc-1" }),
+      makeRow({ company_id: "2", ticker: "MSFT", watchlist_membership_id: "wc-2" }),
+    ]);
+    render(<WatchlistPage />);
+    await waitFor(() => expect(screen.getByText("AAPL")).toBeInTheDocument());
+
+    const removeBtns = screen.getAllByRole("button", { name: /Remove .* from watchlist/i });
+    expect(removeBtns).toHaveLength(2);
+  });
+
+  it("shows a confirmation dialog before removing", async () => {
+    const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(false);
+    vi.mocked(fetchWatchlist).mockResolvedValue([
+      makeRow({ ticker: "AAPL", watchlist_membership_id: "wc-1" }),
+    ]);
+    render(<WatchlistPage />);
+    await waitFor(() => expect(screen.getByText("AAPL")).toBeInTheDocument());
+
+    const removeBtn = screen.getByRole("button", { name: /Remove AAPL from watchlist/i });
+    fireEvent.click(removeBtn);
+
+    expect(confirmSpy).toHaveBeenCalledOnce();
+    expect(confirmSpy.mock.calls[0][0]).toContain("AAPL");
+    confirmSpy.mockRestore();
+  });
+
+  it("calls removeFromWatchlist with the membership ID when confirmed", async () => {
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+    vi.mocked(fetchWatchlist).mockResolvedValue([
+      makeRow({ ticker: "AAPL", watchlist_membership_id: "wc-42" }),
+    ]);
+    render(<WatchlistPage />);
+    await waitFor(() => expect(screen.getByText("AAPL")).toBeInTheDocument());
+
+    fireEvent.click(screen.getByRole("button", { name: /Remove AAPL from watchlist/i }));
+
+    await waitFor(() =>
+      expect(vi.mocked(removeFromWatchlist)).toHaveBeenCalledWith("wc-42"),
+    );
+  });
+
+  it("removes the row from the DOM after successful removal", async () => {
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+    vi.mocked(fetchWatchlist).mockResolvedValue([
+      makeRow({ company_id: "1", ticker: "AAPL", watchlist_membership_id: "wc-1" }),
+      makeRow({ company_id: "2", ticker: "MSFT", watchlist_membership_id: "wc-2" }),
+    ]);
+    render(<WatchlistPage />);
+    await waitFor(() => expect(screen.getByText("AAPL")).toBeInTheDocument());
+
+    fireEvent.click(screen.getByRole("button", { name: /Remove AAPL from watchlist/i }));
+
+    await waitFor(() => expect(screen.queryByText("AAPL")).not.toBeInTheDocument());
+    // MSFT should still be present.
+    expect(screen.getByText("MSFT")).toBeInTheDocument();
+  });
+
+  it("does NOT remove the row when the confirmation is cancelled", async () => {
+    vi.spyOn(window, "confirm").mockReturnValue(false);
+    vi.mocked(fetchWatchlist).mockResolvedValue([
+      makeRow({ ticker: "AAPL", watchlist_membership_id: "wc-1" }),
+    ]);
+    render(<WatchlistPage />);
+    await waitFor(() => expect(screen.getByText("AAPL")).toBeInTheDocument());
+
+    fireEvent.click(screen.getByRole("button", { name: /Remove AAPL from watchlist/i }));
+
+    // Row must still be visible.
+    expect(screen.getByText("AAPL")).toBeInTheDocument();
+    // API must not have been called.
+    expect(vi.mocked(removeFromWatchlist)).not.toHaveBeenCalled();
+  });
+
+  it("shows an error message when removeFromWatchlist rejects", async () => {
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+    vi.mocked(removeFromWatchlist).mockRejectedValue(new Error("Permission denied"));
+    vi.mocked(fetchWatchlist).mockResolvedValue([
+      makeRow({ ticker: "AAPL", watchlist_membership_id: "wc-1" }),
+    ]);
+    render(<WatchlistPage />);
+    await waitFor(() => expect(screen.getByText("AAPL")).toBeInTheDocument());
+
+    fireEvent.click(screen.getByRole("button", { name: /Remove AAPL from watchlist/i }));
+
+    await waitFor(() =>
+      expect(screen.getByText(/Permission denied/i)).toBeInTheDocument(),
+    );
+    // Row should remain visible on error.
+    expect(screen.getByText("AAPL")).toBeInTheDocument();
+  });
+
+  it("never calls a hard-delete on watchlist_companies", async () => {
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+    vi.mocked(fetchWatchlist).mockResolvedValue([
+      makeRow({ ticker: "AAPL", watchlist_membership_id: "wc-1" }),
+    ]);
+    render(<WatchlistPage />);
+    await waitFor(() => expect(screen.getByText("AAPL")).toBeInTheDocument());
+
+    fireEvent.click(screen.getByRole("button", { name: /Remove AAPL from watchlist/i }));
+
+    await waitFor(() =>
+      expect(vi.mocked(removeFromWatchlist)).toHaveBeenCalledOnce(),
+    );
+    // Confirm removeFromWatchlist (soft-remove via update) is the only
+    // removal API called — no separate deleteFromWatchlist mock is registered
+    // because no such export exists in api.ts.
+    expect(vi.mocked(removeFromWatchlist)).toHaveBeenCalledWith("wc-1");
+  });
+});

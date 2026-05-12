@@ -138,6 +138,226 @@ def get_company_by_ticker(ticker: str, *, client: Any = None) -> dict[str, Any] 
     return response.data[0] if response.data else None
 
 
+def list_companies_by_ticker(ticker: str, *, client: Any = None) -> list[dict[str, Any]]:
+    """Return all company rows matching *ticker* (exact, case-insensitive).
+
+    Used by the pipeline to detect whether a company already exists (possibly
+    on multiple exchanges) before creating a new one.
+    """
+    response = (
+        _db(client)
+        .table("companies")
+        .select("*")
+        .eq("ticker", ticker.upper())
+        .execute()
+    )
+    return response.data
+
+
+def get_company_by_ticker_exchange(
+    ticker: str,
+    exchange: str | None,
+    *,
+    client: Any = None,
+) -> dict[str, Any] | None:
+    """Return a company row matching *ticker* and optionally *exchange*.
+
+    When *exchange* is provided the lookup is exact (ticker + exchange).
+    When *exchange* is ``None`` the first row matching ticker alone is returned.
+    """
+    ticker_upper = ticker.upper()
+    if exchange:
+        response = (
+            _db(client)
+            .table("companies")
+            .select("*")
+            .eq("ticker", ticker_upper)
+            .eq("exchange", exchange.upper())
+            .limit(1)
+            .execute()
+        )
+    else:
+        response = (
+            _db(client)
+            .table("companies")
+            .select("*")
+            .eq("ticker", ticker_upper)
+            .limit(1)
+            .execute()
+        )
+    return response.data[0] if response.data else None
+
+
+def create_company(
+    ticker: str,
+    name: str,
+    exchange: str | None = None,
+    country: str | None = None,
+    currency: str | None = None,
+    sector: str | None = None,
+    industry: str | None = None,
+    cik: str | None = None,
+    *,
+    client: Any = None,
+) -> dict[str, Any]:
+    """Insert a new company row and return it.
+
+    Used exclusively by the backend pipeline.  The frontend never calls this.
+    ``cik`` may be ``None`` when FMP does not provide it.
+    """
+    payload: dict[str, Any] = {
+        "ticker": ticker.upper(),
+        "name": name,
+        "active": True,
+    }
+    if exchange is not None:
+        payload["exchange"] = exchange.upper()
+    if country is not None:
+        payload["country"] = country
+    if currency is not None:
+        payload["currency"] = currency
+    if sector is not None:
+        payload["sector"] = sector
+    if industry is not None:
+        payload["industry"] = industry
+    if cik is not None:
+        payload["cik"] = cik
+    response = _db(client).table("companies").insert(payload).execute()
+    return response.data[0]
+
+
+def get_watchlist_membership(
+    watchlist_id: str,
+    company_id: str,
+    *,
+    client: Any = None,
+) -> dict[str, Any] | None:
+    """Return the ``watchlist_companies`` row for a given watchlist/company pair, or ``None``."""
+    response = (
+        _db(client)
+        .table("watchlist_companies")
+        .select("*")
+        .eq("watchlist_id", watchlist_id)
+        .eq("company_id", company_id)
+        .limit(1)
+        .execute()
+    )
+    return response.data[0] if response.data else None
+
+
+def create_watchlist_membership(
+    watchlist_id: str,
+    company_id: str,
+    *,
+    client: Any = None,
+) -> dict[str, Any]:
+    """Insert a new active ``watchlist_companies`` row and return it.
+
+    Used exclusively by the backend pipeline; the frontend cannot INSERT
+    into ``watchlist_companies`` (no INSERT grant to ``authenticated`` role).
+    """
+    response = (
+        _db(client)
+        .table("watchlist_companies")
+        .insert({"watchlist_id": watchlist_id, "company_id": company_id, "active": True})
+        .execute()
+    )
+    return response.data[0]
+
+
+# ── Phase 9B: Watchlist add requests ─────────────────────────────────────────
+
+
+def list_pending_watchlist_add_requests(*, client: Any = None) -> list[dict[str, Any]]:
+    """Return all ``watchlist_add_requests`` rows with ``status = 'pending'``.
+
+    Ordered by ``requested_at`` ascending (process oldest first).
+    Called by the pipeline before loading active companies.
+    """
+    response = (
+        _db(client)
+        .table("watchlist_add_requests")
+        .select("*")
+        .eq("status", "pending")
+        .order("requested_at", desc=False)
+        .execute()
+    )
+    return response.data
+
+
+def approve_watchlist_add_request(
+    request_id: str,
+    company_id: str,
+    *,
+    client: Any = None,
+) -> dict[str, Any] | None:
+    """Mark a request as approved, recording the resulting company UUID."""
+    response = (
+        _db(client)
+        .table("watchlist_add_requests")
+        .update(
+            {
+                "status": "approved",
+                "company_id": company_id,
+                "processed_at": utc_now().isoformat(),
+            }
+        )
+        .eq("id", request_id)
+        .execute()
+    )
+    return response.data[0] if response.data else None
+
+
+def reject_watchlist_add_request(
+    request_id: str,
+    error_code: str,
+    error_message: str,
+    *,
+    client: Any = None,
+) -> dict[str, Any] | None:
+    """Mark a request as rejected with a safe error code and message."""
+    response = (
+        _db(client)
+        .table("watchlist_add_requests")
+        .update(
+            {
+                "status": "rejected",
+                "error_code": error_code,
+                "error_message": error_message,
+                "processed_at": utc_now().isoformat(),
+            }
+        )
+        .eq("id", request_id)
+        .execute()
+    )
+    return response.data[0] if response.data else None
+
+
+def fail_watchlist_add_request(
+    request_id: str,
+    error_code: str,
+    error_message: str,
+    *,
+    client: Any = None,
+) -> dict[str, Any] | None:
+    """Mark a request as failed due to a technical error (e.g. provider unavailable)."""
+    response = (
+        _db(client)
+        .table("watchlist_add_requests")
+        .update(
+            {
+                "status": "failed",
+                "error_code": error_code,
+                "error_message": error_message,
+                "processed_at": utc_now().isoformat(),
+            }
+        )
+        .eq("id", request_id)
+        .execute()
+    )
+    return response.data[0] if response.data else None
+
+
 def update_company_profile(
     company_id: str,
     fields: dict[str, Any],

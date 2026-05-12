@@ -128,6 +128,353 @@ def _build_news_query(company: dict[str, Any]) -> str:
     return name or ticker
 
 
+# ── Phase 9B: process pending watchlist add requests ─────────────────────────
+
+
+_TICKER_VALID_CHARS = frozenset("ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789.-")
+
+
+def _is_valid_ticker(ticker: str) -> bool:
+    """Return True when *ticker* is non-empty and contains only valid characters."""
+    return bool(ticker) and all(c in _TICKER_VALID_CHARS for c in ticker.upper())
+
+
+def _process_pending_add_requests(
+    repo_module: Any,
+    fmp: Any | None,
+    run_id: str,
+    metrics: dict[str, int],
+) -> None:
+    """Process all pending watchlist add requests before company loading.
+
+    For each pending request the pipeline:
+    1. Validates the ticker format.
+    2. Checks for an existing company (by ticker+exchange or ticker alone).
+    3. Checks for an existing watchlist membership (active or inactive).
+    4. Creates a new company from the FMP profile when needed.
+    5. Creates or reactivates the watchlist membership.
+    6. Marks the request approved / rejected / failed accordingly.
+
+    New metrics keys updated in *metrics*:
+      ``add_requests_processed``, ``add_requests_approved``,
+      ``add_requests_rejected``, ``add_requests_failed``.
+    """
+    try:
+        requests = repo_module.list_pending_watchlist_add_requests()
+    except Exception as exc:  # noqa: BLE001
+        logger.warning(
+            "Could not load pending add requests (%s) — skipping stage.",
+            type(exc).__name__,
+        )
+        repo_module.log_pipeline_event(
+            run_id,
+            stage="add_requests",
+            level="warning",
+            message="Could not load pending add requests — stage skipped.",
+            details={"error_type": type(exc).__name__},
+        )
+        return
+
+    if not requests:
+        return
+
+    repo_module.log_pipeline_event(
+        run_id,
+        stage="add_requests",
+        message=f"Processing {len(requests)} pending add request(s).",
+    )
+
+    for req in requests:
+        req_id = req["id"]
+        raw_ticker = req.get("requested_ticker", "")
+        raw_exchange = req.get("requested_exchange")
+        watchlist_id = req["watchlist_id"]
+        ticker = raw_ticker.upper().strip()
+        exchange = raw_exchange.upper().strip() if raw_exchange else None
+
+        metrics["add_requests_processed"] += 1
+
+        try:
+            # ── Step 1: validate ticker format ────────────────────────────────
+            if not _is_valid_ticker(ticker):
+                repo_module.reject_watchlist_add_request(
+                    req_id,
+                    "invalid_ticker",
+                    f"Ticker '{ticker}' contains invalid characters.",
+                )
+                metrics["add_requests_rejected"] += 1
+                repo_module.log_pipeline_event(
+                    run_id,
+                    stage="add_requests",
+                    level="warning",
+                    message=f"Rejected request for '{ticker}': invalid ticker format.",
+                    details={"request_id": req_id, "error_code": "invalid_ticker"},
+                )
+                continue
+
+            # ── Step 2: look up existing company ─────────────────────────────
+            if exchange:
+                existing_company = repo_module.get_company_by_ticker_exchange(ticker, exchange)
+                if existing_company is None:
+                    # Exchange was specified but does not match — check by ticker alone
+                    # to detect exchange mismatch vs completely new ticker.
+                    all_matching = repo_module.list_companies_by_ticker(ticker)
+                    if all_matching:
+                        # Ticker exists on a different exchange.
+                        repo_module.reject_watchlist_add_request(
+                            req_id,
+                            "exchange_mismatch",
+                            (
+                                f"Ticker '{ticker}' exists on "
+                                f"{all_matching[0].get('exchange', 'another exchange')}, "
+                                f"not '{exchange}'."
+                            ),
+                        )
+                        metrics["add_requests_rejected"] += 1
+                        repo_module.log_pipeline_event(
+                            run_id,
+                            stage="add_requests",
+                            level="warning",
+                            message=(
+                                f"Rejected request for '{ticker}': "
+                                "exchange mismatch."
+                            ),
+                            details={"request_id": req_id, "error_code": "exchange_mismatch"},
+                        )
+                        continue
+                    # else: ticker doesn't exist at all — fall through to FMP.
+            else:
+                all_matching = repo_module.list_companies_by_ticker(ticker)
+                if len(all_matching) > 1:
+                    # Ambiguous: ticker exists on multiple exchanges.
+                    repo_module.reject_watchlist_add_request(
+                        req_id,
+                        "ambiguous_ticker",
+                        (
+                            f"Ticker '{ticker}' exists on multiple exchanges. "
+                            "Please specify an exchange."
+                        ),
+                    )
+                    metrics["add_requests_rejected"] += 1
+                    repo_module.log_pipeline_event(
+                        run_id,
+                        stage="add_requests",
+                        level="warning",
+                        message=(
+                            f"Rejected request for '{ticker}': "
+                            "ambiguous ticker (multiple exchanges)."
+                        ),
+                        details={"request_id": req_id, "error_code": "ambiguous_ticker"},
+                    )
+                    continue
+                existing_company = all_matching[0] if all_matching else None
+
+            # ── Step 3: if company exists, check/manage membership ────────────
+            if existing_company:
+                company_id = existing_company["id"]
+                membership = repo_module.get_watchlist_membership(watchlist_id, company_id)
+
+                if membership and membership.get("active"):
+                    # Already on the watchlist — reject as duplicate.
+                    repo_module.reject_watchlist_add_request(
+                        req_id,
+                        "already_active",
+                        f"'{ticker}' is already active in this watchlist.",
+                    )
+                    metrics["add_requests_rejected"] += 1
+                    repo_module.log_pipeline_event(
+                        run_id,
+                        stage="add_requests",
+                        level="warning",
+                        message=f"Rejected request for '{ticker}': already active.",
+                        details={"request_id": req_id, "error_code": "already_active"},
+                    )
+                    continue
+
+                if membership and not membership.get("active"):
+                    # Inactive membership — reactivate it.
+                    repo_module.reactivate_watchlist_company(membership["id"])
+                    repo_module.approve_watchlist_add_request(req_id, company_id)
+                    metrics["add_requests_approved"] += 1
+                    repo_module.log_pipeline_event(
+                        run_id,
+                        stage="add_requests",
+                        message=(
+                            f"Approved request for '{ticker}': "
+                            "reactivated existing inactive membership."
+                        ),
+                        details={"request_id": req_id, "company_id": company_id},
+                    )
+                    continue
+
+                # No membership — create one.
+                repo_module.create_watchlist_membership(watchlist_id, company_id)
+                repo_module.approve_watchlist_add_request(req_id, company_id)
+                metrics["add_requests_approved"] += 1
+                repo_module.log_pipeline_event(
+                    run_id,
+                    stage="add_requests",
+                    message=(
+                        f"Approved request for '{ticker}': "
+                        "created new watchlist membership for existing company."
+                    ),
+                    details={"request_id": req_id, "company_id": company_id},
+                )
+                continue
+
+            # ── Step 4: company does not exist — validate via FMP ─────────────
+            if fmp is None:
+                repo_module.fail_watchlist_add_request(
+                    req_id,
+                    "provider_unavailable",
+                    "FMP provider is not configured; cannot validate new ticker.",
+                )
+                metrics["add_requests_failed"] += 1
+                repo_module.log_pipeline_event(
+                    run_id,
+                    stage="add_requests",
+                    level="warning",
+                    message=f"Failed request for '{ticker}': FMP not available.",
+                    details={"request_id": req_id, "error_code": "provider_unavailable"},
+                )
+                continue
+
+            try:
+                profile_resp = fmp.get_profile(ticker)
+            except Exception as fmp_exc:  # noqa: BLE001
+                repo_module.fail_watchlist_add_request(
+                    req_id,
+                    "fmp_request_failed",
+                    "Provider request failed; please try again later.",
+                )
+                metrics["add_requests_failed"] += 1
+                logger.warning(
+                    "FMP profile fetch failed for %s (%s)",
+                    ticker,
+                    type(fmp_exc).__name__,
+                )
+                repo_module.log_pipeline_event(
+                    run_id,
+                    stage="add_requests",
+                    level="error",
+                    message=f"Failed request for '{ticker}': FMP request error.",
+                    details={
+                        "request_id": req_id,
+                        "error_code": "fmp_request_failed",
+                        "error_type": type(fmp_exc).__name__,
+                    },
+                )
+                continue
+
+            if not profile_resp.success:
+                repo_module.fail_watchlist_add_request(
+                    req_id,
+                    "provider_unavailable",
+                    "Provider returned an error; please try again later.",
+                )
+                metrics["add_requests_failed"] += 1
+                repo_module.log_pipeline_event(
+                    run_id,
+                    stage="add_requests",
+                    level="error",
+                    message=f"Failed request for '{ticker}': provider error.",
+                    details={"request_id": req_id, "error_code": "provider_unavailable"},
+                )
+                continue
+
+            payload = profile_resp.payload
+            if not payload:
+                repo_module.reject_watchlist_add_request(
+                    req_id,
+                    "invalid_ticker",
+                    f"Ticker '{ticker}' was not found in the data provider.",
+                )
+                metrics["add_requests_rejected"] += 1
+                repo_module.log_pipeline_event(
+                    run_id,
+                    stage="add_requests",
+                    level="warning",
+                    message=f"Rejected request for '{ticker}': not found in FMP.",
+                    details={"request_id": req_id, "error_code": "invalid_ticker"},
+                )
+                continue
+
+            profile = payload[0] if isinstance(payload, list) else payload
+            fmp_exchange = (profile.get("exchangeShortName") or profile.get("exchange") or "")
+            fmp_exchange = fmp_exchange.upper().strip()
+
+            # If the user specified an exchange and it does not match the
+            # profile, reject with exchange_mismatch.
+            if exchange and fmp_exchange and exchange != fmp_exchange:
+                repo_module.reject_watchlist_add_request(
+                    req_id,
+                    "exchange_mismatch",
+                    (
+                        f"FMP reports '{ticker}' on '{fmp_exchange}', "
+                        f"not '{exchange}'."
+                    ),
+                )
+                metrics["add_requests_rejected"] += 1
+                repo_module.log_pipeline_event(
+                    run_id,
+                    stage="add_requests",
+                    level="warning",
+                    message=f"Rejected request for '{ticker}': FMP exchange mismatch.",
+                    details={"request_id": req_id, "error_code": "exchange_mismatch"},
+                )
+                continue
+
+            # ── Step 5: create company + membership ───────────────────────────
+            new_company = repo_module.create_company(
+                ticker=ticker,
+                name=profile.get("companyName") or ticker,
+                exchange=fmp_exchange or exchange or None,
+                country=profile.get("country") or None,
+                currency=profile.get("currency") or None,
+                sector=profile.get("sector") or None,
+                industry=profile.get("industry") or None,
+                cik=profile.get("cik") or None,
+            )
+            new_company_id = new_company["id"]
+            repo_module.create_watchlist_membership(watchlist_id, new_company_id)
+            repo_module.approve_watchlist_add_request(req_id, new_company_id)
+            metrics["add_requests_approved"] += 1
+            repo_module.log_pipeline_event(
+                run_id,
+                stage="add_requests",
+                message=(
+                    f"Approved request for '{ticker}': "
+                    "created new company and watchlist membership."
+                ),
+                details={"request_id": req_id, "company_id": new_company_id},
+            )
+
+        except Exception as exc:  # noqa: BLE001
+            logger.error(
+                "Unexpected error processing add request %s (%s)",
+                req_id,
+                type(exc).__name__,
+            )
+            try:
+                repo_module.fail_watchlist_add_request(
+                    req_id,
+                    "internal_error",
+                    "An unexpected error occurred; please try again later.",
+                )
+                metrics["add_requests_failed"] += 1
+            except Exception:  # noqa: BLE001
+                pass
+            repo_module.log_pipeline_event(
+                run_id,
+                stage="add_requests",
+                level="error",
+                message=f"Unexpected error processing add request {req_id}.",
+                details={"request_id": req_id, "error_type": type(exc).__name__},
+            )
+
+
+
+
 def _build_sec_document_url(
     cik: str | int | None,
     accession_number: str | None,
@@ -181,9 +528,17 @@ def _run_live_pipeline(
         "alerts_sent": 0,
         "alert_history_written": 0,
         "alerts_deduplicated": 0,
+        # Phase 9B
+        "add_requests_processed": 0,
+        "add_requests_approved": 0,
+        "add_requests_rejected": 0,
+        "add_requests_failed": 0,
     }
 
     try:
+        # ── Phase 9B: process pending add requests ────────────────────────────
+        _process_pending_add_requests(repo_module, fmp, run_id, metrics)
+
         companies, company_source = _load_live_companies(repo_module)
         console.print(f"Watchlist   : {len(companies)} companies")
         repo_module.log_pipeline_event(

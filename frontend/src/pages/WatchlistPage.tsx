@@ -1,8 +1,12 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import type { InactiveWatchlistRow, SignalFilter, SortKey, WatchlistRow } from "../types";
+import type { InactiveWatchlistRow, SignalFilter, SortKey, WatchlistAddRequest, WatchlistRow } from "../types";
 import {
+  cancelWatchlistAddRequest,
+  createWatchlistAddRequest,
   fetchInactiveWatchlist,
+  fetchMyDefaultWatchlistId,
   fetchWatchlist,
+  fetchWatchlistAddRequests,
   reactivateWatchlistCompany,
   removeFromWatchlist,
 } from "../lib/api";
@@ -34,6 +38,15 @@ export function WatchlistPage() {
   const [loadingRemoved, setLoadingRemoved] = useState(false);
   const [reactivatingId, setReactivatingId] = useState<string | null>(null);
 
+  // Phase 9B: add-request state
+  const [watchlistId, setWatchlistId] = useState<string | null>(null);
+  const [addRequests, setAddRequests] = useState<WatchlistAddRequest[]>([]);
+  const [requestTicker, setRequestTicker] = useState("");
+  const [requestExchange, setRequestExchange] = useState("");
+  const [requestSubmitting, setRequestSubmitting] = useState(false);
+  const [requestError, setRequestError] = useState<string | null>(null);
+  const [cancellingId, setCancellingId] = useState<string | null>(null);
+
   // Filter / sort state
   const [signalFilter, setSignalFilter] = useState<SignalFilter>("ALL");
   const [sortKey, setSortKey] = useState<SortKey>("ticker");
@@ -52,6 +65,18 @@ export function WatchlistPage() {
         setError(msg);
         setLoading(false);
       });
+  }, []);
+
+  // Phase 9B: load default watchlist ID and recent add requests once on mount.
+  useEffect(() => {
+    fetchMyDefaultWatchlistId()
+      .then((wid) => {
+        setWatchlistId(wid);
+        if (wid) {
+          return fetchWatchlistAddRequests(wid).then(setAddRequests);
+        }
+      })
+      .catch(() => { /* non-critical */ });
   }, []);
 
   // Phase 9A: soft-remove a company from the active watchlist.

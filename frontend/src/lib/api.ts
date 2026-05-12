@@ -5,7 +5,7 @@
  * Supabase Auth). No backend provider APIs are called from here.
  */
 import { supabase } from "./supabase";
-import type { AlertHistoryRow, InactiveWatchlistRow, WatchlistRow } from "../types";
+import type { AlertHistoryRow, InactiveWatchlistRow, WatchlistAddRequest, WatchlistRow } from "../types";
 
 /**
  * Fetch all rows from the `dashboard_watchlist_latest` view, ordered by ticker.
@@ -79,5 +79,79 @@ export async function fetchAlertHistory(limit = 100): Promise<AlertHistoryRow[]>
     .limit(limit);
   if (error) throw new Error(error.message);
   return (data ?? []) as AlertHistoryRow[];
+}
+
+// ---------------------------------------------------------------------------
+// Phase 9B: Watchlist add requests
+// ---------------------------------------------------------------------------
+
+/**
+ * Fetch the user's default watchlist UUID.
+ * Returns the first watchlist by created_at for the authenticated user.
+ * Used to attach add requests to the correct watchlist.
+ */
+export async function fetchMyDefaultWatchlistId(): Promise<string | null> {
+  const { data, error } = await supabase
+    .from("watchlists")
+    .select("id")
+    .order("created_at", { ascending: true })
+    .limit(1);
+  if (error) throw new Error(error.message);
+  return data && data.length > 0 ? (data[0] as { id: string }).id : null;
+}
+
+/**
+ * Fetch add requests for a specific watchlist, ordered newest-first.
+ * RLS restricts this to the authenticated user's own requests.
+ */
+export async function fetchWatchlistAddRequests(
+  watchlistId: string,
+): Promise<WatchlistAddRequest[]> {
+  const { data, error } = await supabase
+    .from("watchlist_add_requests")
+    .select("*")
+    .eq("watchlist_id", watchlistId)
+    .order("requested_at", { ascending: false })
+    .limit(50);
+  if (error) throw new Error(error.message);
+  return (data ?? []) as WatchlistAddRequest[];
+}
+
+/**
+ * Submit a new watchlist add request.
+ * The backend pipeline validates, enriches, and approves/rejects the request.
+ * The frontend never calls FMP or any provider API.
+ */
+export async function createWatchlistAddRequest(params: {
+  watchlistId: string;
+  requestedTicker: string;
+  requestedExchange?: string;
+}): Promise<WatchlistAddRequest> {
+  const payload: Record<string, string> = {
+    watchlist_id: params.watchlistId,
+    requested_ticker: params.requestedTicker.toUpperCase().trim(),
+  };
+  if (params.requestedExchange && params.requestedExchange.trim()) {
+    payload.requested_exchange = params.requestedExchange.toUpperCase().trim();
+  }
+  const { data, error } = await supabase
+    .from("watchlist_add_requests")
+    .insert(payload)
+    .select()
+    .single();
+  if (error) throw new Error(error.message);
+  return data as WatchlistAddRequest;
+}
+
+/**
+ * Cancel a pending add request.
+ * RLS only allows updating own pending requests to 'cancelled'.
+ */
+export async function cancelWatchlistAddRequest(requestId: string): Promise<void> {
+  const { error } = await supabase
+    .from("watchlist_add_requests")
+    .update({ status: "cancelled" })
+    .eq("id", requestId);
+  if (error) throw new Error(error.message);
 }
 

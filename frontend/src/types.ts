@@ -87,3 +87,22 @@ export type SortKey =
   | "margin_of_safety_conservative"
   | "final_quality_score"
   | "final_signal";
+
+// ---------------------------------------------------------------------------
+// watchlist_add_requests table (006_watchlist_add_requests.sql)
+// ---------------------------------------------------------------------------
+export interface WatchlistAddRequest {
+  id: string;
+  user_id: string;
+  watchlist_id: string;
+  requested_ticker: string;
+  requested_exchange: string | null;
+  status: "pending" | "approved" | "rejected" | "failed" | "cancelled";
+  company_id: string | null;
+  error_code: string | null;
+  error_message: string | null;
+  requested_at: string;
+  processed_at: string | null;
+  created_at: string;
+  updated_at: string;
+}

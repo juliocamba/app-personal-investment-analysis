@@ -6,7 +6,8 @@ import pytest
 from investment_app.config.settings import Settings, get_settings
 
 
-def test_default_settings_load() -> None:
+def test_default_settings_load(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("APP_ENV", raising=False)
     settings = Settings()
     assert settings.app_env == "local"
     assert settings.log_level == "INFO"

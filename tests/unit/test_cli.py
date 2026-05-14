@@ -19,7 +19,8 @@ def test_health_shows_version() -> None:
     assert "0.1.0" in result.output
 
 
-def test_health_shows_environment() -> None:
+def test_health_shows_environment(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("APP_ENV", raising=False)
     result = runner.invoke(app, ["health"])
     assert "local" in result.output
 

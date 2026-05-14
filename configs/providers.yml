@@ -29,7 +29,7 @@ providers:
   twelve_data:
     name: Twelve Data
     base_url: https://api.twelvedata.com
-    enabled: false
+    enabled: true
     rate_limit_per_minute: 8
     retry_attempts: 3
     timeout_seconds: 30

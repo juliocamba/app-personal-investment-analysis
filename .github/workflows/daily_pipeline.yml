@@ -4,17 +4,42 @@ on:
   workflow_dispatch:
     inputs:
       dry_run:
-        description: "Run without writing provider-derived results"
+        description: "Pass --dry-run to the pipeline (no DB writes)"
         required: false
         default: "false"
-  schedule:
-    # 22:30 UTC Monday–Friday (after US market close)
-    - cron: "30 22 * * 1-5"
+  # schedule:
+  #   # 22:30 UTC Monday–Friday (after US market close).
+  #   # Re-enable once production secrets are verified.
+  #   - cron: "30 22 * * 1-5"
 
 jobs:
   daily-pipeline:
     runs-on: ubuntu-latest
     timeout-minutes: 30
+
+    # All secrets are sourced here so every step below can read them.
+    # GitHub automatically masks secret values in logs.
+    env:
+      APP_ENV: production
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+      FMP_API_KEY: ${{ secrets.FMP_API_KEY }}
+      SEC_USER_AGENT: ${{ secrets.SEC_USER_AGENT }}
+      TWELVE_DATA_API_KEY: ${{ secrets.TWELVE_DATA_API_KEY }}
+      FINNHUB_API_KEY: ${{ secrets.FINNHUB_API_KEY }}
+      ALPHA_VANTAGE_API_KEY: ${{ secrets.ALPHA_VANTAGE_API_KEY }}
+      ALERTS_ENABLED: ${{ secrets.ALERTS_ENABLED }}
+      SMTP_ENABLED: ${{ secrets.SMTP_ENABLED }}
+      SMTP_HOST: ${{ secrets.SMTP_HOST }}
+      SMTP_PORT: ${{ secrets.SMTP_PORT }}
+      SMTP_USER: ${{ secrets.SMTP_USER }}
+      SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
+      ALERT_EMAIL_FROM: ${{ secrets.ALERT_EMAIL_FROM }}
+      ALERT_EMAIL_TO: ${{ secrets.ALERT_EMAIL_TO }}
+      TELEGRAM_ENABLED: ${{ secrets.TELEGRAM_ENABLED }}
+      TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+      TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
 
     steps:
       - name: Checkout
@@ -30,29 +55,29 @@ jobs:
           python -m pip install --upgrade pip
           pip install -e ".[dev]"
 
-      - name: Run tests
-        run: pytest
+      - name: Check required secrets
+        # Validates that all required secrets are non-empty.
+        # Fails fast with a clear message — never prints secret values.
+        run: |
+          missing=()
+          [ -z "$SUPABASE_URL" ]              && missing+=("SUPABASE_URL")
+          [ -z "$SUPABASE_SERVICE_ROLE_KEY" ] && missing+=("SUPABASE_SERVICE_ROLE_KEY")
+          [ -z "$FMP_API_KEY" ]               && missing+=("FMP_API_KEY")
+          [ -z "$SEC_USER_AGENT" ]            && missing+=("SEC_USER_AGENT")
+          if [ "${#missing[@]}" -gt 0 ]; then
+            echo "::error::Missing required secrets: ${missing[*]}"
+            echo "Configure these in: Settings → Secrets and variables → Actions"
+            exit 1
+          fi
+          echo "All required secrets are present."
+
+      - name: Run unit tests
+        run: pytest tests/unit/
+
+      - name: Validate Supabase schema
+        run: python scripts/validate_supabase_schema.py
 
       - name: Run daily pipeline
-        env:
-          APP_ENV: production
-          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-          FMP_API_KEY: ${{ secrets.FMP_API_KEY }}
-          FINNHUB_API_KEY: ${{ secrets.FINNHUB_API_KEY }}
-          ALPHA_VANTAGE_API_KEY: ${{ secrets.ALPHA_VANTAGE_API_KEY }}
-          TWELVE_DATA_API_KEY: ${{ secrets.TWELVE_DATA_API_KEY }}
-          SEC_USER_AGENT: ${{ secrets.SEC_USER_AGENT }}
-          SMTP_ENABLED: ${{ secrets.SMTP_ENABLED }}
-          SMTP_HOST: ${{ secrets.SMTP_HOST }}
-          SMTP_PORT: ${{ secrets.SMTP_PORT }}
-          SMTP_USER: ${{ secrets.SMTP_USER }}
-          SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
-          ALERT_EMAIL_FROM: ${{ secrets.ALERT_EMAIL_FROM }}
-          ALERT_EMAIL_TO: ${{ secrets.ALERT_EMAIL_TO }}
-          TELEGRAM_ENABLED: ${{ secrets.TELEGRAM_ENABLED }}
-          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
         run: |
           if [ "${{ github.event.inputs.dry_run }}" = "true" ]; then
             python scripts/run_daily_pipeline.py --dry-run

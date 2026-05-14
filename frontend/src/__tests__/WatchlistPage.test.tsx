@@ -27,10 +27,23 @@ vi.mock("../lib/api", () => ({
   removeFromWatchlist: vi.fn(),
   fetchInactiveWatchlist: vi.fn(),
   reactivateWatchlistCompany: vi.fn(),
+  // Phase 9B
+  fetchMyDefaultWatchlistId: vi.fn().mockResolvedValue("wl-default"),
+  fetchWatchlistAddRequests: vi.fn().mockResolvedValue([]),
+  createWatchlistAddRequest: vi.fn(),
+  cancelWatchlistAddRequest: vi.fn(),
 }));
 
 import { WatchlistPage } from "../pages/WatchlistPage";
-import { fetchWatchlist, removeFromWatchlist, fetchInactiveWatchlist } from "../lib/api";
+import {
+  fetchWatchlist,
+  removeFromWatchlist,
+  fetchInactiveWatchlist,
+  fetchMyDefaultWatchlistId,
+  fetchWatchlistAddRequests,
+  createWatchlistAddRequest,
+  cancelWatchlistAddRequest,
+} from "../lib/api";
 import type { WatchlistRow } from "../types";
 
 function makeRow(overrides: Partial<WatchlistRow> = {}): WatchlistRow {
@@ -330,5 +343,257 @@ describe("WatchlistPage — remove action", () => {
     // removal API called — no separate deleteFromWatchlist mock is registered
     // because no such export exists in api.ts.
     expect(vi.mocked(removeFromWatchlist)).toHaveBeenCalledWith("wc-1");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Phase 9B: Add-request form and list
+// ---------------------------------------------------------------------------
+
+import type { WatchlistAddRequest } from "../types";
+
+function makeAddRequest(overrides: Partial<WatchlistAddRequest> = {}): WatchlistAddRequest {
+  return {
+    id: "req-1",
+    user_id: "user-1",
+    watchlist_id: "wl-default",
+    requested_ticker: "NVDA",
+    requested_exchange: null,
+    status: "pending",
+    company_id: null,
+    error_code: null,
+    error_message: null,
+    requested_at: "2026-05-12T10:00:00Z",
+    processed_at: null,
+    created_at: "2026-05-12T10:00:00Z",
+    updated_at: "2026-05-12T10:00:00Z",
+    ...overrides,
+  };
+}
+
+describe("WatchlistPage — Phase 9B add-request form", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(fetchWatchlist).mockResolvedValue([makeRow()]);
+    vi.mocked(fetchInactiveWatchlist).mockResolvedValue([]);
+    vi.mocked(fetchMyDefaultWatchlistId).mockResolvedValue("wl-default");
+    vi.mocked(fetchWatchlistAddRequests).mockResolvedValue([]);
+  });
+
+  it("renders the add-request form with ticker and exchange inputs", async () => {
+    render(<WatchlistPage />);
+    await waitFor(() => expect(screen.getByText("AAPL")).toBeInTheDocument());
+
+    expect(screen.getByLabelText(/Ticker symbol/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/Exchange \(optional\)/i)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Request/i })).toBeInTheDocument();
+  });
+
+  it("submits a request with the correct ticker and no exchange", async () => {
+    const newReq = makeAddRequest({ requested_ticker: "TSLA" });
+    vi.mocked(createWatchlistAddRequest).mockResolvedValue(newReq);
+
+    render(<WatchlistPage />);
+    await waitFor(() => expect(screen.getByText("AAPL")).toBeInTheDocument());
+
+    fireEvent.change(screen.getByLabelText(/Ticker symbol/i), {
+      target: { value: "tsla" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: /Request/i }));
+
+    await waitFor(() =>
+      expect(vi.mocked(createWatchlistAddRequest)).toHaveBeenCalledWith(
+        expect.objectContaining({
+          watchlistId: "wl-default",
+          requestedTicker: "TSLA",
+        }),
+      ),
+    );
+  });
+
+  it("submits a request with exchange when provided", async () => {
+    const newReq = makeAddRequest({ requested_ticker: "VOD", requested_exchange: "LSE" });
+    vi.mocked(createWatchlistAddRequest).mockResolvedValue(newReq);
+
+    render(<WatchlistPage />);
+    await waitFor(() => expect(screen.getByText("AAPL")).toBeInTheDocument());
+
+    fireEvent.change(screen.getByLabelText(/Ticker symbol/i), {
+      target: { value: "VOD" },
+    });
+    fireEvent.change(screen.getByLabelText(/Exchange \(optional\)/i), {
+      target: { value: "lse" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: /Request/i }));
+
+    await waitFor(() =>
+      expect(vi.mocked(createWatchlistAddRequest)).toHaveBeenCalledWith(
+        expect.objectContaining({
+          requestedExchange: "LSE",
+        }),
+      ),
+    );
+  });
+
+  it("shows a client-side warning when the ticker is already active but does not block submission", async () => {
+    // AAPL is already in active rows.
+    vi.mocked(fetchWatchlist).mockResolvedValue([makeRow({ ticker: "AAPL" })]);
+    vi.mocked(createWatchlistAddRequest).mockResolvedValue(makeAddRequest({ requested_ticker: "AAPL" }));
+
+    render(<WatchlistPage />);
+    await waitFor(() => expect(screen.getByText("AAPL")).toBeInTheDocument());
+
+    fireEvent.change(screen.getByLabelText(/Ticker symbol/i), {
+      target: { value: "AAPL" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: /Request/i }));
+
+    await waitFor(() =>
+      expect(screen.getByText(/already active/i)).toBeInTheDocument(),
+    );
+    // Request was still submitted — backend is authority.
+    expect(vi.mocked(createWatchlistAddRequest)).toHaveBeenCalled();
+  });
+
+  it("shows a duplicate-pending error when the API returns a unique constraint error", async () => {
+    vi.mocked(createWatchlistAddRequest).mockRejectedValue(
+      new Error("duplicate key value violates unique constraint"),
+    );
+
+    render(<WatchlistPage />);
+    await waitFor(() => expect(screen.getByText("AAPL")).toBeInTheDocument());
+
+    fireEvent.change(screen.getByLabelText(/Ticker symbol/i), {
+      target: { value: "MSFT" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: /Request/i }));
+
+    await waitFor(() =>
+      expect(screen.getByText(/pending request for MSFT already exists/i)).toBeInTheDocument(),
+    );
+  });
+
+  it("does not call any provider API directly", async () => {
+    // This test confirms no FMP/SEC call is present in the component.
+    // The api module mock is the only one registered; if any unmocked
+    // network call fires, the test would fail from unhandled rejection.
+    vi.mocked(createWatchlistAddRequest).mockResolvedValue(makeAddRequest());
+
+    render(<WatchlistPage />);
+    await waitFor(() => expect(screen.getByText("AAPL")).toBeInTheDocument());
+
+    fireEvent.change(screen.getByLabelText(/Ticker symbol/i), {
+      target: { value: "NVDA" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: /Request/i }));
+
+    await waitFor(() =>
+      expect(vi.mocked(createWatchlistAddRequest)).toHaveBeenCalledOnce(),
+    );
+    // Only createWatchlistAddRequest was called — no provider calls.
+  });
+});
+
+describe("WatchlistPage — Phase 9B request list", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(fetchWatchlist).mockResolvedValue([makeRow()]);
+    vi.mocked(fetchInactiveWatchlist).mockResolvedValue([]);
+    vi.mocked(fetchMyDefaultWatchlistId).mockResolvedValue("wl-default");
+  });
+
+  it("renders request statuses correctly", async () => {
+    vi.mocked(fetchWatchlistAddRequests).mockResolvedValue([
+      makeAddRequest({ id: "r1", requested_ticker: "NVDA", status: "pending" }),
+      makeAddRequest({ id: "r2", requested_ticker: "TSLA", status: "approved" }),
+      makeAddRequest({ id: "r3", requested_ticker: "AMD", status: "rejected", error_code: "invalid_ticker" }),
+      makeAddRequest({ id: "r4", requested_ticker: "INTC", status: "failed", error_code: "provider_unavailable" }),
+      makeAddRequest({ id: "r5", requested_ticker: "QCOM", status: "cancelled" }),
+    ]);
+
+    render(<WatchlistPage />);
+    await waitFor(() => expect(screen.getByText("NVDA")).toBeInTheDocument());
+
+    expect(screen.getByText("Pending")).toBeInTheDocument();
+    expect(screen.getByText("Approved ✓")).toBeInTheDocument();
+    expect(screen.getByText("Rejected")).toBeInTheDocument();
+    expect(screen.getByText("Failed")).toBeInTheDocument();
+    expect(screen.getByText("Cancelled")).toBeInTheDocument();
+  });
+
+  it("shows friendly message for approved request", async () => {
+    vi.mocked(fetchWatchlistAddRequests).mockResolvedValue([
+      makeAddRequest({ status: "approved" }),
+    ]);
+
+    render(<WatchlistPage />);
+    await waitFor(() =>
+      expect(screen.getByText(/Analysis appears after next pipeline run/i)).toBeInTheDocument(),
+    );
+  });
+
+  it("shows friendly message for invalid_ticker rejection", async () => {
+    vi.mocked(fetchWatchlistAddRequests).mockResolvedValue([
+      makeAddRequest({ status: "rejected", error_code: "invalid_ticker" }),
+    ]);
+
+    render(<WatchlistPage />);
+    await waitFor(() =>
+      expect(screen.getByText(/Ticker not found/i)).toBeInTheDocument(),
+    );
+  });
+
+  it("shows friendly message for already_active rejection", async () => {
+    vi.mocked(fetchWatchlistAddRequests).mockResolvedValue([
+      makeAddRequest({ status: "rejected", error_code: "already_active" }),
+    ]);
+
+    render(<WatchlistPage />);
+    await waitFor(() =>
+      expect(screen.getByText(/Already in your active watchlist/i)).toBeInTheDocument(),
+    );
+  });
+
+  it("shows friendly message for provider_unavailable failure", async () => {
+    vi.mocked(fetchWatchlistAddRequests).mockResolvedValue([
+      makeAddRequest({ status: "failed", error_code: "provider_unavailable" }),
+    ]);
+
+    render(<WatchlistPage />);
+    await waitFor(() =>
+      expect(screen.getByText(/Provider temporarily unavailable/i)).toBeInTheDocument(),
+    );
+  });
+
+  it("shows cancel button only for pending requests", async () => {
+    vi.mocked(fetchWatchlistAddRequests).mockResolvedValue([
+      makeAddRequest({ id: "r1", status: "pending" }),
+      makeAddRequest({ id: "r2", status: "approved" }),
+    ]);
+
+    render(<WatchlistPage />);
+    await waitFor(() => expect(screen.getByText("Pending")).toBeInTheDocument());
+
+    const cancelButtons = screen.getAllByRole("button", { name: /Cancel request/i });
+    expect(cancelButtons).toHaveLength(1);
+  });
+
+  it("cancels a pending request and updates UI", async () => {
+    vi.mocked(fetchWatchlistAddRequests).mockResolvedValue([
+      makeAddRequest({ id: "req-cancel", requested_ticker: "NVDA", status: "pending" }),
+    ]);
+    vi.mocked(cancelWatchlistAddRequest).mockResolvedValue(undefined);
+
+    render(<WatchlistPage />);
+    await waitFor(() => expect(screen.getByText("Pending")).toBeInTheDocument());
+
+    fireEvent.click(screen.getByRole("button", { name: /Cancel request for NVDA/i }));
+
+    await waitFor(() =>
+      expect(vi.mocked(cancelWatchlistAddRequest)).toHaveBeenCalledWith("req-cancel"),
+    );
+    await waitFor(() =>
+      expect(screen.getByText("Cancelled")).toBeInTheDocument(),
+    );
   });
 });

@@ -84,9 +84,19 @@ alter table watchlist_add_requests enable row level security;
 -- Deny all access to the public / anon role.
 revoke all on watchlist_add_requests from public, anon;
 
--- Grant authenticated users SELECT, INSERT, and UPDATE only.
+-- Grant authenticated users SELECT and column-limited INSERT and UPDATE.
+-- INSERT is restricted to the three fields a frontend user may supply.
+--   Pipeline-owned fields (status, company_id, error_code, error_message,
+--   processed_at, user_id, requested_at, created_at, updated_at) cannot be
+--   set by authenticated clients at insert time.
+-- UPDATE is restricted to status only, so authenticated users cannot mutate
+--   any pipeline-owned outcome field even during cancellation.
+-- The column-level grants are enforced by the database engine independently
+--   of RLS; even a malicious JWT bearer cannot touch any other column.
 -- No DELETE is granted — requests are immutable once submitted.
-grant select, insert, update on watchlist_add_requests to authenticated;
+grant select on watchlist_add_requests to authenticated;
+grant insert(watchlist_id, requested_ticker, requested_exchange) on watchlist_add_requests to authenticated;
+grant update(status) on watchlist_add_requests to authenticated;
 
 -- SELECT: users can only read their own requests.
 drop policy if exists "users read own add requests" on watchlist_add_requests;

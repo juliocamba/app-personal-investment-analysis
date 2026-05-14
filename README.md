@@ -1,271 +1,337 @@
 # Investment Analysis MVP
 
-A private investment-analysis application that monitors a predefined watchlist of public companies and produces a daily analytical snapshot covering price data, fundamentals, intrinsic value ranges, margin of safety, qualitative scores, probabilistic buy/sell/hold signals, and configurable alerts.
+A private research application that tracks a watchlist of public companies, ingests market and filing data, computes daily analytics, and exposes the latest results in a Supabase-backed dashboard.
 
-> **Disclaimer:** This tool is for private research and education only. It must not be used as personalised financial advice.
+This repository contains both the Python backend pipeline and the React frontend.
 
-## Stack
+For implementation detail, schema notes, RLS behavior, and the operational model, see [README-TECHNICAL.md](README-TECHNICAL.md).
 
-| Layer | Technology |
+## Project overview
+
+The app is designed for a single-operator or small trusted-user deployment.
+
+It combines:
+
+- provider ingestion from FMP Stable API, SEC EDGAR, and ECB FX;
+- a Supabase/Postgres analytical store with Row Level Security;
+- a daily Python pipeline for ingestion, normalization, analytics, and alerts;
+- a React + Vite dashboard that reads from Supabase using the anon key plus Supabase Auth.
+
+## What the app does
+
+On each pipeline run, the system can:
+
+- refresh company profile, price, statement, filing, and FX data;
+- store raw provider payloads before normalization;
+- compute ratios and features;
+- compute valuation ranges and margin of safety outputs;
+- compute qualitative scores;
+- compute probabilistic buy, hold, and sell signals;
+- optionally evaluate alerts;
+- keep watchlist history intact when companies are removed or reactivated.
+
+## Current MVP capabilities
+
+- Supabase schema is applied and validated.
+- FMP Stable API ingestion works.
+- SEC EDGAR ingestion works.
+- ECB FX ingestion works.
+- Daily pipeline runs successfully.
+- Dashboard works locally.
+- Phase 9A watchlist active-membership management is implemented and manually tested.
+- Phase 9B add-new-company request flow is implemented and ready; manual testing is in progress.
+- Alerts exist but remain disabled by default.
+- Cloudflare Pages deployment is planned.
+- GitHub Actions daily pipeline is included in the repo and is configurable once secrets are set.
+
+## High-level architecture
+
+| Layer | Role |
 |---|---|
-| Backend pipeline | Python 3.11+ |
-| Database | Supabase / Postgres |
-| Scheduler | GitHub Actions |
-| Frontend | Cloudflare Pages (React + Vite + TypeScript) |
-| Alerts | SMTP email + Telegram |
+| Python backend | Ingests provider data, stores raw payloads, normalizes data, computes analytics, writes results |
+| Supabase / Postgres | Operational database, analytical tables, views, RLS, auth-backed frontend access |
+| GitHub Actions | Planned scheduler/runner for the daily pipeline and manual workflow dispatch |
+| React + Vite frontend | Dashboard UI for watchlist, add requests, and alert history |
+| Cloudflare Pages | Planned static hosting target for the frontend |
 
-## Quick start
+## Main stack
+
+| Component | Technology |
+|---|---|
+| Backend language | Python 3.11+ |
+| Database | Supabase / PostgreSQL |
+| Scheduler | GitHub Actions |
+| Frontend | React 18 + Vite 5 + TypeScript |
+| Frontend hosting | Cloudflare Pages |
+| Market/provider data | FMP Stable API |
+| Filings | SEC EDGAR |
+| FX rates | ECB FX |
+
+## Safe setup summary
+
+1. Copy `.env.example` to `.env` and fill in placeholder values with your own secrets locally.
+2. Copy `frontend/.env.example` to `frontend/.env` and set only the public Supabase frontend variables.
+3. Create the Python virtual environment and install backend dependencies.
+4. Install frontend dependencies in `frontend/`.
+5. Apply the SQL migrations in order in Supabase.
+6. Validate the schema.
+7. Run the pipeline in `--dry-run` mode first.
+8. Start the frontend locally and sign in with a Supabase Auth user.
+
+On Linux or macOS, the commands are equivalent but activation paths differ.
+
+## Required environment variables
+
+Use placeholders only. Never commit real values.
+
+### Backend `.env`
+
+| Variable | Example placeholder | Purpose |
+|---|---|---|
+| `APP_ENV` | `local` | Runtime environment |
+| `LOG_LEVEL` | `INFO` | Logging verbosity |
+| `SUPABASE_URL` | `https://your-project.supabase.co` | Supabase project URL |
+| `SUPABASE_SERVICE_ROLE_KEY` | `replace_me` | Backend-only Supabase key |
+| `SUPABASE_ANON_KEY` | `replace_me` | Public Supabase anon key |
+| `DATA_PROVIDER_PRIMARY` | `fmp` | Primary market-data provider |
+| `FMP_API_KEY` | `replace_me` | FMP Stable API key |
+| `SEC_USER_AGENT` | `InvestmentAnalysisMVP your_email@example.com` | SEC EDGAR required identifier |
+| `SMTP_ENABLED` | `false` | Email alert toggle |
+| `SMTP_HOST` | `smtp.example.com` | SMTP host |
+| `SMTP_PORT` | `587` | SMTP port |
+| `SMTP_USER` | `replace_me` | SMTP username |
+| `SMTP_PASSWORD` | `replace_me` | SMTP password |
+| `ALERT_EMAIL_FROM` | `alerts@example.com` | Sender address |
+| `ALERT_EMAIL_TO` | `operator@example.com` | Recipient address |
+| `TELEGRAM_ENABLED` | `false` | Telegram alert toggle |
+| `TELEGRAM_BOT_TOKEN` | `replace_me` | Telegram bot token |
+| `TELEGRAM_CHAT_ID` | `replace_me` | Telegram destination |
+| `ALERTS_ENABLED` | `false` | Master alert switch |
+
+Additional provider keys such as `FINNHUB_API_KEY`, `ALPHA_VANTAGE_API_KEY`, and `TWELVE_DATA_API_KEY` exist in the template but only need to be set if you actually use them.
+
+### Frontend `frontend/.env`
+
+| Variable | Example placeholder | Purpose |
+|---|---|---|
+| `VITE_SUPABASE_URL` | `https://your-project.supabase.co` | Public Supabase URL for browser client |
+| `VITE_SUPABASE_ANON_KEY` | `replace_me` | Public anon key for browser client |
+
+## Local backend setup
 
 ```powershell
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
 pip install -e ".[dev]"
 
-# Check app health
+Copy-Item .env.example .env
+
 investment-app health
-
-# Validate configuration
 investment-app config-check
-
-# Run tests
-pytest
 ```
 
-Copy `.env.example` to `.env` and fill in your values before running the pipeline.
-
-## Frontend Dashboard (Phase 8)
-
-The frontend is a React 18 + Vite 5 + TypeScript single-page application (SPA) located in the `frontend/` directory. It reads data directly from Supabase using the **anon key** and Supabase Auth (email/password) — no backend server is required for the UI.
-
-### Local development
+## Local frontend setup
 
 ```powershell
-cd frontend
-cp .env.example .env         # then edit .env with real values
+Set-Location frontend
+Copy-Item .env.example .env
 npm install
-npm run dev                  # serves at http://localhost:5173
+npm run dev
 ```
 
-| Variable | Description |
-|---|---|
-| `VITE_SUPABASE_URL` | Your Supabase project URL (e.g. `https://xyz.supabase.co`) |
-| `VITE_SUPABASE_ANON_KEY` | Supabase anon (public) key — **never** the service-role key |
-
-### Running frontend tests
-
-```powershell
-cd frontend
-npm test           # run once (vitest run)
-npm run test:watch # watch mode
-```
-
-63 tests across 5 suites: `SignalBadge.test.tsx`, `formatters.test.ts`, `watchlistFilters.test.ts`, `WatchlistPage.test.tsx`, `AlertsPage.test.tsx`.
-
-### Production build
-
-```powershell
-cd frontend
-npm run build      # outputs to frontend/dist/
-```
-
-### Deploying to Cloudflare Pages
-
-1. Connect your GitHub repository to Cloudflare Pages.
-2. Set **Framework preset** to `None` (or Vite).
-3. Configure the build:
-
-| Setting | Value |
-|---|---|
-| Root directory | `frontend` |
-| Build command | `npm run build` |
-| Build output directory | `dist` |
-
-4. Add the following environment variables in the Cloudflare Pages dashboard (Settings → Environment variables):
-
-| Variable | Value |
-|---|---|
-| `VITE_SUPABASE_URL` | Your Supabase project URL |
-| `VITE_SUPABASE_ANON_KEY` | Your Supabase anon key |
-
-5. Trigger a deploy. The first deployment should complete in under two minutes.
-
-### Auth and data access assumptions
-
-- Every page requires a **Supabase Auth session**. Users are redirected to the login screen until authenticated. Create users in the Supabase dashboard → Authentication → Users.
-- Data is read from the `dashboard_watchlist_latest` view and the `alert_history` table. Both are protected by Row Level Security policies that require an authenticated session (see `sql/002_rls_policies.sql`).
-- The anon key is intentionally public (it is embedded in client-side JavaScript). Access control is enforced by RLS — without a valid session the anon key cannot read any rows.
-- `dashboard_watchlist_latest` is defined with `WITH (security_invoker = true)` (PostgreSQL 15+, see `sql/003_views_and_functions.sql`). This makes the security intent explicit: Supabase evaluates the RLS policies on the underlying tables for the **calling role** rather than the view owner. The `anon` role is explicitly denied `SELECT` on this view; only the `authenticated` role may query it. The underlying base-table RLS policies act as a second layer of defence.
-- MVP visibility assumption: all authenticated Supabase Auth users share the same read-only view of **all active companies**. This is appropriate for a small private deployment with trusted users. Per-user watchlist isolation (user-scoped `WHERE` clauses + RLS updates) is a post-MVP enhancement.
-- The **service-role key** must never appear in the frontend. It is used only by the Python backend pipeline.
-
-### Disclaimer
-
-The frontend shows a non-dismissible disclaimer on every page:
-> *Private research tool — not financial advice. All data is stored and calculated internally. Do not redistribute.*
-
-## Alert configuration
-
-Phase 7 alerts are **disabled by default** (`ALERTS_ENABLED=false`). No alert rules are evaluated and no records are written to `alert_history` unless the setting is explicitly enabled.
-
-| Setting | Default | Effect |
-|---|---|---|
-| `ALERTS_ENABLED` | `false` | Master on/off switch. When `false`, `process_company_alerts` returns immediately — no DB writes, no sends. |
-| `SMTP_ENABLED` | `false` | Per-channel on/off for email. When `false`, matched email rules are silently skipped — no `failed` history row. |
-| `TELEGRAM_ENABLED` | `false` | Per-channel on/off for Telegram. Same silent-skip behaviour. |
-
-**Security rules:**
-
-- Email credentials (`SMTP_PASSWORD`, `SMTP_USER`) and the Telegram bot token (`TELEGRAM_BOT_TOKEN`) must never be committed to the repository.
-- Add them to `.env` locally or as GitHub Actions secrets (see [docs/03_ENVIRONMENT_AND_SECRETS.md](docs/03_ENVIRONMENT_AND_SECRETS.md)).
-- Tests must never send real emails or Telegram messages. All adapter calls are injected via `send_email_fn=` / `send_telegram_fn=` parameters and replaced with mocks in tests.
-- Delivery failures are persisted to `alert_history.error_message` using a sanitized format (`smtp_send_failed (ExcClassName)`) — never raw exception text, URLs, tokens, or credentials.
+Local frontend URL: `http://localhost:5173`
 
 ## Running the pipeline
 
-Phases 3–7 run through the daily pipeline entry point in [scripts/run_daily_pipeline.py](scripts/run_daily_pipeline.py).
+Use the daily pipeline entry point in [scripts/run_daily_pipeline.py](scripts/run_daily_pipeline.py).
 
-Run a dry-run to confirm configuration and pipeline stages without fetching data or writing to Supabase:
+### Dry-run
 
 ```powershell
 .\.venv\Scripts\python scripts\run_daily_pipeline.py --dry-run
 ```
 
-Run the live pipeline to execute ingestion, Phase 3 features, Phase 4 valuation, Phase 5 qualitative scoring, Phase 6 probabilistic signal generation, and Phase 7 alert evaluation:
+Dry-run validates configuration and prints the planned stages without writing provider-derived results.
+
+### Live run
 
 ```powershell
 .\.venv\Scripts\python scripts\run_daily_pipeline.py
 ```
 
-Inspect persisted valuation outputs in Supabase with a query such as:
+The live run processes pending add-company requests, loads the active watchlist, ingests provider data, computes analytics, and optionally evaluates alerts.
 
-```sql
-select
-	company_id,
-	valuation_date,
-	model_version,
-	iv_p10,
-	iv_p50,
-	iv_p90,
-	current_price,
-	margin_of_safety_conservative,
-	assumptions,
-	method_weights
-from valuation_runs
-order by valuation_date desc, company_id;
-```
+## Running tests
 
-Inspect qualitative scores:
-
-```sql
-select
-	company_id,
-	score_date,
-	model_version,
-	moat_score,
-	management_score,
-	risk_score,
-	governance_score,
-	final_quality_score,
-	human_override,
-	override_reason
-from qualitative_scores
-order by score_date desc, company_id;
-```
-
-Inspect signal runs:
-
-```sql
-select
-	company_id,
-	signal_date,
-	model_version,
-	p_buy,
-	p_buy_adjusted,
-	p_sell,
-	final_signal,
-	uncertainty_penalty,
-	red_flags,
-	freshness_flag
-from signal_runs
-order by signal_date desc, company_id;
-```
-
-Inspect alert history:
-
-```sql
-select
-	company_id,
-	channel,
-	title,
-	status,
-	dedupe_key,
-	sent_at,
-	created_at
-from alert_history
-order by created_at desc;
-```
-
-## Applying the Supabase schema
-
-Run the SQL files in order using the Supabase SQL editor (Dashboard → SQL Editor → New query):
-
-1. `sql/001_initial_schema.sql` — creates all tables, indexes, and check constraints
-2. `sql/002_rls_policies.sql` — enables Row Level Security and creates access policies
-3. `sql/003_views_and_functions.sql` — creates dashboard views and `updated_at` triggers
-4. `sql/004_seed_watchlist_example.sql` — *(optional)* inserts example companies and watchlist
-
-> **Before running step 4:** replace `your_email@example.com` inside `004_seed_watchlist_example.sql` with your real Supabase Auth user email. All four files are idempotent — re-running them will not create duplicate objects or rows.
-
-After applying the schema, confirm all required tables exist:
+### Backend
 
 ```powershell
-python scripts\validate_supabase_schema.py
+.\.venv\Scripts\python -m pytest
 ```
+
+### Frontend
+
+```powershell
+Set-Location frontend
+npm test
+npm run build
+```
+
+Use `npm run test:watch` in `frontend/` for interactive frontend test work.
+
+## Supabase setup summary
+
+Apply the SQL files in order in the Supabase SQL editor:
+
+1. `sql/001_initial_schema.sql`
+2. `sql/002_rls_policies.sql`
+3. `sql/003_views_and_functions.sql`
+4. `sql/004_seed_watchlist_example.sql` (optional sample data)
+5. `sql/005_watchlist_management.sql`
+6. `sql/006_watchlist_add_requests.sql`
+
+Before using the optional seed file, replace any placeholder email with your own test or operator email in a local copy or directly in the SQL editor. Do not commit personal addresses.
+
+Validate the schema after applying the migrations:
+
+```powershell
+.\.venv\Scripts\python scripts\validate_supabase_schema.py
+```
+
+## Watchlist management
+
+The dashboard supports two watchlist flows.
+
+### Existing companies
+
+- Companies can be soft-removed from the active watchlist.
+- Removed companies can be reactivated later.
+- Historical analytical data is preserved; removal does not delete company history.
+
+### Request new company flow
+
+- A user can submit a request with ticker and optional exchange.
+- The pipeline validates the request before creating or reusing a company row.
+- Approved requests create or reactivate the watchlist membership.
+- Ambiguous tickers are rejected unless an exact exchange match can be resolved safely.
+- Analysis appears after the next successful pipeline run.
+
+## Alerts
+
+Alerts are present in the MVP but remain disabled by default.
+
+| Setting | Default | Meaning |
+|---|---|---|
+| `ALERTS_ENABLED` | `false` | Master switch for all alert evaluation |
+| `SMTP_ENABLED` | `false` | Enables SMTP delivery when alerts are enabled |
+| `TELEGRAM_ENABLED` | `false` | Enables Telegram delivery when alerts are enabled |
+
+When alerts are disabled, no alert evaluation runs and no new `alert_history` rows are written by the alert stage.
+
+## GitHub Actions daily pipeline
+
+The repository includes [.github/workflows/daily_pipeline.yml](.github/workflows/daily_pipeline.yml).
+
+GitHub only executes workflow files placed under `.github/workflows/`. The file at that path is the authoritative, executable workflow.
+
+Current workflow characteristics:
+
+- manual-only via `workflow_dispatch` — weekday cron schedule is disabled;
+- fails early with a clear error when required secrets are absent;
+- runs unit tests before the live pipeline step;
+- validates Supabase schema before running the pipeline;
+- requires repository secrets before it can be used safely in production.
+
+Required GitHub Actions secrets:
+
+| Secret | Required | Purpose |
+|---|---|---|
+| `SUPABASE_URL` | Yes | Supabase project URL |
+| `SUPABASE_SERVICE_ROLE_KEY` | Yes | Service-role key for backend DB access |
+| `SUPABASE_ANON_KEY` | No | Anon key (optional; used if backend logic needs it) |
+| `FMP_API_KEY` | Yes | Financial Modeling Prep primary data provider |
+| `SEC_USER_AGENT` | Yes | User-agent string for SEC EDGAR requests |
+| `ALERTS_ENABLED` | No | Master switch for alert evaluation (`true`/`false`) |
+| `SMTP_ENABLED` | No | Enable SMTP delivery (`true`/`false`) |
+| `SMTP_HOST` | No | SMTP server hostname |
+| `SMTP_PORT` | No | SMTP server port |
+| `SMTP_USER` | No | SMTP username |
+| `SMTP_PASSWORD` | No | SMTP password |
+| `ALERT_EMAIL_FROM` | No | Sender address for email alerts |
+| `ALERT_EMAIL_TO` | No | Recipient address for email alerts |
+| `TELEGRAM_ENABLED` | No | Enable Telegram delivery (`true`/`false`) |
+| `TELEGRAM_BOT_TOKEN` | No | Telegram bot token |
+| `TELEGRAM_CHAT_ID` | No | Telegram chat ID |
+| `FINNHUB_API_KEY` | No | Optional secondary data provider |
+| `ALPHA_VANTAGE_API_KEY` | No | Optional secondary data provider |
+| `TWELVE_DATA_API_KEY` | No | Optional secondary data provider |
+
+Only configure provider and alert secrets you actually use.
+
+## Cloudflare Pages deployment
+
+Cloudflare Pages deployment is planned. The intended configuration is:
+
+| Setting | Value |
+|---|---|
+| Root directory | `frontend` |
+| Build command | `npm run build` |
+| Output directory | `dist` |
+
+Frontend environment variables:
+
+| Variable | Placeholder |
+|---|---|
+| `VITE_SUPABASE_URL` | `https://your-project.supabase.co` |
+| `VITE_SUPABASE_ANON_KEY` | `replace_me` |
+
+Do not put `SUPABASE_SERVICE_ROLE_KEY` into Cloudflare Pages.
+
+## Security notes
+
+- Never expose the Supabase service-role key in the frontend.
+- The frontend uses the anon key only, together with Supabase Auth.
+- RLS is the primary access-control layer for browser access.
+- `dashboard_watchlist_latest` and related dashboard views rely on `security_invoker` behavior so access is evaluated as the calling role.
+- Do not commit `.env`, `frontend/.env`, API keys, SMTP credentials, or Telegram tokens.
+- Provider errors persisted to the database should remain sanitized.
+
+## Current limitations
+
+- The app is designed for a private deployment, not a public multi-tenant product.
+- The frontend reads directly from Supabase; there is no separate backend API layer for dashboard queries.
+- Cloudflare Pages deployment is documented but not described here as already live.
+- GitHub Actions automation depends on repository secrets being configured.
+- GDELT/news ingestion is optional and can remain disabled.
+- Alerts exist but are intentionally off by default.
+- Per-user watchlist isolation beyond the current trusted-user model is not implemented.
+
+## Roadmap / post-MVP ideas
+
+- Cloudflare Pages production deployment.
+- GitHub Actions production scheduling and secret management.
+- Backfill and reconciliation workflows.
+- Per-user watchlist isolation.
+- Improved operator dashboards for `pipeline_runs` and provider health.
+- Additional valuation diagnostics and model calibration tools.
+- Expanded alert rule management in the frontend.
 
 ## Phase status
 
 | Phase | Name | Status |
 |---|---|---|
-| 0 | Project Bootstrap | ✅ Complete |
-| 1 | Supabase Schema | ✅ Complete |
-| 2 | Data Ingestion | ✅ Complete |
-| 3 | Features & Ratios | ✅ Complete |
-| 4 | Valuation Engine | ✅ Complete |
-| 5 | Qualitative Scoring | ✅ Complete |
-| 6 | Probabilistic Signal | ✅ Complete |
-| 7 | Alerts | ✅ Complete |
-| 8 | Frontend Dashboard | ✅ Complete |
+| 0 | Project Bootstrap | Complete |
+| 1 | Supabase Schema | Complete |
+| 2 | Data Ingestion | Complete |
+| 3 | Features & Ratios | Complete |
+| 4 | Valuation Engine | Complete |
+| 5 | Qualitative Scoring | Complete |
+| 6 | Probabilistic Signal | Complete |
+| 7 | Alerts | Implemented, disabled by default |
+| 8 | Frontend Dashboard | Complete |
+| 9A | Watchlist Active Membership | Complete and manually tested |
+| 9B | Add New Company Request Flow | Implemented, ready; manual testing in progress |
 
-## Documentation
+## Financial disclaimer
 
-The implementation documentation is written for phased development in VS Code with coding agents such as Claude Sonnet, Codex, or ChatGPT. Each phase is intentionally scoped so the agent can complete, test, and commit one stable increment at a time.
-
-## Recommended development order
-
-1. `docs/00_PROJECT_BRIEF.md`
-2. `docs/01_ARCHITECTURE.md`
-3. `docs/02_REPOSITORY_STRUCTURE.md`
-4. `docs/03_ENVIRONMENT_AND_SECRETS.md`
-5. `sql/001_initial_schema.sql`
-6. `sql/002_rls_policies.sql`
-7. `sql/003_views_and_functions.sql`
-8. `sql/004_seed_watchlist_example.sql`
-9. `docs/04_PHASE_0_PROJECT_BOOTSTRAP.md`
-10. `docs/05_PHASE_1_SUPABASE_SCHEMA.md`
-11. `docs/06_PHASE_2_DATA_INGESTION.md`
-12. `docs/07_PHASE_3_FEATURES_AND_RATIOS.md`
-13. `docs/08_PHASE_4_VALUATION_ENGINE.md`
-14. `docs/09_PHASE_5_QUALITATIVE_SCORING.md`
-15. `docs/10_PHASE_6_PROBABILISTIC_SIGNAL.md`
-16. `docs/11_PHASE_7_ALERTS.md`
-17. `docs/12_PHASE_8_FRONTEND_DASHBOARD.md`
-18. `docs/13_TESTING_AND_VALIDATION.md`
-19. `docs/14_OPERATIONS_RUNBOOK.md`
-20. `docs/15_SECURITY_LICENSE_AND_COMPLIANCE.md`
-21. `agent_prompts/AGENT_MASTER_PROMPT.md`
-22. `agent_prompts/PHASE_EXECUTION_TEMPLATE.md`
-23. `github/daily_pipeline.yml`
-
-## Important disclaimer
-
-This MVP is designed for private research and education. It must not be presented as personalised financial advice. Any public distribution of market data, signals, rankings, or recommendations requires legal and data-licensing review.
+This application is for private research and education only. It is not financial advice, not an offer to buy or sell securities, and not a recommendation engine for public distribution. Any public distribution of market data, rankings, or recommendations requires separate legal, compliance, and data-licensing review.

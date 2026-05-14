@@ -79,6 +79,75 @@ export function WatchlistPage() {
       .catch(() => { /* non-critical */ });
   }, []);
 
+  // Phase 9B: submit a new company add request.
+  const handleRequestSubmit = useCallback(
+    (e: React.FormEvent) => {
+      e.preventDefault();
+      const ticker = requestTicker.trim().toUpperCase();
+      if (!ticker) return;
+      if (!watchlistId) {
+        setRequestError("No watchlist found. Please contact support.");
+        return;
+      }
+      // Client-side duplicate warning: ticker already active in current data.
+      const alreadyActive = rows.some((r) => r.ticker === ticker);
+      if (alreadyActive) {
+        setRequestError(
+          `${ticker} is already active in your watchlist. The pipeline will also validate this.`,
+        );
+        // Do not block submission: backend is the authority.
+      } else {
+        setRequestError(null);
+      }
+      setRequestSubmitting(true);
+      createWatchlistAddRequest({
+        watchlistId,
+        requestedTicker: ticker,
+        requestedExchange: requestExchange.trim() || undefined,
+      })
+        .then((newReq) => {
+          setAddRequests((prev) => [newReq, ...prev]);
+          setRequestTicker("");
+          setRequestExchange("");
+          if (!alreadyActive) setRequestError(null);
+        })
+        .catch((err: unknown) => {
+          const msg = err instanceof Error ? err.message : String(err);
+          // Detect partial unique index violation (duplicate pending request).
+          if (msg.toLowerCase().includes("unique") || msg.toLowerCase().includes("duplicate")) {
+            setRequestError(
+              `A pending request for ${ticker} already exists. Please wait for it to be processed.`,
+            );
+          } else {
+            setRequestError(msg);
+          }
+        })
+        .finally(() => {
+          setRequestSubmitting(false);
+        });
+    },
+    [watchlistId, requestTicker, requestExchange, rows],
+  );
+
+  // Phase 9B: cancel a pending add request.
+  const handleCancelRequest = useCallback((requestId: string) => {
+    setCancellingId(requestId);
+    cancelWatchlistAddRequest(requestId)
+      .then(() => {
+        setAddRequests((prev) =>
+          prev.map((r) => (r.id === requestId ? { ...r, status: "cancelled" as const } : r)),
+        );
+      })
+      .catch((err: unknown) => {
+        setRequestError(
+          `Failed to cancel: ${err instanceof Error ? err.message : String(err)}`,
+        );
+      })
+      .finally(() => {
+        setCancellingId(null);
+      });
+  }, []);
+
   // Phase 9A: soft-remove a company from the active watchlist.
   const handleRemove = useCallback(
     (membershipId: string, ticker: string) => {
@@ -155,6 +224,138 @@ export function WatchlistPage() {
     return sortRows(filtered, sortKey, sortAsc);
   }, [rows, signalFilter, tickerSearch, sortKey, sortAsc]);
 
+  // Phase 9B: map pipeline error_code to a user-friendly message.
+  function friendlyErrorMessage(req: WatchlistAddRequest): string {
+    switch (req.error_code) {
+      case "already_active":
+        return "Already in your active watchlist.";
+      case "invalid_ticker":
+        return "Ticker not found. Please check the symbol and try again.";
+      case "ambiguous_ticker":
+        return "Ticker exists on multiple exchanges. Please specify an exchange.";
+      case "exchange_mismatch":
+        return req.error_message ?? "Exchange does not match the ticker's listed exchange.";
+      case "provider_unavailable":
+      case "fmp_request_failed":
+        return "Provider temporarily unavailable. The pipeline will retry on the next run.";
+      case "internal_error":
+        return "An internal error occurred. Please try again.";
+      default:
+        return req.error_message ?? "Request could not be processed.";
+    }
+  }
+
+  // Phase 9B: status badge label.
+  function statusLabel(status: WatchlistAddRequest["status"]): string {
+    switch (status) {
+      case "pending":   return "Pending";
+      case "approved":  return "Approved ✓";
+      case "rejected":  return "Rejected";
+      case "failed":    return "Failed";
+      case "cancelled": return "Cancelled";
+    }
+  }
+
+  // Phase 9B: reusable add-request section (rendered in both states).
+  const addRequestSection = watchlistId ? (
+    <div className="add-request-section" aria-label="Request new company">
+      <p className="add-request-section__title">Request a new company</p>
+      <form className="add-request-form" onSubmit={handleRequestSubmit} aria-label="Request new company form">
+        <div className="add-request-form__fields">
+          <input
+            className="add-request-form__ticker"
+            type="text"
+            placeholder="Ticker (e.g. AAPL)"
+            value={requestTicker}
+            onChange={(e) => setRequestTicker(e.target.value.toUpperCase())}
+            maxLength={20}
+            aria-label="Ticker symbol"
+            required
+          />
+          <input
+            className="add-request-form__exchange"
+            type="text"
+            placeholder="Exchange (optional, e.g. NASDAQ)"
+            value={requestExchange}
+            onChange={(e) => setRequestExchange(e.target.value.toUpperCase())}
+            maxLength={20}
+            aria-label="Exchange (optional)"
+          />
+          <button
+            className="btn-submit-request"
+            type="submit"
+            disabled={requestSubmitting || !requestTicker.trim()}
+          >
+            {requestSubmitting ? "Submitting…" : "Request"}
+          </button>
+        </div>
+        {requestError && (
+          <p className="add-request-form__error" role="alert">
+            {requestError}
+          </p>
+        )}
+        <p className="add-request-form__hint">
+          The pipeline validates tickers and fetches company data. Analysis will appear
+          after the next pipeline run.
+        </p>
+      </form>
+
+      {addRequests.length > 0 && (
+        <div className="add-request-list">
+          <p className="add-request-list__title">Recent requests</p>
+          <table className="add-request-table" aria-label="Add requests">
+            <thead>
+              <tr>
+                <th scope="col">Ticker</th>
+                <th scope="col">Exchange</th>
+                <th scope="col">Status</th>
+                <th scope="col">Message</th>
+                <th scope="col">Submitted</th>
+                <th scope="col" aria-label="Cancel"></th>
+              </tr>
+            </thead>
+            <tbody>
+              {addRequests.map((req) => (
+                <tr key={req.id} data-status={req.status}>
+                  <td><strong>{req.requested_ticker}</strong></td>
+                  <td>{req.requested_exchange ?? "—"}</td>
+                  <td>
+                    <span className={`status-badge status-badge--${req.status}`}>
+                      {statusLabel(req.status)}
+                    </span>
+                  </td>
+                  <td className="add-request-table__message">
+                    {req.status === "approved" && (
+                      <span>Added. Analysis appears after next pipeline run.</span>
+                    )}
+                    {(req.status === "rejected" || req.status === "failed") && (
+                      <span>{friendlyErrorMessage(req)}</span>
+                    )}
+                  </td>
+                  <td>
+                    {new Date(req.requested_at).toLocaleDateString()}
+                  </td>
+                  <td>
+                    {req.status === "pending" && (
+                      <button
+                        className="btn-cancel-request"
+                        disabled={cancellingId === req.id}
+                        onClick={() => handleCancelRequest(req.id)}
+                        aria-label={`Cancel request for ${req.requested_ticker}`}
+                      >
+                        {cancellingId === req.id ? "Cancelling…" : "Cancel"}
+                      </button>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  ) : null;
+
   if (loading) {
     return (
       <div className="page-state" aria-live="polite" aria-busy="true">
@@ -187,8 +388,8 @@ export function WatchlistPage() {
         <div className="page-state" aria-live="polite">
           <p className="page-state__title">No active companies in watchlist</p>
           <p className="page-state__detail">
-            All companies have been removed. Use the section below to reactivate
-            a company, or add new ones via Supabase.
+            All companies have been removed. Use the sections below to reactivate
+            a company or request a new one.
           </p>
         </div>
 
@@ -250,6 +451,9 @@ export function WatchlistPage() {
             </>
           )}
         </div>
+
+        {/* Phase 9B: add-request section */}
+        {addRequestSection}
       </div>
     );
   }
@@ -375,6 +579,9 @@ export function WatchlistPage() {
           </>
         )}
       </div>
+
+      {/* Phase 9B: add-request section */}
+      {addRequestSection}
 
       <p className="page__footer-note">
         All values are model outputs from the daily pipeline. Not financial

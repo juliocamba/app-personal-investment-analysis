@@ -399,12 +399,74 @@ def _process_pending_add_requests(
                 )
                 continue
 
-            profile = payload[0] if isinstance(payload, list) else payload
+            # ── Resolve profile from potentially multi-profile response ─────
+            # FMP may return multiple profiles when a ticker trades on several
+            # exchanges.  Blindly using payload[0] would silently create the
+            # wrong company row, so we handle every case explicitly.
+            profiles = payload if isinstance(payload, list) else [payload]
+
+            if len(profiles) > 1:
+                if exchange:
+                    matched = [
+                        p for p in profiles
+                        if (p.get("exchangeShortName") or p.get("exchange") or "").upper().strip() == exchange
+                    ]
+                    if len(matched) == 1:
+                        profile = matched[0]
+                    elif len(matched) == 0:
+                        repo_module.reject_watchlist_add_request(
+                            req_id,
+                            "exchange_mismatch",
+                            f"FMP reports '{ticker}' on multiple exchanges, none matching '{exchange}'.",
+                        )
+                        metrics["add_requests_rejected"] += 1
+                        repo_module.log_pipeline_event(
+                            run_id,
+                            stage="add_requests",
+                            level="warning",
+                            message=f"Rejected request for '{ticker}': no FMP profile matches exchange '{exchange}'.",
+                            details={"request_id": req_id, "error_code": "exchange_mismatch"},
+                        )
+                        continue
+                    else:
+                        # Multiple profiles even after filtering by exchange — ambiguous.
+                        repo_module.reject_watchlist_add_request(
+                            req_id,
+                            "ambiguous_ticker",
+                            f"Ticker '{ticker}' has multiple ambiguous listings on '{exchange}'.",
+                        )
+                        metrics["add_requests_rejected"] += 1
+                        repo_module.log_pipeline_event(
+                            run_id,
+                            stage="add_requests",
+                            level="warning",
+                            message=f"Rejected request for '{ticker}': ambiguous FMP listings.",
+                            details={"request_id": req_id, "error_code": "ambiguous_ticker"},
+                        )
+                        continue
+                else:
+                    repo_module.reject_watchlist_add_request(
+                        req_id,
+                        "ambiguous_ticker",
+                        f"Ticker '{ticker}' exists on multiple exchanges. Specify an exchange to disambiguate.",
+                    )
+                    metrics["add_requests_rejected"] += 1
+                    repo_module.log_pipeline_event(
+                        run_id,
+                        stage="add_requests",
+                        level="warning",
+                        message=f"Rejected request for '{ticker}': FMP returned multiple profiles.",
+                        details={"request_id": req_id, "error_code": "ambiguous_ticker"},
+                    )
+                    continue
+            else:
+                profile = profiles[0]
+
             fmp_exchange = (profile.get("exchangeShortName") or profile.get("exchange") or "")
             fmp_exchange = fmp_exchange.upper().strip()
 
             # If the user specified an exchange and it does not match the
-            # profile, reject with exchange_mismatch.
+            # single resolved profile, reject with exchange_mismatch.
             if exchange and fmp_exchange and exchange != fmp_exchange:
                 repo_module.reject_watchlist_add_request(
                     req_id,
@@ -491,6 +553,451 @@ def _build_sec_document_url(
     )
 
 
+def _try_twelve_price_fallback(
+    *,
+    twelve: Any | None,
+    company_id: str,
+    ticker: str,
+    currency: str,
+    fallback_reason: str,
+    run_id: str,
+    metrics: dict[str, int],
+    repo_module: Any,
+    store_raw_response_fn: Any,
+    normalize_twelve_fn: Any,
+) -> None:
+    """Attempt Twelve Data as a price_eod fallback (Phase 10B).
+
+    Emits safe compact pipeline events.  Never raises — any failure is caught
+    and logged so the rest of the company pipeline continues uninterrupted.
+
+    Preconditions already evaluated by the caller:
+    - FMP price data is unusable for this run/ticker.
+    """
+    # ── Guard: Twelve Data connector not configured ───────────────────────────
+    if twelve is None:
+        repo_module.log_pipeline_event(
+            run_id,
+            stage="price_fallback",
+            level="warning",
+            company_id=company_id,
+            message=f"Twelve Data price fallback unavailable for {ticker}: provider not configured.",
+            details={
+                "ticker": ticker,
+                "event": "price_fallback_unavailable_provider_disabled",
+                "fallback_reason": fallback_reason,
+                "provider": "twelve_data",
+            },
+        )
+        return
+
+    # ── Started ───────────────────────────────────────────────────────────────
+    repo_module.log_pipeline_event(
+        run_id,
+        stage="price_fallback",
+        company_id=company_id,
+        message=f"Twelve Data price fallback started for {ticker}.",
+        details={
+            "ticker": ticker,
+            "event": "price_fallback_started",
+            "fallback_reason": fallback_reason,
+            "provider": "twelve_data",
+        },
+    )
+
+    # ── Stage 1: fetch time-series from Twelve Data ───────────────────────────
+    try:
+        resp = twelve.get_time_series(ticker)
+    except Exception as exc:  # noqa: BLE001
+        logger.error(
+            "Twelve Data price fallback fetch error for %s (%s)",
+            ticker,
+            type(exc).__name__,
+        )
+        repo_module.log_pipeline_event(
+            run_id,
+            stage="price_fallback",
+            level="error",
+            company_id=company_id,
+            message=f"Twelve Data price fallback fetch error for {ticker}.",
+            details={
+                "ticker": ticker,
+                "event": "price_fallback_failed",
+                "stage": "twelve_fetch",
+                "fallback_reason": fallback_reason,
+                "provider": "twelve_data",
+                "error_type": type(exc).__name__,
+            },
+        )
+        return
+
+    if not resp.success or not resp.payload:
+        repo_module.log_pipeline_event(
+            run_id,
+            stage="price_fallback",
+            level="warning",
+            company_id=company_id,
+            message=f"Twelve Data price fallback failed for {ticker}: fetch unsuccessful.",
+            details={
+                "ticker": ticker,
+                "event": "price_fallback_failed",
+                "stage": "twelve_fetch",
+                "fallback_reason": fallback_reason,
+                "provider": "twelve_data",
+                "status_code": resp.status_code,
+            },
+        )
+        return
+
+    # ── Stage 2: persist raw payload ─────────────────────────────────────────
+    try:
+        raw_id = store_raw_response_fn(resp, company_id)
+    except Exception as exc:  # noqa: BLE001
+        logger.error(
+            "Twelve Data price fallback raw-store error for %s (%s)",
+            ticker,
+            type(exc).__name__,
+        )
+        repo_module.log_pipeline_event(
+            run_id,
+            stage="price_fallback",
+            level="error",
+            company_id=company_id,
+            message=f"Twelve Data price fallback raw-store error for {ticker}.",
+            details={
+                "ticker": ticker,
+                "event": "price_fallback_failed",
+                "stage": "raw_payload_read",
+                "fallback_reason": fallback_reason,
+                "provider": "twelve_data",
+                "error_type": type(exc).__name__,
+            },
+        )
+        return
+
+    # ── Stage 3: normalise ────────────────────────────────────────────────────
+    try:
+        rows = normalize_twelve_fn(
+            resp.payload,
+            company_id,
+            ticker,
+            currency,
+            raw_payload_id=raw_id,
+        )
+    except Exception as exc:  # noqa: BLE001
+        logger.error(
+            "Twelve Data price fallback normalize error for %s (%s)",
+            ticker,
+            type(exc).__name__,
+        )
+        repo_module.log_pipeline_event(
+            run_id,
+            stage="price_fallback",
+            level="error",
+            company_id=company_id,
+            message=f"Twelve Data price fallback normalise error for {ticker}.",
+            details={
+                "ticker": ticker,
+                "event": "price_fallback_failed",
+                "stage": "price_normalize",
+                "fallback_reason": fallback_reason,
+                "provider": "twelve_data",
+                "error_type": type(exc).__name__,
+            },
+        )
+        return
+
+    if not rows:
+        repo_module.log_pipeline_event(
+            run_id,
+            stage="price_fallback",
+            level="warning",
+            company_id=company_id,
+            message=f"Twelve Data price fallback produced no rows for {ticker}.",
+            details={
+                "ticker": ticker,
+                "event": "price_fallback_no_rows",
+                "fallback_reason": fallback_reason,
+                "provider": "twelve_data",
+            },
+        )
+        return
+
+    # ── Stage 4: upsert ───────────────────────────────────────────────────────
+    try:
+        upserted = repo_module.upsert_price_eod(rows)
+    except Exception as exc:  # noqa: BLE001
+        logger.error(
+            "Twelve Data price fallback upsert error for %s (%s)",
+            ticker,
+            type(exc).__name__,
+        )
+        repo_module.log_pipeline_event(
+            run_id,
+            stage="price_fallback",
+            level="error",
+            company_id=company_id,
+            message=f"Twelve Data price fallback upsert error for {ticker}.",
+            details={
+                "ticker": ticker,
+                "event": "price_fallback_failed",
+                "stage": "price_upsert",
+                "fallback_reason": fallback_reason,
+                "provider": "twelve_data",
+                "error_type": type(exc).__name__,
+            },
+        )
+        return
+
+    metrics["price_fallback_upserted"] += upserted
+    repo_module.log_pipeline_event(
+        run_id,
+        stage="price_fallback",
+        company_id=company_id,
+        message=f"Twelve Data price fallback succeeded for {ticker}: {upserted} rows upserted.",
+        details={
+            "ticker": ticker,
+            "event": "price_fallback_succeeded",
+            "fallback_reason": fallback_reason,
+            "provider": "twelve_data",
+            "rows_normalized": len(rows),
+            "rows_upserted": upserted,
+        },
+    )
+
+
+def _try_sec_statements_fallback(
+    *,
+    sec: Any | None,
+    cik: str,
+    company_id: str,
+    ticker: str,
+    currency: str,
+    fallback_reason: str,
+    run_id: str,
+    metrics: dict[str, int],
+    repo_module: Any,
+    store_raw_response_fn: Any,
+    normalize_sec_fn: Any,
+) -> None:
+    """Attempt SEC companyfacts as annual statements fallback (Phase 10A).
+
+    Emits safe compact pipeline events.  Never raises — any failure is caught
+    and logged so the rest of the company pipeline continues uninterrupted.
+
+    Preconditions already evaluated by the caller:
+    - FMP annual statements are unusable for this run/ticker.
+
+    This function evaluates:
+    - SEC connector available.
+    - Valid CIK present.
+    Then it fetches, normalises, and upserts up to 5 years of annual statements.
+    """
+    # ── Guard: missing CIK ────────────────────────────────────────────────────
+    if not cik:
+        repo_module.log_pipeline_event(
+            run_id,
+            stage="sec_fallback",
+            level="warning",
+            company_id=company_id,
+            message=f"SEC fallback unavailable for {ticker}: missing CIK.",
+            details={
+                "ticker": ticker,
+                "event": "sec_fallback_unavailable_missing_cik",
+                "fallback_reason": fallback_reason,
+            },
+        )
+        return
+
+    # ── Guard: SEC connector not configured ───────────────────────────────────
+    if sec is None:
+        repo_module.log_pipeline_event(
+            run_id,
+            stage="sec_fallback",
+            level="warning",
+            company_id=company_id,
+            message=f"SEC fallback unavailable for {ticker}: provider not configured.",
+            details={
+                "ticker": ticker,
+                "event": "sec_fallback_unavailable_provider_disabled",
+                "fallback_reason": fallback_reason,
+            },
+        )
+        return
+
+    # ── Started ───────────────────────────────────────────────────────────────
+    repo_module.log_pipeline_event(
+        run_id,
+        stage="sec_fallback",
+        company_id=company_id,
+        message=f"SEC fundamentals fallback started for {ticker}.",
+        details={
+            "ticker": ticker,
+            "event": "sec_fallback_started",
+            "fallback_reason": fallback_reason,
+        },
+    )
+
+    # ── Stage 1a: fetch companyfacts from SEC ────────────────────────────────
+    try:
+        facts_resp = sec.get_company_facts(cik)
+    except Exception as exc:  # noqa: BLE001
+        logger.error("SEC fallback fetch error for %s (%s)", ticker, type(exc).__name__)
+        repo_module.log_pipeline_event(
+            run_id,
+            stage="sec_fallback",
+            level="error",
+            company_id=company_id,
+            message=f"SEC fallback fetch error for {ticker}.",
+            details={
+                "ticker": ticker,
+                "cik": cik,
+                "event": "sec_fallback_failed",
+                "stage": "sec_fetch",
+                "fallback_reason": fallback_reason,
+                "error_type": type(exc).__name__,
+            },
+        )
+        return
+
+    if not facts_resp.success or not facts_resp.payload:
+        repo_module.log_pipeline_event(
+            run_id,
+            stage="sec_fallback",
+            level="warning",
+            company_id=company_id,
+            message=f"SEC fallback failed for {ticker}: companyfacts fetch unsuccessful.",
+            details={
+                "ticker": ticker,
+                "cik": cik,
+                "event": "sec_fallback_failed",
+                "stage": "sec_fetch",
+                "fallback_reason": fallback_reason,
+                "status_code": facts_resp.status_code,
+            },
+        )
+        return
+
+    # ── Stage 1b: persist raw payload ────────────────────────────────────────
+    try:
+        raw_payload_id = store_raw_response_fn(facts_resp, company_id)
+    except Exception as exc:  # noqa: BLE001
+        logger.error("SEC fallback raw store error for %s (%s)", ticker, type(exc).__name__)
+        repo_module.log_pipeline_event(
+            run_id,
+            stage="sec_fallback",
+            level="error",
+            company_id=company_id,
+            message=f"SEC fallback raw payload store error for {ticker}.",
+            details={
+                "ticker": ticker,
+                "cik": cik,
+                "event": "sec_fallback_failed",
+                "stage": "raw_payload_read",
+                "fallback_reason": fallback_reason,
+                "error_type": type(exc).__name__,
+            },
+        )
+        return
+
+    # ── Stage 2: normalize ────────────────────────────────────────────────────
+    try:
+        sec_rows, diag = normalize_sec_fn(
+            facts_resp.payload,
+            company_id,
+            ticker,
+            cik,
+            currency=currency,
+            fallback_reason=fallback_reason,
+            raw_payload_id=raw_payload_id,
+        )
+    except Exception as exc:  # noqa: BLE001
+        logger.error("SEC fallback normalize error for %s (%s)", ticker, type(exc).__name__)
+        repo_module.log_pipeline_event(
+            run_id,
+            stage="sec_fallback",
+            level="error",
+            company_id=company_id,
+            message=f"SEC fallback normalize error for {ticker}.",
+            details={
+                "ticker": ticker,
+                "event": "sec_fallback_failed",
+                "stage": "sec_normalize",
+                "fallback_reason": fallback_reason,
+                "error_type": type(exc).__name__,
+            },
+        )
+        return
+
+    if not sec_rows:
+        repo_module.log_pipeline_event(
+            run_id,
+            stage="sec_fallback",
+            level="warning",
+            company_id=company_id,
+            message=f"SEC fallback yielded no usable rows for {ticker}.",
+            details={
+                "ticker": ticker,
+                "event": "sec_fallback_no_rows",
+                "fallback_reason": fallback_reason,
+                "missing_fields": diag.get("missing_fields", []),
+            },
+        )
+        return
+
+    # ── Stage 3: upsert statements_norm ─────────────────────────────────────
+    try:
+        upserted = repo_module.upsert_statements_norm(sec_rows)
+    except Exception as exc:  # noqa: BLE001
+        logger.error("SEC fallback upsert error for %s (%s)", ticker, type(exc).__name__)
+        repo_module.log_pipeline_event(
+            run_id,
+            stage="sec_fallback",
+            level="error",
+            company_id=company_id,
+            message=f"SEC fallback statements upsert error for {ticker}.",
+            details={
+                "ticker": ticker,
+                "cik": cik,
+                "event": "sec_fallback_failed",
+                "stage": "statements_upsert",
+                "fallback_reason": fallback_reason,
+                "error_type": type(exc).__name__,
+                "rows_normalized": diag.get("rows_normalized", 0),
+            },
+        )
+        return
+
+    metrics["sec_fallback_upserted"] += upserted
+
+    # Decide succeeded vs partial based on essential field coverage.
+    _essential = {"revenue", "net_income", "total_assets"}
+    missing = set(diag.get("missing_fields", []))
+    event_name = (
+        "sec_fallback_partial"
+        if _essential & missing
+        else "sec_fallback_succeeded"
+    )
+
+    repo_module.log_pipeline_event(
+        run_id,
+        stage="sec_fallback",
+        company_id=company_id,
+        message=(
+            f"SEC fallback {event_name.replace('sec_fallback_', '')} for {ticker}: "
+            f"{upserted} rows upserted."
+        ),
+        details={
+            "ticker": ticker,
+            "event": event_name,
+            "fallback_reason": fallback_reason,
+            "rows_normalized": diag.get("rows_normalized", 0),
+            "missing_fields": diag.get("missing_fields", []),
+            "weak_fallbacks": diag.get("weak_fallbacks", []),
+        },
+    )
+
+
 def _run_live_pipeline(
     *,
     repo_module: Any,
@@ -499,6 +1006,7 @@ def _run_live_pipeline(
     sec: Any | None,
     ecb: Any | None,
     gdelt: Any | None,
+    twelve: Any | None = None,
     store_raw_response_fn: Any,
     normalize_prices_fn: Any,
     normalize_statements_fn: Any,
@@ -533,6 +1041,10 @@ def _run_live_pipeline(
         "add_requests_approved": 0,
         "add_requests_rejected": 0,
         "add_requests_failed": 0,
+        # Phase 10A
+        "sec_fallback_upserted": 0,
+        # Phase 10B
+        "price_fallback_upserted": 0,
     }
 
     try:
@@ -598,6 +1110,7 @@ def _run_live_pipeline(
 
                     price_resp = fmp.get_historical_prices(ticker)
                     price_raw_id = store_raw_response_fn(price_resp, company_id)
+                    price_rows: list[Any] = []
                     if price_resp.success and price_resp.payload:
                         price_rows = normalize_prices_fn(
                             price_resp.payload,
@@ -607,6 +1120,28 @@ def _run_live_pipeline(
                             price_raw_id,
                         )
                         metrics["prices_upserted"] += repo_module.upsert_price_eod(price_rows)
+
+                    # ── Phase 10B: Twelve Data price fallback ─────────────────
+                    from investment_app.etl.normalize_prices import (
+                        fmp_prices_need_fallback,
+                        normalize_twelve_data_prices as _normalize_twelve_prices,
+                    )
+                    needs_price_fallback, price_fallback_reason = fmp_prices_need_fallback(
+                        price_resp, price_rows
+                    )
+                    if needs_price_fallback:
+                        _try_twelve_price_fallback(
+                            twelve=twelve,
+                            company_id=company_id,
+                            ticker=ticker,
+                            currency=currency,
+                            fallback_reason=price_fallback_reason,
+                            run_id=run_id,
+                            metrics=metrics,
+                            repo_module=repo_module,
+                            store_raw_response_fn=store_raw_response_fn,
+                            normalize_twelve_fn=_normalize_twelve_prices,
+                        )
 
                     inc_resp = fmp.get_income_statement(ticker, period="annual", limit=5)
                     bal_resp = fmp.get_balance_sheet(ticker, period="annual", limit=5)
@@ -625,6 +1160,29 @@ def _run_live_pipeline(
                         stmt_rows
                     )
 
+                    # ── Phase 10A: SEC fundamentals fallback ──────────────────
+                    from investment_app.etl.normalize_sec_companyfacts import (
+                        fmp_statements_need_fallback,
+                        normalize_sec_companyfacts_annual as _normalize_sec_annual,
+                    )
+                    needs_fallback, fallback_reason = fmp_statements_need_fallback(
+                        inc_resp, bal_resp, cf_resp, stmt_rows
+                    )
+                    if needs_fallback:
+                        _try_sec_statements_fallback(
+                            sec=sec,
+                            cik=cik,
+                            company_id=company_id,
+                            ticker=ticker,
+                            currency=currency,
+                            fallback_reason=fallback_reason,
+                            run_id=run_id,
+                            metrics=metrics,
+                            repo_module=repo_module,
+                            store_raw_response_fn=store_raw_response_fn,
+                            normalize_sec_fn=_normalize_sec_annual,
+                        )
+
                 if sec is not None and cik:
                     sub_resp = sec.get_submissions(cik)
                     sub_raw_id = store_raw_response_fn(sub_resp, company_id)
@@ -638,9 +1196,8 @@ def _run_live_pipeline(
                         metrics["filings_upserted"] += repo_module.upsert_filings_index(
                             filing_rows
                         )
-
-                    facts_resp = sec.get_company_facts(cik)
-                    store_raw_response_fn(facts_resp, company_id)
+                    # SEC companyfacts are now fetched lazily in
+                    # _try_sec_statements_fallback only when needed.
 
                 if gdelt_enabled:
                     news_resp = gdelt.search_news(_build_news_query(company), max_records=10)
@@ -1043,6 +1600,7 @@ def main(
     from investment_app.connectors.fmp import FMPConnector
     from investment_app.connectors.gdelt import GDELTConnector
     from investment_app.connectors.sec_edgar import SECEdgarConnector
+    from investment_app.connectors.twelve_data import TwelveDataConnector
     from investment_app.alerts import process_company_alerts
     from investment_app.db import repositories as repo
     from investment_app.etl.normalize_news import normalize_gdelt_news
@@ -1078,6 +1636,13 @@ def main(
             "[yellow]Warning: SEC_USER_AGENT not set — SEC filing ingestion will be skipped.[/yellow]"
         )
 
+    twelve_data_key = settings.twelve_data_api_key
+    twelve_available = (
+        _provider_enabled(providers_config, "twelve_data")
+        and not _is_placeholder(twelve_data_key)
+        and bool(twelve_data_key)
+    )
+
     # Initialise connectors.
     fmp: FMPConnector | None = FMPConnector(fmp_key) if fmp_available else None
     sec: SECEdgarConnector | None = (
@@ -1087,6 +1652,7 @@ def main(
     gdelt = (
         GDELTConnector() if _provider_enabled(providers_config, "gdelt") else None
     )
+    twelve = TwelveDataConnector(twelve_data_key) if twelve_available else None
 
     metrics = _run_live_pipeline(
         repo_module=repo,
@@ -1095,6 +1661,7 @@ def main(
         sec=sec,
         ecb=ecb,
         gdelt=gdelt,
+        twelve=twelve,
         store_raw_response_fn=store_raw_response,
         normalize_prices_fn=normalize_fmp_prices,
         normalize_statements_fn=normalize_fmp_statements,

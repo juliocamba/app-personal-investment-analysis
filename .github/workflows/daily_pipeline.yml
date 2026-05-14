@@ -8,9 +8,9 @@ on:
         required: false
         default: "false"
   # schedule:
-     # 22:30 UTC Monday–Friday (after US market close).
-     # Re-enable once production secrets are verified.
-     - cron: "30 22 * * 1-5"
+  #   # 22:30 UTC Monday–Friday (after US market close).
+  #   # Re-enable once production secrets are verified.
+  #   - cron: "30 22 * * 1-5"
 
 jobs:
   daily-pipeline:

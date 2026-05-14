@@ -1045,6 +1045,11 @@ def _run_live_pipeline(
         "sec_fallback_upserted": 0,
         # Phase 10B
         "price_fallback_upserted": 0,
+        # Phase 10C
+        "readiness_classified": 0,
+        "readiness_skipped_valuation": 0,
+        "readiness_skipped_signal": 0,
+        "readiness_errors": 0,
     }
 
     try:
@@ -1307,6 +1312,33 @@ def _run_live_pipeline(
                         details={"error_type": type(exc).__name__},
                     )
 
+        # ── Phase 10C: readiness classification ──────────────────────────────
+        from investment_app.pipeline_readiness import (
+            classify_company_for_pipeline as _classify_readiness,
+            should_skip_valuation as _should_skip_valuation,
+            should_skip_signal as _should_skip_signal,
+        )
+        _readiness_by_company_id: dict[str, dict[str, Any]] = {}
+        if companies:
+            repo_module.log_pipeline_event(
+                run_id,
+                stage="readiness",
+                message="Starting readiness classification.",
+            )
+            for company in companies:
+                company_id = _resolve_company_id(company, repo_module)
+                if not company_id:
+                    continue
+                _r = _classify_readiness(
+                    company, company_id,
+                    repo_module=repo_module,
+                    run_id=run_id,
+                    factor_date=factor_date,
+                    metrics=metrics,
+                )
+                if _r is not None:
+                    _readiness_by_company_id[company_id] = _r
+
         # ── Phase 4: valuation ────────────────────────────────────────────────
         if compute_valuation_fn is not None and companies:
             repo_module.log_pipeline_event(
@@ -1320,6 +1352,26 @@ def _run_live_pipeline(
                 sector: str = company.get("sector", "")
                 company_id = _resolve_company_id(company, repo_module)
                 if not company_id:
+                    continue
+                # ── Phase 10C: readiness gate ─────────────────────────────────
+                _readiness = _readiness_by_company_id.get(company_id)
+                if _should_skip_valuation(_readiness):
+                    repo_module.log_pipeline_event(
+                        run_id,
+                        stage="valuation",
+                        company_id=company_id,
+                        message=(
+                            f"Valuation skipped for {ticker}: readiness gate "
+                            f"({_readiness['readiness_status']})."
+                        ),
+                        details={
+                            "ticker": ticker,
+                            "event": "readiness_skipped_valuation",
+                            "readiness_status": _readiness["readiness_status"],
+                            "reason_codes": _readiness["reason_codes"],
+                        },
+                    )
+                    metrics["readiness_skipped_valuation"] += 1
                     continue
                 try:
                     skip_diag: dict[str, Any] = {}
@@ -1433,6 +1485,26 @@ def _run_live_pipeline(
                 ticker: str = company.get("ticker", "")
                 company_id = _resolve_company_id(company, repo_module)
                 if not company_id:
+                    continue
+                # ── Phase 10C: readiness gate ─────────────────────────────────
+                _readiness = _readiness_by_company_id.get(company_id)
+                if _should_skip_signal(_readiness):
+                    repo_module.log_pipeline_event(
+                        run_id,
+                        stage="signal",
+                        company_id=company_id,
+                        message=(
+                            f"Signal skipped for {ticker}: readiness gate "
+                            f"({_readiness['readiness_status']})."
+                        ),
+                        details={
+                            "ticker": ticker,
+                            "event": "readiness_skipped_signal",
+                            "readiness_status": _readiness["readiness_status"],
+                            "reason_codes": _readiness["reason_codes"],
+                        },
+                    )
+                    metrics["readiness_skipped_signal"] += 1
                     continue
                 try:
                     signal_row = compute_signal_fn(

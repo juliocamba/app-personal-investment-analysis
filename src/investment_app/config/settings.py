@@ -1,9 +1,9 @@
 """Application settings loaded from environment variables."""
 from __future__ import annotations
 
-from typing import Literal
+from typing import Any, Literal
 
-from pydantic import Field
+from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 # Lowercase substrings that indicate a value was copied from .env.example
@@ -60,6 +60,14 @@ class Settings(BaseSettings):
     smtp_password: str = Field(default="")
     alert_email_from: str = Field(default="")
     alert_email_to: str = Field(default="")
+
+    @field_validator("smtp_port", mode="before")
+    @classmethod
+    def _coerce_smtp_port(cls, v: Any) -> Any:
+        """Convert empty string to the default port (587) to handle unset CI secrets."""
+        if v == "" or v is None:
+            return 587
+        return v
 
     # Telegram
     telegram_enabled: bool = Field(default=False)

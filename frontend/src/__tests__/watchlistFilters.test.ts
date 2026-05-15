@@ -46,6 +46,11 @@ function makeRow(overrides: Partial<WatchlistRow>): WatchlistRow {
     red_flags: null,
     explanation: null,
     freshness_flag: null,
+    readiness_status: null,
+    provider_mix: null,
+    readiness_reason_codes: null,
+    can_run_valuation: null,
+    can_run_signal: null,
     ...overrides,
   };
 }
@@ -159,5 +164,56 @@ describe("sortRows", () => {
     const original = [...rows];
     sortRows(rows, "ticker", false);
     expect(rows).toEqual(original);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// TRACKING_ONLY filter and HOLD exclusion (Phase 10C.4)
+// ---------------------------------------------------------------------------
+
+describe("filterRows — TRACKING_ONLY filter and HOLD exclusion", () => {
+  const trackingRow = makeRow({
+    company_id: "5",
+    ticker: "ASML",
+    name: "ASML Holding",
+    final_signal: "hold",
+    can_run_signal: false,
+    readiness_status: "tracking_only",
+  });
+  const mixedRows = [...rows, trackingRow];
+
+  it("TRACKING_ONLY filter returns only rows with can_run_signal = false", () => {
+    const result = filterRows(mixedRows, "TRACKING_ONLY", "");
+    expect(result).toHaveLength(1);
+    expect(result[0].ticker).toBe("ASML");
+  });
+
+  it("TRACKING_ONLY filter returns empty when no tracking rows exist", () => {
+    expect(filterRows(rows, "TRACKING_ONLY", "")).toHaveLength(0);
+  });
+
+  it("HOLD filter excludes rows with can_run_signal = false", () => {
+    const result = filterRows(mixedRows, "HOLD", "");
+    expect(result.some((r) => r.ticker === "ASML")).toBe(false);
+  });
+
+  it("HOLD filter still includes rows with can_run_signal = null (legacy rows)", () => {
+    const result = filterRows(mixedRows, "HOLD", "");
+    expect(result.some((r) => r.ticker === "MSFT")).toBe(true);
+  });
+
+  it("ALL filter includes tracking-only rows", () => {
+    const result = filterRows(mixedRows, "ALL", "");
+    expect(result.some((r) => r.ticker === "ASML")).toBe(true);
+  });
+
+  it("TRACKING_ONLY filter respects search term", () => {
+    const result = filterRows(mixedRows, "TRACKING_ONLY", "asml");
+    expect(result).toHaveLength(1);
+    expect(result[0].ticker).toBe("ASML");
+  });
+
+  it("TRACKING_ONLY filter + non-matching search returns empty", () => {
+    expect(filterRows(mixedRows, "TRACKING_ONLY", "zzz")).toHaveLength(0);
   });
 });

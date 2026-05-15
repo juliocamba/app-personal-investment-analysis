@@ -1,8 +1,10 @@
 import React, { useState } from "react";
 import type { WatchlistRow } from "../types";
 import { SignalBadge } from "./SignalBadge";
+import { ReadinessBadge } from "./ReadinessBadge";
 import { FreshnessTag } from "./FreshnessTag";
 import { RedFlagList } from "./RedFlagList";
+import { formatReasonCode, readinessLabel } from "../utils/readiness";
 import {
   formatPrice,
   formatPct,
@@ -33,6 +35,9 @@ interface Props {
  */
 export function CompanyRow({ row, onRemove, isRemoving = false }: Props) {
   const [expanded, setExpanded] = useState(false);
+
+  // can_run_signal === false → price-only tracking; suppress investment signal display.
+  const isTracking = row.can_run_signal === false;
 
   const ivRange =
     row.iv_p25 != null && row.iv_p75 != null
@@ -68,9 +73,13 @@ export function CompanyRow({ row, onRemove, isRemoving = false }: Props) {
           {row.sector && <span className="company-sector">{row.sector}</span>}
         </td>
 
-        {/* Signal */}
+        {/* Signal / Readiness */}
         <td className="company-row__signal">
-          <SignalBadge signal={row.final_signal} />
+          {isTracking ? (
+            <ReadinessBadge status={row.readiness_status} />
+          ) : (
+            <SignalBadge signal={row.final_signal} />
+          )}
         </td>
 
         {/* Price */}
@@ -81,9 +90,11 @@ export function CompanyRow({ row, onRemove, isRemoving = false }: Props) {
           )}
         </td>
 
-        {/* p_buy_adjusted */}
+        {/* p_buy_adjusted — hidden for tracking-only rows */}
         <td className="company-row__num">
-          {row.p_buy_adjusted != null ? (
+          {isTracking ? (
+            <span className="text-muted">—</span>
+          ) : row.p_buy_adjusted != null ? (
             <span className={row.p_buy_adjusted >= 0.6 ? "num--positive" : ""}>
               {formatPct(row.p_buy_adjusted)}
             </span>
@@ -92,9 +103,11 @@ export function CompanyRow({ row, onRemove, isRemoving = false }: Props) {
           )}
         </td>
 
-        {/* p_sell */}
+        {/* p_sell — hidden for tracking-only rows */}
         <td className="company-row__num">
-          {row.p_sell != null ? (
+          {isTracking ? (
+            <span className="text-muted">—</span>
+          ) : row.p_sell != null ? (
             <span className={row.p_sell >= 0.4 ? "num--negative" : ""}>
               {formatPct(row.p_sell)}
             </span>
@@ -175,13 +188,47 @@ export function CompanyRow({ row, onRemove, isRemoving = false }: Props) {
         <tr className="company-detail-row">
           <td colSpan={11} className="company-detail-cell">
             <div className="company-detail">
-              {/* Signal explanation */}
-              {row.explanation && (
+              {/* Readiness notice (tracking/partial) or signal explanation (analysis-ready) */}
+              {isTracking || row.can_run_valuation === false ? (
+                <div className="detail-section detail-section--readiness">
+                  <h4 className="detail-section__title">Readiness notice</h4>
+                  <p className="detail-section__text">
+                    {isTracking
+                      ? "Price data is available for this company. Valuation and investment signal are not currently available due to provider or data coverage limitations."
+                      : "Price data is available for this company. Full valuation is not currently available due to provider or data coverage limitations."}
+                  </p>
+                  <div className="detail-grid">
+                    {row.readiness_status && (
+                      <div className="detail-grid__item">
+                        <span className="detail-grid__label">Readiness status</span>
+                        <span className="detail-grid__value">
+                          {readinessLabel(row.readiness_status)}
+                        </span>
+                      </div>
+                    )}
+                    {row.provider_mix && (
+                      <div className="detail-grid__item">
+                        <span className="detail-grid__label">Provider coverage</span>
+                        <span className="detail-grid__value">{row.provider_mix}</span>
+                      </div>
+                    )}
+                  </div>
+                  {row.readiness_reason_codes && row.readiness_reason_codes.length > 0 && (
+                    <ul className="readiness-reason-list">
+                      {row.readiness_reason_codes.map((code) => (
+                        <li key={code} className="readiness-reason-list__item">
+                          {formatReasonCode(code)}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              ) : row.explanation ? (
                 <div className="detail-section">
                   <h4 className="detail-section__title">Signal explanation</h4>
                   <p className="detail-section__text">{row.explanation}</p>
                 </div>
-              )}
+              ) : null}
 
               {/* Red flags */}
               <div className="detail-section">

@@ -39,6 +39,12 @@ export interface WatchlistRow {
   red_flags: string[] | null;
   explanation: string | null;
   freshness_flag: string | null;
+  // Phase 10C: provider readiness fields from company_analysis_readiness
+  readiness_status: string | null;
+  provider_mix: string | null;
+  readiness_reason_codes: string[] | null;
+  can_run_valuation: boolean | null;
+  can_run_signal: boolean | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -79,7 +85,7 @@ export interface InactiveWatchlistRow {
 // Valid values mirror the SQL CHECK constraint on signal_runs.final_signal:
 //   strong_buy | buy | hold | sell | strong_sell | insufficient_data
 // The frontend uppercases the stored value before comparison.
-export type SignalFilter = "ALL" | "BUY" | "STRONG_BUY" | "SELL" | "STRONG_SELL" | "HOLD" | "INSUFFICIENT_DATA";
+export type SignalFilter = "ALL" | "BUY" | "STRONG_BUY" | "SELL" | "STRONG_SELL" | "HOLD" | "INSUFFICIENT_DATA" | "TRACKING_ONLY";
 
 export type SortKey =
   | "ticker"

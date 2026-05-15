@@ -22,6 +22,7 @@ const SIGNAL_FILTERS: SignalFilter[] = [
   "INSUFFICIENT_DATA",
   "SELL",
   "STRONG_SELL",
+  "TRACKING_ONLY",
 ];
 
 const SORT_OPTIONS: { value: SortKey; label: string }[] = [

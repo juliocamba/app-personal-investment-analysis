@@ -8,9 +8,18 @@ export function filterRows(
   let result = rows;
 
   if (signal !== "ALL") {
-    result = result.filter(
-      (r) => (r.final_signal ?? "").toUpperCase() === signal,
-    );
+    if (signal === "TRACKING_ONLY") {
+      result = result.filter((r) => r.can_run_signal === false);
+    } else if (signal === "HOLD") {
+      // Exclude tracking-only rows from HOLD so they don't surface as actionable signals.
+      result = result.filter(
+        (r) => (r.final_signal ?? "").toUpperCase() === "HOLD" && r.can_run_signal !== false,
+      );
+    } else {
+      result = result.filter(
+        (r) => (r.final_signal ?? "").toUpperCase() === signal,
+      );
+    }
   }
 
   const q = search.trim().toLowerCase();

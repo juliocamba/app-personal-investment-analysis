@@ -394,6 +394,7 @@ def compute_signal_run(
 		red_flags=red_flags,
 		p_buy_adjusted=p_buy_adjusted,
 		p_sell=p_sell,
+		uncertainty_width=uncertainty_width or None,
 	)
 
 	return {

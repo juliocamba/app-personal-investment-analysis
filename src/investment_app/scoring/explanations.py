@@ -68,6 +68,52 @@ def build_top_feature_contributors(
 	return contributors
 
 
+# ---------------------------------------------------------------------------
+# Red flag plain-English labels
+# ---------------------------------------------------------------------------
+
+_RED_FLAG_LABELS: dict[str, str] = {
+	"negative_margin_of_safety":  "price above intrinsic value",
+	"overvalued_vs_iv_p75":       "price exceeds optimistic IV estimate",
+	"quality_breakdown":          "quality score very low",
+	"weak_quality":               "weak quality indicators",
+	"high_leverage":              "high financial leverage",
+	"critical_interest_coverage": "insufficient interest coverage",
+	"negative_direct_fcf":        "negative free cash flow",
+	"zero_direct_fcf":            "zero free cash flow",
+	"negative_news_spike":        "recent negative news spike",
+	"missing_valuation":          "valuation unavailable",
+	"missing_qualitative_score":  "qualitative data unavailable",
+	"missing_ratio_factors":      "ratio factors unavailable",
+	"freshness_stale":            "stale input data",
+	"freshness_missing_inputs":   "missing core inputs",
+}
+
+# Priority order for selecting the top bearish driver(s) in sell explanations.
+_BEARISH_PRIORITY: list[str] = [
+	"negative_margin_of_safety",
+	"overvalued_vs_iv_p75",
+	"quality_breakdown",
+	"high_leverage",
+	"critical_interest_coverage",
+	"negative_direct_fcf",
+	"zero_direct_fcf",
+	"weak_quality",
+	"negative_news_spike",
+]
+
+
+def _label(flag: str) -> str:
+	"""Return a plain-English label for a red flag code."""
+	return _RED_FLAG_LABELS.get(flag, flag.replace("_", " "))
+
+
+def _top_bearish(red_flags: list[str], limit: int = 2) -> list[str]:
+	"""Return up to *limit* highest-priority bearish flags."""
+	prioritised = [f for f in _BEARISH_PRIORITY if f in red_flags]
+	return prioritised[:limit] if prioritised else list(red_flags[:limit])
+
+
 def build_signal_explanation(
 	*,
 	final_signal: str,
@@ -78,29 +124,80 @@ def build_signal_explanation(
 	red_flags: list[str],
 	p_buy_adjusted: float,
 	p_sell: float,
+	uncertainty_width: float | None = None,
 ) -> str:
-	"""Build a short deterministic explanation string."""
-	parts: list[str] = [
-		f"Signal is {final_signal} with adjusted buy probability {p_buy_adjusted:.2f}"
-	]
+	"""Build a short, structured, plain-English explanation string.
 
-	mos = None
+	The function is backward-compatible: *uncertainty_width* defaults to None
+	and existing callers that omit it continue to work without modification.
+	"""
+	sig = final_signal.upper()
+	mos: float | None = None
 	if valuation_row is not None:
 		mos = valuation_row.get("margin_of_safety_conservative")
-	if mos is not None:
-		parts.append(f"because conservative margin of safety is {mos:.0%}")
-	else:
-		parts.append("because valuation evidence is incomplete")
 
-	parts.append(f"quality score is {quality_score:.1f}")
-	parts.append(f"balance-sheet score is {balance_score:.1f}")
+	# Optional uncertainty suffix appended to every label when width is wide.
+	uncertainty_note = (
+		" Wide valuation range — estimates carry high uncertainty."
+		if uncertainty_width is not None and uncertainty_width > 0.50
+		else ""
+	)
 
-	if freshness_flag != "ok":
-		parts.append(f"data freshness is {freshness_flag}")
+	# ── Insufficient data ────────────────────────────────────────────────────
+	if sig == "INSUFFICIENT_DATA":
+		if "missing_valuation" in red_flags:
+			return (
+				"Insufficient data — valuation unavailable; cannot assess margin of safety."
+				+ uncertainty_note
+			)
+		return (
+			"Insufficient data — core inputs missing; signal cannot be determined."
+			+ uncertainty_note
+		)
 
-	if red_flags:
-		parts.append(f"red flags: {', '.join(red_flags[:3])}")
-	elif p_sell >= 0.60:
-		parts.append("sell pressure remains elevated")
+	# ── Sell / Strong sell ───────────────────────────────────────────────────
+	if sig in ("STRONG_SELL", "SELL"):
+		label = "Strong sell" if sig == "STRONG_SELL" else "Sell"
+		top = _top_bearish(red_flags)
+		if top:
+			reasons = " and ".join(_label(f) for f in top)
+			return f"{label} — {reasons}." + uncertainty_note
+		if mos is not None and mos < 0.0:
+			return f"{label} — price above intrinsic value ({mos:.0%} MoS)." + uncertainty_note
+		return f"{label} — elevated sell pressure (p_sell={p_sell:.2f})." + uncertainty_note
 
-	return "; ".join(parts) + "."
+	# ── Buy / Strong buy ─────────────────────────────────────────────────────
+	if sig in ("STRONG_BUY", "BUY"):
+		label = "Strong buy" if sig == "STRONG_BUY" else "Buy"
+		if mos is not None:
+			parts: list[str] = [f"{label} — conservative margin of safety {mos:.0%}"]
+			if quality_score >= 60.0:
+				parts.append("supported by strong quality score")
+			if not red_flags:
+				parts.append("no major red flags")
+			return "; ".join(parts) + "." + uncertainty_note
+		return (
+			f"{label} — buy probability {p_buy_adjusted:.2f} with no disqualifying red flags."
+			+ uncertainty_note
+		)
+
+	# ── Hold ─────────────────────────────────────────────────────────────────
+	if p_buy_adjusted >= 0.50 and p_sell >= 0.50:
+		return "Hold — mixed signals; buy and sell pressure both elevated." + uncertainty_note
+	if p_buy_adjusted >= 0.55:
+		return (
+			f"Hold — buy probability ({p_buy_adjusted:.2f}) just below threshold."
+			+ uncertainty_note
+		)
+	if freshness_flag == "missing_inputs":
+		return "Hold — low confidence due to missing core inputs." + uncertainty_note
+	if freshness_flag == "stale":
+		return "Hold — low confidence due to stale input data." + uncertainty_note
+	if freshness_flag == "limited":
+		return "Hold — limited evidence; no high-conviction signal." + uncertainty_note
+	if p_buy_adjusted >= 0.40:
+		return (
+			f"Hold — insufficient directional conviction (p_buy_adj={p_buy_adjusted:.2f})."
+			+ uncertainty_note
+		)
+	return "Hold — no strong buy or sell case established." + uncertainty_note

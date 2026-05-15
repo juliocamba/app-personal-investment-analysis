@@ -898,3 +898,27 @@ def insert_alert_history(
     response = _db(client).table("alert_history").insert(row).execute()
     return response.data[0] if response.data else None
 
+
+# ── Phase 10C.3: Readiness snapshots ──────────────────────────────────────────
+
+def upsert_company_analysis_readiness(
+    rows: list[dict[str, Any]], *, client: Any = None
+) -> int:
+    """Upsert current-state readiness snapshot rows into ``company_analysis_readiness``.
+
+    Each row represents the latest readiness classification for one company.
+    The primary key is ``company_id``, so this always overwrites the previous
+    snapshot for that company.
+
+    Returns the number of rows written.
+    """
+    if not rows:
+        return 0
+    response = (
+        _db(client)
+        .table("company_analysis_readiness")
+        .upsert(rows, on_conflict="company_id")
+        .execute()
+    )
+    return len(response.data)
+

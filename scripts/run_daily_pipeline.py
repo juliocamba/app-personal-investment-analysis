@@ -1050,6 +1050,7 @@ def _run_live_pipeline(
         "readiness_skipped_valuation": 0,
         "readiness_skipped_signal": 0,
         "readiness_errors": 0,
+        "readiness_snapshots_upserted": 0,
     }
 
     try:
@@ -1314,6 +1315,7 @@ def _run_live_pipeline(
 
         # ── Phase 10C: readiness classification ──────────────────────────────
         from investment_app.pipeline_readiness import (
+            build_readiness_snapshot_row as _build_readiness_snapshot_row,
             classify_company_for_pipeline as _classify_readiness,
             should_skip_valuation as _should_skip_valuation,
             should_skip_signal as _should_skip_signal,
@@ -1338,6 +1340,17 @@ def _run_live_pipeline(
                 )
                 if _r is not None:
                     _readiness_by_company_id[company_id] = _r
+                    # Phase 10C.3: persist current-state snapshot
+                    try:
+                        _snapshot = _build_readiness_snapshot_row(_r, company_id)
+                        repo_module.upsert_company_analysis_readiness([_snapshot])
+                        metrics["readiness_snapshots_upserted"] += 1
+                    except Exception as _snap_exc:  # noqa: BLE001
+                        logger.warning(
+                            "Readiness snapshot persist failed for %s (%s)",
+                            company_id,
+                            type(_snap_exc).__name__,
+                        )
 
         # ── Phase 4: valuation ────────────────────────────────────────────────
         if compute_valuation_fn is not None and companies:

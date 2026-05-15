@@ -421,3 +421,55 @@ def test_upsert_ratios_factors_uses_correct_conflict_columns() -> None:
     client.table.return_value.upsert.assert_called_once_with(
         rows, on_conflict="company_id,factor_date"
     )
+
+
+# ── upsert_company_analysis_readiness ─────────────────────────────────────────
+
+
+def test_upsert_company_analysis_readiness_returns_count() -> None:
+    rows = [
+        {
+            "company_id": "c1",
+            "readiness_status": "analysis_ready",
+            "can_run_valuation": True,
+            "can_run_signal": True,
+            "readiness_reason_codes": [],
+            "readiness_updated_at": "2024-01-02T00:00:00+00:00",
+        }
+    ]
+    client = _make_read_client(rows)
+    result = repo.upsert_company_analysis_readiness(rows, client=client)
+    assert result == 1
+
+
+def test_upsert_company_analysis_readiness_returns_zero_for_empty_rows() -> None:
+    client = _make_read_client([])
+    result = repo.upsert_company_analysis_readiness([], client=client)
+    assert result == 0
+    client.table.assert_not_called()
+
+
+def test_upsert_company_analysis_readiness_uses_company_id_conflict_key() -> None:
+    rows = [{"company_id": "c1", "readiness_status": "tracking_only",
+             "can_run_valuation": False, "can_run_signal": False,
+             "readiness_reason_codes": [], "readiness_updated_at": "2024-01-02T00:00:00+00:00"}]
+    client = _make_read_client(rows)
+    repo.upsert_company_analysis_readiness(rows, client=client)
+    client.table.return_value.upsert.assert_called_once_with(rows, on_conflict="company_id")
+
+
+def test_upsert_company_analysis_readiness_writes_expected_payload() -> None:
+    row = {
+        "company_id": "abc-123",
+        "readiness_status": "partial_analysis",
+        "provider_mix": "fmp_only",
+        "readiness_reason_codes": ["missing_fundamentals"],
+        "can_run_valuation": False,
+        "can_run_signal": True,
+        "limiting_domain": "fundamentals",
+        "readiness_updated_at": "2024-06-01T12:00:00+00:00",
+    }
+    client = _make_read_client([row])
+    repo.upsert_company_analysis_readiness([row], client=client)
+    client.table.assert_called_once_with("company_analysis_readiness")
+    client.table.return_value.upsert.assert_called_once_with([row], on_conflict="company_id")

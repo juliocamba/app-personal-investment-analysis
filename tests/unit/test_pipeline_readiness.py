@@ -18,6 +18,7 @@ from typing import Any
 import pytest
 
 from investment_app.pipeline_readiness import (
+    build_readiness_snapshot_row,
     classify_company_for_pipeline,
     should_skip_valuation,
     should_skip_signal,
@@ -47,6 +48,7 @@ class _FakeRepo:
         self._valuation_row = valuation_row
         self._signal_rows = signal_rows or []
         self.events: list[dict[str, Any]] = []
+        self.readiness_snapshots: list[dict[str, Any]] = []
 
     def get_prices_for_company(
         self, company_id: str, *, as_of_date: str | None = None, limit: int = 1
@@ -91,6 +93,15 @@ class _FakeRepo:
             "message": message,
             "details": details or {},
         })
+
+    def upsert_company_analysis_readiness(
+        self,
+        rows: list[dict[str, Any]],
+        *,
+        client: Any = None,
+    ) -> int:
+        self.readiness_snapshots.extend(rows)
+        return len(rows)
 
     def events_by_name(self, event_name: str) -> list[dict[str, Any]]:
         return [e for e in self.events if e["details"].get("event") == event_name]
@@ -386,3 +397,73 @@ def test_schema_valid_company_type_is_not_unsupported(company_type: str) -> None
     assert not should_skip_valuation(result), (
         f"company_type='{company_type}' should not gate valuation"
     )
+
+
+# ---------------------------------------------------------------------------
+# Phase 10C.3: build_readiness_snapshot_row
+# ---------------------------------------------------------------------------
+
+
+def _minimal_result(**overrides: Any) -> dict[str, Any]:
+    base: dict[str, Any] = {
+        "readiness_status": "analysis_ready",
+        "provider_mix": "fmp_full",
+        "reason_codes": [],
+        "can_run_valuation": True,
+        "can_run_signal": True,
+        "limiting_domain": None,
+    }
+    base.update(overrides)
+    return base
+
+
+def test_build_readiness_snapshot_row_maps_required_fields() -> None:
+    result = _minimal_result()
+    row = build_readiness_snapshot_row(result, _COMPANY_ID)
+
+    assert row["company_id"] == _COMPANY_ID
+    assert row["readiness_status"] == "analysis_ready"
+    assert row["provider_mix"] == "fmp_full"
+    assert row["can_run_valuation"] is True
+    assert row["can_run_signal"] is True
+    assert row["limiting_domain"] is None
+    assert row["readiness_reason_codes"] == []
+    assert "readiness_updated_at" in row
+
+
+def test_build_readiness_snapshot_row_maps_reason_codes_to_correct_key() -> None:
+    result = _minimal_result(reason_codes=["missing_price", "stale_fundamentals"])
+    row = build_readiness_snapshot_row(result, _COMPANY_ID)
+
+    # The DB column is readiness_reason_codes, not reason_codes.
+    assert "reason_codes" not in row
+    assert row["readiness_reason_codes"] == ["missing_price", "stale_fundamentals"]
+
+
+def test_build_readiness_snapshot_row_reason_codes_defaults_to_empty_list() -> None:
+    result = _minimal_result()
+    result.pop("reason_codes", None)
+    row = build_readiness_snapshot_row(result, _COMPANY_ID)
+    assert row["readiness_reason_codes"] == []
+
+
+def test_build_readiness_snapshot_row_readiness_updated_at_is_iso_timestamp() -> None:
+    from datetime import datetime, timezone
+
+    row = build_readiness_snapshot_row(_minimal_result(), _COMPANY_ID)
+    ts = row["readiness_updated_at"]
+    # Must be parseable as a UTC-aware datetime.
+    parsed = datetime.fromisoformat(ts)
+    assert parsed.tzinfo is not None
+
+
+def test_build_readiness_snapshot_row_is_pure_no_side_effects() -> None:
+    """Calling twice produces independent dicts; source result is not mutated."""
+    result = _minimal_result()
+    original_keys = set(result.keys())
+    row1 = build_readiness_snapshot_row(result, _COMPANY_ID)
+    row2 = build_readiness_snapshot_row(result, "other-company-id")
+
+    assert set(result.keys()) == original_keys, "source result was mutated"
+    assert row1["company_id"] == _COMPANY_ID
+    assert row2["company_id"] == "other-company-id"

@@ -21,6 +21,7 @@ Design constraints (PR 10C.2):
 from __future__ import annotations
 
 import logging
+from datetime import datetime, timezone
 from typing import Any
 
 from investment_app.readiness import classify_company_readiness
@@ -184,3 +185,32 @@ def should_skip_signal(readiness: dict[str, Any] | None) -> bool:
     if readiness is None:
         return False
     return not readiness.get("can_run_signal", True)
+
+
+# ---------------------------------------------------------------------------
+# Snapshot row builder — Phase 10C.3
+# ---------------------------------------------------------------------------
+
+
+def build_readiness_snapshot_row(
+    result: dict[str, Any],
+    company_id: str,
+) -> dict[str, Any]:
+    """Build a ``company_analysis_readiness`` row from a classifier result.
+
+    Pure and side-effect free.  The caller is responsible for persisting the
+    returned dict via :func:`~investment_app.db.repositories.upsert_company_analysis_readiness`.
+
+    ``readiness_updated_at`` is set to the current UTC instant so each
+    snapshot row accurately reflects when the classification was performed.
+    """
+    return {
+        "company_id": company_id,
+        "readiness_status": result["readiness_status"],
+        "provider_mix": result.get("provider_mix"),
+        "readiness_reason_codes": result.get("reason_codes") or [],
+        "can_run_valuation": result["can_run_valuation"],
+        "can_run_signal": result["can_run_signal"],
+        "limiting_domain": result.get("limiting_domain"),
+        "readiness_updated_at": datetime.now(timezone.utc).isoformat(),
+    }

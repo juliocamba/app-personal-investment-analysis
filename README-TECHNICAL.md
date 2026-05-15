@@ -139,14 +139,66 @@ Apply migrations in this order:
 4. `sql/004_seed_watchlist_example.sql`
 5. `sql/005_watchlist_management.sql`
 6. `sql/006_watchlist_add_requests.sql`
+7. `sql/007_statements_norm_metadata.sql`
+8. `sql/008_statements_norm_raw_payload_id.sql`
+9. `sql/009_price_eod_metadata_and_precedence.sql`
+10. `sql/010_analysis_readiness_latest_view.sql`
+11. `sql/011_explicit_grants_and_rls_hardening.sql`
 
 Notes:
 
 - `004_seed_watchlist_example.sql` is optional sample data.
 - `005_watchlist_management.sql` implements Phase 9A watchlist active-membership behavior.
 - `006_watchlist_add_requests.sql` implements Phase 9B add-company request flow and hardening.
+- `011_explicit_grants_and_rls_hardening.sql` applies explicit GRANT/REVOKE to every table and view.  Apply this migration before running the permission validator.
 
 ## RLS and grants model
+
+### Supabase explicit GRANT requirement
+
+Supabase is removing the default public-schema grants that previously gave every
+role automatic access to new tables.  Migration `011_explicit_grants_and_rls_hardening.sql`
+adds explicit `GRANT` and `REVOKE` statements to every table and view in the
+schema.  Without this migration the following symptoms appear:
+
+- `authenticated` inherits unexpected `REFERENCES`, `TRIGGER`, and `TRUNCATE`
+  privileges from the Supabase `ALTER DEFAULT PRIVILEGES` defaults.
+- `service_role` is missing `SELECT`, `INSERT`, `UPDATE`, `DELETE` on tables
+  created after the default grant behaviour was removed, preventing the backend
+  pipeline from writing via the Data API.
+- Tables that have an RLS SELECT policy but no explicit `GRANT SELECT` silently
+  return empty result sets or permission errors for authenticated users.
+
+Always apply migrations 001–011 in order on a new or existing Supabase project.
+
+### Access tiers
+
+| Tier | Tables | authenticated | service_role | anon / public |
+|---|---|---|---|---|
+| **backend_only** | `pipeline_runs`, `pipeline_run_events`, `provider_requests`, `raw_provider_payloads`, `statements_raw` | none | SELECT/INSERT/UPDATE/DELETE | none |
+| **backend_rw_auth_r** | `companies`, `price_eod`, `fx_rates`, `filings_index`, `statements_norm`, `ratios_factors`, `qualitative_scores`, `valuation_runs`, `signal_runs`, `news_events`, `corporate_actions`, `company_analysis_readiness` | SELECT only | SELECT/INSERT/UPDATE/DELETE | none |
+| **auth_scoped_write** | `app_users`, `watchlists`, `alert_rules`, `alert_history` | SELECT only (own rows via RLS) | SELECT/INSERT/UPDATE/DELETE | none |
+| **auth_scoped_write** | `watchlist_companies` | SELECT + UPDATE (own rows via RLS) | SELECT/INSERT/UPDATE/DELETE | none |
+| **auth_scoped_write** | `watchlist_add_requests` | SELECT + column-scoped INSERT + UPDATE(status) | SELECT/INSERT/UPDATE/DELETE | none |
+| **views** | all `latest_*`, `dashboard_*`, `analysis_readiness_latest` | SELECT | SELECT | none |
+
+### Validating permissions
+
+After applying all migrations, run the permission validator:
+
+```powershell
+.\.venv\Scripts\python scripts\validate_supabase_permissions.py
+```
+
+This calls the `check_permission_matrix()` function (defined in migration 011)
+and reports pass/fail for six key invariants.
+
+For a full diagnostic breakdown, run the SQL queries in `sql/audit/` in the
+Supabase SQL Editor:
+
+- `sql/audit/permission_audit.sql` — table and view privileges by grantee
+- `sql/audit/rls_policy_audit.sql` — RLS enabled/disabled and all policies
+- `sql/audit/view_security_audit.sql` — view `security_invoker` settings and grants
 
 ### Frontend anon access
 

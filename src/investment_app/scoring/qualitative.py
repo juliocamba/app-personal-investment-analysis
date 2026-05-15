@@ -27,6 +27,11 @@ from investment_app.config.loader import load_scoring_weights
 
 MODEL_VERSION = "qual_v0"
 
+# Diagnostic bounds for ROIC outlier detection.
+# Values outside this range are flagged in evidence but do NOT change the score.
+_ROIC_DIAGNOSTIC_LO: float = -2.0
+_ROIC_DIAGNOSTIC_HI: float = 5.0
+
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -88,6 +93,16 @@ def _score_moat(
             evidence["roic_signal"] = "negative"
         else:
             evidence["roic_signal"] = "weak (0–8%)"
+        # Outlier diagnostic: flag extreme raw ROIC values for investigation.
+        # No score change — diagnostic only.
+        if roic < _ROIC_DIAGNOSTIC_LO:
+            evidence["roic_outlier"] = True
+            evidence["roic_raw"] = roic
+            evidence["roic_diagnostic_bound"] = "low"
+        elif roic > _ROIC_DIAGNOSTIC_HI:
+            evidence["roic_outlier"] = True
+            evidence["roic_raw"] = roic
+            evidence["roic_diagnostic_bound"] = "high"
     else:
         evidence["roic_signal"] = "missing"
 
@@ -115,6 +130,11 @@ def _score_moat(
             evidence["margin_stability"] = "volatile (>10% std)"
         else:
             evidence["margin_stability"] = "moderate variance"
+        # Outlier diagnostic: extremely high gross-margin std may indicate data
+        # quality issues (e.g. segment reclassifications, M&A distortions).
+        # Diagnostic only — no score change.
+        if std_gm > 0.50:
+            evidence["gross_margin_std_outlier"] = True
         # Trend: gm_ratios[0] is the most recent period (newest-first ordering).
         if gm_ratios[0] > gm_ratios[-1] + 0.03:
             score += 4

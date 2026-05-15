@@ -318,12 +318,16 @@ class TestBuildDiagnosticsStatus:
 
     def test_all_required_keys_present(self):
         result = _call()
+        # PR 11A.2 added mos_basis, scenario_count, uncertainty_category.
         assert set(result.keys()) == {
             "valuation_status",
             "freshness_flag",
             "data_quality_flag",
             "blockers",
             "warnings",
+            "mos_basis",
+            "scenario_count",
+            "uncertainty_category",
         }
 
     def test_blockers_list_is_sorted(self):

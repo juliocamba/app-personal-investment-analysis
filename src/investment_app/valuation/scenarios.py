@@ -80,6 +80,26 @@ def _normalize_weights(weights: dict[str, float]) -> dict[str, float]:
     return {key: value / total for key, value in positive.items()}
 
 
+def _classify_uncertainty(width: float | None) -> str | None:
+    """Classify uncertainty_width into a descriptive category.
+
+    Thresholds (diagnostic only — no effect on valuation math or signal):
+    - low:      width <= 0.35
+    - moderate: 0.35 < width <= 0.75
+    - high:     0.75 < width <= 1.25
+    - extreme:  width > 1.25
+    """
+    if width is None:
+        return None
+    if width <= 0.35:
+        return "low"
+    if width <= 0.75:
+        return "moderate"
+    if width <= 1.25:
+        return "high"
+    return "extreme"
+
+
 # ---------------------------------------------------------------------------
 # Net debt helper
 # ---------------------------------------------------------------------------
@@ -223,6 +243,7 @@ def _build_diagnostics(
     terminal_growth: float,
     wacc: float,
     distribution: list[dict[str, Any]],
+    uncertainty_width: float | None = None,
 ) -> dict[str, Any]:
     """Build a compact, safe diagnostics payload for assumptions JSON."""
     blockers: list[str] = []
@@ -266,6 +287,17 @@ def _build_diagnostics(
         blockers.append("missing_fcf")
         warnings.append("dcf_unavailable")
 
+    # ── Distribution-level diagnostics ───────────────────────────────────────
+    scenario_count = sum(1 for d in distribution if d.get("method") == "dcf")
+    # Warn when multiple distribution entries all share the same value — this
+    # explains cases where iv_p10..iv_p90 collapse to one number and MoS looks
+    # artificially precise.
+    if len(distribution) > 1 and len({d["value"] for d in distribution}) <= 1:
+        warnings.append("distribution_collapsed")
+
+    # ── Uncertainty classification ────────────────────────────────────────────
+    uncertainty_category = _classify_uncertainty(uncertainty_width)
+
     valuation_status = "ok"
     if not distribution:
         valuation_status = "blocked"
@@ -288,6 +320,9 @@ def _build_diagnostics(
         "data_quality_flag": data_quality_flag,
         "blockers": sorted(set(blockers)),
         "warnings": sorted(set(warnings)),
+        "mos_basis": "iv_p10",
+        "scenario_count": scenario_count,
+        "uncertainty_category": uncertainty_category,
     }
 
 
@@ -655,6 +690,24 @@ def compute_valuation_run(
             else configured_method_weights
         ),
     )
+
+    # ── Percentiles and uncertainty — computed here so _build_diagnostics ────
+    # ── can include uncertainty_category in the assumptions payload.       ────
+    percentiles = _weighted_percentiles(distribution)
+    iv_p10 = percentiles.get("iv_p10")
+    iv_p25 = percentiles.get("iv_p25")
+    iv_p50 = percentiles.get("iv_p50")
+    iv_p75 = percentiles.get("iv_p75")
+    iv_p90 = percentiles.get("iv_p90")
+
+    margin_of_safety_conservative: float | None = None
+    if current_price and current_price > 0.0 and iv_p10 is not None:
+        margin_of_safety_conservative = (iv_p10 - current_price) / current_price
+
+    uncertainty_width: float | None = None
+    if iv_p90 is not None and iv_p10 is not None and iv_p10 > 0.0:
+        uncertainty_width = (iv_p90 - iv_p10) / iv_p10
+
     diagnostics = _build_diagnostics(
         annual_statements=annual_statements,
         ratio_rows=ratio_rows,
@@ -664,6 +717,7 @@ def compute_valuation_run(
         terminal_growth=terminal_growth,
         wacc=wacc,
         distribution=distribution,
+        uncertainty_width=uncertainty_width,
     )
     assumptions["aggregation"] = {
         "distribution_method": "weighted_step_percentiles",
@@ -695,24 +749,6 @@ def compute_valuation_run(
                 "direct_fcf_status": (fcf_data or {}).get("direct_fcf_status"),
             })
         return None
-
-    # ── Percentiles ──────────────────────────────────────────────────────────
-    percentiles = _weighted_percentiles(distribution)
-    iv_p10 = percentiles.get("iv_p10")
-    iv_p25 = percentiles.get("iv_p25")
-    iv_p50 = percentiles.get("iv_p50")
-    iv_p75 = percentiles.get("iv_p75")
-    iv_p90 = percentiles.get("iv_p90")
-
-    # ── Margin of safety (conservative: use p10 vs current price) ────────────
-    margin_of_safety_conservative: float | None = None
-    if current_price and current_price > 0.0 and iv_p10 is not None:
-        margin_of_safety_conservative = (iv_p10 - current_price) / current_price
-
-    # ── Uncertainty width ─────────────────────────────────────────────────────
-    uncertainty_width: float | None = None
-    if iv_p90 is not None and iv_p10 is not None and iv_p10 > 0.0:
-        uncertainty_width = (iv_p90 - iv_p10) / iv_p10
 
     return {
         "company_id": company_id,

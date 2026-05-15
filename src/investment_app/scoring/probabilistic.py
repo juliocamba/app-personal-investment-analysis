@@ -22,7 +22,28 @@ from investment_app.scoring.rule_based import (
 	sigmoid,
 )
 
-MODEL_VERSION = "signal_rule_v1"
+MODEL_VERSION = "signal_rule_v2"
+
+_FAIR_VALUE_MOS_EPSILON: float = 0.005
+"""Absolute MoS within this band (±0.5%) is treated as near fair value.
+
+Floating-point subtraction in the valuation model can produce values like
+-1.5e-16 for stocks trading right at intrinsic value.  Any |mos| smaller
+than this constant is clamped to 0.0 before signal pressure is accumulated
+so that numerical noise does not add spurious bearish pressure.
+"""
+
+
+def _normalized_mos_for_signal(mos: float | None) -> float | None:
+	"""Return *mos* clamped to zero when it falls inside the near-fair-value band.
+
+	Values with ``|mos| <= _FAIR_VALUE_MOS_EPSILON`` are treated as 0.0 for
+	signal-pressure purposes.  The raw stored margin_of_safety_conservative
+	column is never modified; normalisation is applied only during computation.
+	"""
+	if mos is None:
+		return None
+	return 0.0 if abs(mos) <= _FAIR_VALUE_MOS_EPSILON else mos
 
 
 def _days_between(newer: str | None, older: str | None) -> int | None:
@@ -173,7 +194,7 @@ def _sell_probability(
 ) -> float:
 	"""Compute a conservative sell probability."""
 	pressure = 35.0
-	mos = _safe((valuation_row or {}).get("margin_of_safety_conservative"))
+	mos = _normalized_mos_for_signal(_safe((valuation_row or {}).get("margin_of_safety_conservative")))
 	current_price = _safe((valuation_row or {}).get("current_price"))
 	iv_p50 = _safe((valuation_row or {}).get("iv_p50"))
 	iv_p75 = _safe((valuation_row or {}).get("iv_p75"))

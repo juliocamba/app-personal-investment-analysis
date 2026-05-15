@@ -86,11 +86,11 @@ def _ratio_row(
 
 class TestModelVersion:
     def test_model_version_literal_string(self):
-        """Intentionally updated from signal_rule_v0 → signal_rule_v1 in PR 11A.4."""
-        assert MODEL_VERSION == "signal_rule_v1"
+        """Intentionally updated from signal_rule_v1 → signal_rule_v2 in PR 11A.4b."""
+        assert MODEL_VERSION == "signal_rule_v2"
 
     def test_module_attribute_matches_import(self):
-        assert _prob_module.MODEL_VERSION == "signal_rule_v1"
+        assert _prob_module.MODEL_VERSION == "signal_rule_v2"
 
 
 # ---------------------------------------------------------------------------
@@ -366,6 +366,15 @@ class TestSellProbability:
         )
         assert result > 0.60
 
+    def test_near_zero_mos_within_fair_value_band_adds_no_pressure(self):
+        """PR 11A.4b: |mos| <= 0.005 is clamped to zero — no sell pressure added."""
+        # baseline: valuation_row=None adds zero MoS pressure
+        baseline = self._compute()
+        # near-zero negative MoS is inside the epsilon band → same pressure as no MoS
+        assert self._compute(valuation_row=_val_row(mos=-1e-12)) == pytest.approx(
+            baseline, abs=1e-9
+        )
+
 
 # ---------------------------------------------------------------------------
 # _classify_signal — decision-boundary assertions
@@ -374,7 +383,7 @@ class TestSellProbability:
 
 class TestClassifySignal:
     """
-    Decision tree (signal_rule_v1, PR 11A.4):
+    Decision tree (signal_rule_v2, PR 11A.4b):
       1. all three core flags missing → insufficient_data
       2. p_sell >= 0.60 AND confirming bearish flag → strong_sell
       3. any hard red flag OR p_sell >= 0.60 (no confirming flag) → sell

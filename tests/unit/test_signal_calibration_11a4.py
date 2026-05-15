@@ -94,12 +94,12 @@ def _classify(
 
 
 class TestModelVersion:
-    def test_model_version_is_signal_rule_v1(self):
-        """PR 11A.4 intentionally bumps MODEL_VERSION from signal_rule_v0."""
-        assert MODEL_VERSION == "signal_rule_v1"
+    def test_model_version_is_signal_rule_v2(self):
+        """PR 11A.4b intentionally bumps MODEL_VERSION from signal_rule_v1."""
+        assert MODEL_VERSION == "signal_rule_v2"
 
     def test_module_attribute_matches_import(self):
-        assert _prob_module.MODEL_VERSION == "signal_rule_v1"
+        assert _prob_module.MODEL_VERSION == "signal_rule_v2"
 
 
 # ---------------------------------------------------------------------------

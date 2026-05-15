@@ -15,7 +15,7 @@ Coverage:
   9.  BUY without quality ≥ 60 omits "supported by strong quality score"
   10. STRONG_SELL with quality_breakdown and high_leverage includes both labels
   11. Backward-compatible — call without uncertainty_width works
-  12. MODEL_VERSION = "signal_rule_v1" (bumped in PR 11A.4)
+  12. MODEL_VERSION = "signal_rule_v2" (bumped in PR 11A.4b)
   13. Explanation length ≤ 300 characters for all covered cases
   14. Uncertainty note is NOT appended when uncertainty_width = 0.50 (boundary)
 
@@ -71,8 +71,8 @@ def _call(
 
 
 class TestModelVersionUnchanged:
-    def test_signal_model_version_is_signal_rule_v1(self):
-        assert MODEL_VERSION == "signal_rule_v1"
+    def test_signal_model_version_is_signal_rule_v2(self):
+        assert MODEL_VERSION == "signal_rule_v2"
 
 
 # ---------------------------------------------------------------------------

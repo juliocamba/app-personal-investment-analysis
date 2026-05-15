@@ -1524,6 +1524,9 @@ def _run_live_pipeline(
                         company_id,
                         repo_module,
                         factor_date,
+                        readiness_status=(
+                            (_readiness or {}).get("readiness_status", "analysis_ready")
+                        ),
                     )
                     if signal_row:
                         n = repo_module.upsert_signal_runs([signal_row])

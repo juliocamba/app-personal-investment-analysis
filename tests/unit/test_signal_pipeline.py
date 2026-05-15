@@ -192,7 +192,7 @@ def test_pipeline_signal_fn_called_per_company():
     )
     calls: list[str] = []
 
-    def fake_signal_fn(company_id: str, repo_module: Any, signal_date: str) -> dict[str, Any]:
+    def fake_signal_fn(company_id: str, repo_module: Any, signal_date: str, **kwargs: Any) -> dict[str, Any]:
         calls.append(company_id)
         return _make_signal_row(company_id, signal_date)
 
@@ -233,7 +233,7 @@ def test_pipeline_signal_upserted_metric_increments():
         compute_features_fn=None,
         compute_valuation_fn=None,
         compute_qualitative_fn=None,
-        compute_signal_fn=lambda company_id, repo_module, signal_date: _make_signal_row(company_id, signal_date),
+        compute_signal_fn=lambda company_id, repo_module, signal_date, **kwargs: _make_signal_row(company_id, signal_date),
     )
     assert metrics["signal_runs_upserted"] == 1
     assert len(repo.signal_upserts) == 1
@@ -273,7 +273,7 @@ def test_pipeline_signal_exception_is_isolated():
     )
     calls: list[str] = []
 
-    def flaky_signal_fn(company_id: str, repo_module: Any, signal_date: str) -> dict[str, Any]:
+    def flaky_signal_fn(company_id: str, repo_module: Any, signal_date: str, **kwargs: Any) -> dict[str, Any]:
         calls.append(company_id)
         if company_id == "cid-001":
             raise ValueError("simulated signal failure")
@@ -297,6 +297,187 @@ def test_pipeline_signal_exception_is_isolated():
     )
     assert set(calls) == {"cid-001", "cid-002"}
     assert metrics["signal_runs_upserted"] == 1
+
+
+def test_pipeline_passes_readiness_status_to_signal_fn():
+    """PR 11A.4 fix: _run_live_pipeline threads readiness_status from
+    _readiness_by_company_id into the compute_signal_fn call.
+
+    The test patches classify_company_for_pipeline so cid-001 is classified
+    as 'partial_analysis' and cid-002 has no readiness entry (None return).
+    A capturing signal function records the readiness_status kwarg it receives;
+    the test asserts correct forwarding and correct fall-through default.
+    """
+    from unittest.mock import patch
+
+    _run_live_pipeline = _import_run_live_pipeline()
+
+    readiness_by_id = {
+        "cid-001": {"readiness_status": "partial_analysis", "reason_codes": [], "reasons": []},
+    }
+
+    def fake_classify(company: Any, company_id: str, **kwargs: Any) -> dict[str, Any] | None:
+        return readiness_by_id.get(company_id)
+
+    received_kwargs: dict[str, Any] = {}
+
+    def capturing_signal_fn(company_id: str, repo_module: Any, signal_date: str, **kwargs: Any) -> dict[str, Any]:
+        received_kwargs[company_id] = kwargs.get("readiness_status")
+        return _make_signal_row(company_id, signal_date)
+
+    repo = _FakePipelineRepo(
+        companies=[
+            {"id": "cid-001", "ticker": "AAPL", "currency": "USD", "sector": "Technology", "cik": ""},
+            {"id": "cid-002", "ticker": "MSFT", "currency": "USD", "sector": "Technology", "cik": ""},
+        ]
+    )
+
+    with patch(
+        "investment_app.pipeline_readiness.classify_company_for_pipeline",
+        side_effect=fake_classify,
+    ):
+        _run_live_pipeline(
+            repo_module=repo,
+            providers_config={},
+            fmp=None,
+            sec=None,
+            ecb=None,
+            gdelt=None,
+            store_raw_response_fn=lambda resp, company_id: None,
+            normalize_prices_fn=lambda *a, **k: [],
+            normalize_statements_fn=lambda *a, **k: [],
+            normalize_news_fn=lambda *a, **k: [],
+            compute_features_fn=None,
+            compute_valuation_fn=None,
+            compute_qualitative_fn=None,
+            compute_signal_fn=capturing_signal_fn,
+        )
+
+    assert received_kwargs.get("cid-001") == "partial_analysis", (
+        "partial_analysis companies must receive readiness_status='partial_analysis'"
+    )
+    assert received_kwargs.get("cid-002") == "analysis_ready", (
+        "companies with no readiness entry must default to 'analysis_ready'"
+    )
+
+
+def test_pipeline_real_compute_signal_run_partial_analysis_produces_hold():
+    """Integration: _run_live_pipeline + real compute_signal_run.
+
+    Verifies the complete production path end-to-end:
+    1. A repo fixture that would produce 'strong_buy' under analysis_ready.
+    2. classify_company_for_pipeline patched to return partial_analysis.
+    3. compute_signal_run passed as compute_signal_fn (as in production).
+    4. The persisted signal row must have final_signal == 'hold' (demoted).
+
+    A companion assertion first confirms the fixture would produce 'strong_buy'
+    when readiness_status='analysis_ready', so the test proves demotion rather
+    than an accidentally weak fixture.
+    """
+    from unittest.mock import patch
+
+    from investment_app.scoring.probabilistic import compute_signal_run
+
+    # Fixtures that produce strong_buy under analysis_ready
+    # (same data as test_signal_strong_buy_threshold_classification in
+    # test_probabilistic_signal.py).
+    _SIGNAL_DATE = "2025-01-01"
+    _VALUATION = {
+        "id": "val-001",
+        "valuation_date": _SIGNAL_DATE,
+        "iv_p10": 130.0,
+        "iv_p25": 150.0,
+        "iv_p50": 170.0,
+        "iv_p75": 190.0,
+        "iv_p90": 200.0,
+        "current_price": 100.0,
+        "margin_of_safety_conservative": 0.30,
+        "uncertainty_width": 0.20,
+        "assumptions": {"diagnostics": {"freshness_flag": "ok", "blockers": [], "warnings": []}},
+    }
+    _QUAL = {"id": "qual-001", "score_date": _SIGNAL_DATE, "final_quality_score": 78.0}
+    _RATIO = {
+        "factor_date": _SIGNAL_DATE,
+        "net_debt_to_ebitda": 0.20,
+        "interest_coverage": 12.0,
+        "news_sentiment_7d": 0.25,
+        "news_volume_7d": 5,
+        "momentum_60d": 0.12,
+        "momentum_250d": 0.20,
+        "volatility_90d": 0.18,
+        "data_quality_score": 85.0,
+    }
+    _PRICE = {"price_date": _SIGNAL_DATE, "close": 100.0}
+    _FILING = {"filing_type": "10-K", "filing_date": "2024-12-10"}
+
+    class _FakePipelineAndSignalRepo(_FakePipelineRepo):
+        """Extends _FakePipelineRepo with the data-access methods that
+        compute_signal_run calls on repo_module."""
+
+        def get_latest_valuation_run(self, company_id: str, *, as_of_date: str | None = None) -> dict[str, Any]:
+            return _VALUATION
+
+        def get_latest_qualitative_score(self, company_id: str, *, as_of_date: str | None = None) -> dict[str, Any]:
+            return _QUAL
+
+        def get_ratios_for_company(self, company_id: str, *, as_of_date: str | None = None, limit: int = 1) -> list[dict[str, Any]]:
+            return [_RATIO]
+
+        def get_prices_for_company(self, company_id: str, *, as_of_date: str | None = None, limit: int = 1) -> list[dict[str, Any]]:
+            return [_PRICE]
+
+        def get_filings_for_company(self, company_id: str, *, as_of_date: str | None = None, limit: int = 5) -> list[dict[str, Any]]:
+            return [_FILING]
+
+    # Companion check: same fixture under analysis_ready → strong_buy.
+    from types import SimpleNamespace
+    _baseline_repo = _FakePipelineAndSignalRepo(
+        companies=[{"id": "cid-001", "ticker": "AAPL", "currency": "USD", "sector": "Technology", "cik": ""}]
+    )
+    baseline = compute_signal_run("cid-001", _baseline_repo, _SIGNAL_DATE, readiness_status="analysis_ready")
+    assert baseline is not None and baseline["final_signal"] == "strong_buy", (
+        f"Fixture sanity: expected strong_buy under analysis_ready, got {baseline and baseline['final_signal']}"
+    )
+
+    # Real test: under partial_analysis the signal must be demoted to hold.
+    _run_live_pipeline = _import_run_live_pipeline()
+    repo = _FakePipelineAndSignalRepo(
+        companies=[{"id": "cid-001", "ticker": "AAPL", "currency": "USD", "sector": "Technology", "cik": ""}]
+    )
+
+    readiness_by_id = {
+        "cid-001": {"readiness_status": "partial_analysis", "reason_codes": [], "reasons": []},
+    }
+
+    def fake_classify(company: Any, company_id: str, **kwargs: Any) -> dict[str, Any] | None:
+        return readiness_by_id.get(company_id)
+
+    with patch(
+        "investment_app.pipeline_readiness.classify_company_for_pipeline",
+        side_effect=fake_classify,
+    ):
+        _run_live_pipeline(
+            repo_module=repo,
+            providers_config={},
+            fmp=None,
+            sec=None,
+            ecb=None,
+            gdelt=None,
+            store_raw_response_fn=lambda resp, company_id: None,
+            normalize_prices_fn=lambda *a, **k: [],
+            normalize_statements_fn=lambda *a, **k: [],
+            normalize_news_fn=lambda *a, **k: [],
+            compute_features_fn=None,
+            compute_valuation_fn=None,
+            compute_qualitative_fn=None,
+            compute_signal_fn=compute_signal_run,
+        )
+
+    assert len(repo.signal_upserts) == 1
+    persisted = repo.signal_upserts[0][0]
+    assert persisted["final_signal"] == "hold", (
+        f"Expected hold (partial_analysis demotion), got {persisted['final_signal']}"
+    )
 
 
 def test_pipeline_signal_logs_warning_when_none():

@@ -22,7 +22,7 @@ from investment_app.scoring.rule_based import (
 	sigmoid,
 )
 
-MODEL_VERSION = "signal_rule_v0"
+MODEL_VERSION = "signal_rule_v1"
 
 
 def _days_between(newer: str | None, older: str | None) -> int | None:
@@ -224,6 +224,16 @@ def _sell_probability(
 	return _clamp01(sigmoid((pressure - 50.0) / 12.0))
 
 
+# Flags that can confirm a strong_sell verdict (in addition to elevated p_sell).
+_STRONG_SELL_CONFIRMING_FLAGS: frozenset[str] = frozenset({
+	"high_leverage",
+	"critical_interest_coverage",
+	"quality_breakdown",
+	"negative_margin_of_safety",
+	"overvalued_vs_iv_p75",
+})
+
+
 def _classify_signal(
 	*,
 	p_buy_adjusted: float,
@@ -232,8 +242,17 @@ def _classify_signal(
 	quality_score: float,
 	red_flags: list[str],
 	freshness_flag: str,
+	readiness_status: str = "analysis_ready",
 ) -> str:
-	"""Map probabilities and red flags into a conservative final label."""
+	"""Map probabilities and red flags into a conservative final label.
+
+	*readiness_status* — when ``"partial_analysis"``, buy and strong_buy are
+	demoted to hold.  All other statuses are treated as ``"analysis_ready"``.
+
+	Strong-sell requires BOTH ``p_sell >= 0.60`` AND at least one confirming
+	bearish flag from ``_STRONG_SELL_CONFIRMING_FLAGS``; without confirmation
+	the signal degrades to sell.
+	"""
 	mos = _safe((valuation_row or {}).get("margin_of_safety_conservative"))
 	current_price = _safe((valuation_row or {}).get("current_price"))
 	iv_p75 = _safe((valuation_row or {}).get("iv_p75"))
@@ -251,26 +270,32 @@ def _classify_signal(
 			"zero_direct_fcf",
 		)
 	)
+	has_confirming_bearish = any(f in red_flags for f in _STRONG_SELL_CONFIRMING_FLAGS)
 
 	if has_insufficient_core_inputs:
 		return "insufficient_data"
-	if has_hard_red_flag:
+
+	# Strong sell: elevated p_sell AND at least one confirming bearish flag.
+	# Without BOTH conditions, any bearish scenario degrades to sell.
+	if p_sell >= 0.60 and has_confirming_bearish:
+		return "strong_sell"
+
+	# Sell: hard red flag present, or elevated p_sell without strong_sell confirmation.
+	if has_hard_red_flag or p_sell >= 0.60:
 		return "sell"
-	if p_sell >= 0.60:
-		return "strong_sell"
-	if (
-		current_price is not None
-		and iv_p75 is not None
-		and current_price > iv_p75
-		and quality_score < 50.0
-	):
-		return "strong_sell"
+
+	# Buy / strong buy — only for fully-ready analysis.
+	candidate = "hold"
 	if freshness_flag == "ok" and valuation_row is not None and mos is not None:
 		if p_buy_adjusted >= 0.70 and mos >= 0.15 and not red_flags:
-			return "strong_buy"
-		if p_buy_adjusted >= 0.60 and mos >= 0.10 and "missing_qualitative_score" not in red_flags:
-			return "buy"
-	return "hold"
+			candidate = "strong_buy"
+		elif p_buy_adjusted >= 0.60 and mos >= 0.10 and "missing_qualitative_score" not in red_flags:
+			candidate = "buy"
+
+	# Partial analysis: demote high-conviction buy signals to hold.
+	if readiness_status == "partial_analysis" and candidate in ("strong_buy", "buy"):
+		return "hold"
+	return candidate
 
 
 def compute_signal_run(
@@ -279,6 +304,7 @@ def compute_signal_run(
 	signal_date: str,
 	*,
 	weights: dict[str, float] | None = None,
+	readiness_status: str = "analysis_ready",
 ) -> dict[str, Any] | None:
 	"""Compute one deterministic probabilistic signal row for *signal_date*."""
 	valuation_row = repo_module.get_latest_valuation_run(company_id, as_of_date=signal_date)
@@ -377,6 +403,7 @@ def compute_signal_run(
 		quality_score=quality_score,
 		red_flags=red_flags,
 		freshness_flag=freshness_flag,
+		readiness_status=readiness_status,
 	)
 
 	top_feature_contributors = build_top_feature_contributors(

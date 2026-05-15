@@ -312,7 +312,12 @@ def test_missing_core_inputs_returns_insufficient_data():
     assert result["final_signal"] == "insufficient_data"
 
 
-def test_hard_red_flags_force_sell():
+def test_hard_red_flags_force_strong_sell_when_p_sell_elevated():
+    """PR 11A.4 (signal_rule_v1): quality_score=25 generates quality_breakdown,
+    which is both a hard red flag and a confirming bearish flag.  With quality
+    this low, _sell_probability exceeds 0.60, so the signal is strong_sell
+    (p_sell >= 0.60 AND confirming flag) rather than plain sell.
+    """
     repo = _FakeSignalRepo(
         valuation=_VALUATION_GOOD,
         qualitative={**_QUAL_GOOD, "final_quality_score": 25.0},
@@ -322,7 +327,7 @@ def test_hard_red_flags_force_sell():
     )
     result = compute_signal_run(_COMPANY_ID, repo, _SIGNAL_DATE)
     assert result is not None
-    assert result["final_signal"] == "sell"
+    assert result["final_signal"] == "strong_sell"
 
 
 def test_load_rule_score_weights_negative_raises():

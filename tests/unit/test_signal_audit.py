@@ -86,11 +86,11 @@ def _ratio_row(
 
 class TestModelVersion:
     def test_model_version_literal_string(self):
-        """Fails if the version is bumped without a deliberate change."""
-        assert MODEL_VERSION == "signal_rule_v0"
+        """Intentionally updated from signal_rule_v0 → signal_rule_v1 in PR 11A.4."""
+        assert MODEL_VERSION == "signal_rule_v1"
 
     def test_module_attribute_matches_import(self):
-        assert _prob_module.MODEL_VERSION == "signal_rule_v0"
+        assert _prob_module.MODEL_VERSION == "signal_rule_v1"
 
 
 # ---------------------------------------------------------------------------
@@ -374,15 +374,14 @@ class TestSellProbability:
 
 class TestClassifySignal:
     """
-    Decision tree (current, signal_rule_v0):
+    Decision tree (signal_rule_v1, PR 11A.4):
       1. all three core flags missing → insufficient_data
-      2. any hard red flag → sell
-      3. p_sell >= 0.60 → strong_sell
-      4. price > iv_p75 AND quality < 50 → strong_sell
-      5. freshness==ok AND valuation present AND mos present:
-           p_buy >= 0.70 AND mos >= 0.15 AND no flags → strong_buy
-           p_buy >= 0.60 AND mos >= 0.10 AND not missing_qualitative → buy
-      6. otherwise → hold
+      2. p_sell >= 0.60 AND confirming bearish flag → strong_sell
+      3. any hard red flag OR p_sell >= 0.60 (no confirming flag) → sell
+      4. freshness==ok AND valuation present AND mos present:
+           p_buy >= 0.70 AND mos >= 0.15 AND no flags → strong_buy (demoted to hold when partial_analysis)
+           p_buy >= 0.60 AND mos >= 0.10 AND not missing_qualitative → buy (demoted to hold when partial_analysis)
+      5. otherwise → hold
     """
 
     _VAL_ROW = _val_row()  # used in most tests; never mutated
@@ -446,26 +445,41 @@ class TestClassifySignal:
         assert signal not in {"sell", "strong_sell"}
 
     # ------------------------------------------------------------------
-    # Path 3: p_sell >= 0.60 → strong_sell
+    # Path 2 (v1): p_sell >= 0.60 AND confirming flag → strong_sell
     # ------------------------------------------------------------------
 
-    def test_p_sell_at_sixty_pct_produces_strong_sell(self):
-        assert self._classify(p_sell=0.60, red_flags=[]) == "strong_sell"
+    def test_p_sell_at_sixty_pct_with_confirming_flag_produces_strong_sell(self):
+        """p_sell=0.60 + confirming flag → strong_sell."""
+        assert self._classify(p_sell=0.60, red_flags=["high_leverage"]) == "strong_sell"
 
-    def test_p_sell_above_sixty_pct_produces_strong_sell(self):
-        assert self._classify(p_sell=0.75, red_flags=[]) == "strong_sell"
+    def test_p_sell_above_sixty_pct_with_negative_mos_produces_strong_sell(self):
+        assert self._classify(p_sell=0.75, red_flags=["negative_margin_of_safety"]) == "strong_sell"
+
+    def test_p_sell_at_sixty_pct_without_confirming_flag_produces_sell_not_strong_sell(self):
+        """PR 11A.4: p_sell >= 0.60 alone is no longer sufficient for strong_sell."""
+        assert self._classify(p_sell=0.60, red_flags=[]) == "sell"
+
+    def test_p_sell_above_sixty_pct_without_confirming_flag_produces_sell(self):
+        assert self._classify(p_sell=0.75, red_flags=[]) == "sell"
 
     def test_p_sell_just_below_sixty_pct_does_not_produce_strong_sell(self):
         signal = self._classify(p_sell=0.599, red_flags=[])
         assert signal != "strong_sell"
 
     # ------------------------------------------------------------------
-    # Path 4: price > iv_p75 AND quality < 50 → strong_sell
+    # Valuation-based strong_sell path REMOVED in PR 11A.4
+    # price > iv_p75 AND quality < 50 alone no longer produces strong_sell.
+    # Strong sell requires p_sell >= 0.60 AND a confirming flag.
     # ------------------------------------------------------------------
 
-    def test_price_above_iv_p75_and_low_quality_produces_strong_sell(self):
+    def test_price_above_iv_p75_and_low_quality_without_confirming_flag_is_not_strong_sell(self):
+        """PR 11A.4: shortcut removed. price > iv_p75 + quality < 50 without
+        elevated p_sell and a confirming flag produces sell (hard_red_flag or
+        fall-through), not strong_sell."""
         row = _val_row(price=200.0, iv_p75=180.0)
-        assert self._classify(valuation_row=row, quality_score=45.0) == "strong_sell"
+        # red_flags=[], p_sell=0.30 (default) — no confirming flag, low p_sell
+        signal = self._classify(valuation_row=row, quality_score=45.0)
+        assert signal != "strong_sell"
 
     def test_price_above_iv_p75_but_quality_gte_50_does_not_produce_strong_sell(self):
         row = _val_row(price=200.0, iv_p75=180.0)
@@ -615,11 +629,9 @@ class TestClassifySignal:
     # ------------------------------------------------------------------
 
     def test_both_elevated_buy_and_sell_below_sixty_pct_sell_threshold_resolves_to_buy(self):
-        """Current model (signal_rule_v0): when p_sell < 0.60 and buy conditions
-        are otherwise met, the model returns 'buy' even with elevated p_sell.
-
-        This test documents the *current* behavior before Phase 11A.4 adds
-        explicit conflict resolution.  It must be updated when that PR lands.
+        """signal_rule_v1 (PR 11A.4): analysis_ready + p_sell < 0.60 and buy conditions
+        met → 'buy' is preserved.  Partial-analysis demotion does not apply here
+        because readiness_status defaults to 'analysis_ready'.
         """
         signal = self._classify(
             p_buy_adjusted=0.65,

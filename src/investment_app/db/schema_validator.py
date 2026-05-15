@@ -43,7 +43,10 @@ def validate_tables(client: Any) -> tuple[list[str], list[str]]:
     missing: list[str] = []
     for table in REQUIRED_TABLES:
         try:
-            client.table(table).select("id").limit(1).execute()
+            # Use SELECT * LIMIT 0 so the probe is column-agnostic (not all
+            # tables have an "id" column — e.g. company_analysis_readiness uses
+            # company_id as its PK) and does not fetch real rows.
+            client.table(table).select("*").limit(0).execute()
             present.append(table)
         except Exception:  # noqa: BLE001
             missing.append(table)

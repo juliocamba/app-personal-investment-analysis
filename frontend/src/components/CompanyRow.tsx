@@ -279,6 +279,44 @@ export function CompanyRow({ row, onRemove, isRemoving = false }: Props) {
                 </div>
               </div>
 
+              {/* Valuation diagnostics — hidden for tracking_only (isTracking) and can_run_valuation=false */}
+              {!isTracking && row.can_run_valuation !== false && (
+                <div className="detail-section" data-testid="valuation-diagnostics">
+                  <h4 className="detail-section__title">Valuation diagnostics</h4>
+                  <div className="detail-grid">
+                    <div className="detail-grid__item">
+                      <span className="detail-grid__label">MoS basis</span>
+                      <span className="detail-grid__value">
+                        {row.mos_basis ?? "—"}
+                      </span>
+                    </div>
+                    <div className="detail-grid__item">
+                      <span className="detail-grid__label">DCF scenarios</span>
+                      <span className="detail-grid__value">
+                        {row.scenario_count != null ? `${row.scenario_count}/3` : "—"}
+                      </span>
+                    </div>
+                    <div className="detail-grid__item">
+                      <span className="detail-grid__label">Valuation uncertainty</span>
+                      <span className="detail-grid__value">
+                        {row.uncertainty_category != null
+                          ? row.uncertainty_category.charAt(0).toUpperCase() +
+                            row.uncertainty_category.slice(1)
+                          : "—"}
+                      </span>
+                    </div>
+                  </div>
+                  {row.distribution_collapsed === true && (
+                    <p
+                      className="detail-section__warning"
+                      data-testid="distribution-collapsed-warning"
+                    >
+                      Valuation distribution collapsed — limited scenario/method diversity.
+                    </p>
+                  )}
+                </div>
+              )}
+
               {/* Key ratios */}
               <div className="detail-section">
                 <h4 className="detail-section__title">Key ratios</h4>

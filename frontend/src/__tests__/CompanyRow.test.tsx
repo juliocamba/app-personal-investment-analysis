@@ -49,6 +49,10 @@ function makeRow(overrides: Partial<WatchlistRow> = {}): WatchlistRow {
     readiness_reason_codes: null,
     can_run_valuation: null,
     can_run_signal: null,
+    mos_basis: null,
+    scenario_count: null,
+    uncertainty_category: null,
+    distribution_collapsed: null,
     ...overrides,
   };
 }
@@ -187,6 +191,157 @@ describe("CompanyRow — analysis_ready row", () => {
 
 // ---------------------------------------------------------------------------
 // Null / legacy readiness fields — fallback behaviour
+// ---------------------------------------------------------------------------
+
+// ---------------------------------------------------------------------------
+// Valuation diagnostics section — Phase 11A.5
+// ---------------------------------------------------------------------------
+
+describe("CompanyRow — valuation diagnostics section", () => {
+  const withDiagnostics = makeRow({
+    ticker: "ORCL",
+    name: "Oracle Corp.",
+    readiness_status: "analysis_ready",
+    can_run_valuation: true,
+    can_run_signal: true,
+    mos_basis: "iv_p10",
+    scenario_count: 3,
+    uncertainty_category: "moderate",
+    distribution_collapsed: false,
+  });
+
+  it("shows 'Valuation diagnostics' heading for analysis_ready rows", () => {
+    renderRow(withDiagnostics);
+    fireEvent.click(screen.getByRole("button"));
+    expect(screen.getByText("Valuation diagnostics")).toBeInTheDocument();
+  });
+
+  it("renders MoS basis field", () => {
+    renderRow(withDiagnostics);
+    fireEvent.click(screen.getByRole("button"));
+    expect(screen.getByText("MoS basis")).toBeInTheDocument();
+    expect(screen.getByText("iv_p10")).toBeInTheDocument();
+  });
+
+  it("renders DCF scenarios as N/3 format", () => {
+    renderRow(withDiagnostics);
+    fireEvent.click(screen.getByRole("button"));
+    expect(screen.getByText("DCF scenarios")).toBeInTheDocument();
+    expect(screen.getByText("3/3")).toBeInTheDocument();
+  });
+
+  it("renders uncertainty category with capitalised first letter", () => {
+    renderRow(withDiagnostics);
+    fireEvent.click(screen.getByRole("button"));
+    expect(screen.getByText("Valuation uncertainty")).toBeInTheDocument();
+    expect(screen.getByText("Moderate")).toBeInTheDocument();
+  });
+
+  it("does not show distribution-collapsed warning when false", () => {
+    renderRow(withDiagnostics);
+    fireEvent.click(screen.getByRole("button"));
+    expect(
+      screen.queryByTestId("distribution-collapsed-warning"),
+    ).not.toBeInTheDocument();
+  });
+
+  it("shows distribution-collapsed warning when distribution_collapsed is true", () => {
+    renderRow(makeRow({ ...withDiagnostics, distribution_collapsed: true }));
+    fireEvent.click(screen.getByRole("button"));
+    expect(
+      screen.getByTestId("distribution-collapsed-warning"),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "Valuation distribution collapsed — limited scenario/method diversity.",
+      ),
+    ).toBeInTheDocument();
+  });
+
+  it("does not show distribution-collapsed warning when null", () => {
+    renderRow(makeRow({ ...withDiagnostics, distribution_collapsed: null }));
+    fireEvent.click(screen.getByRole("button"));
+    expect(
+      screen.queryByTestId("distribution-collapsed-warning"),
+    ).not.toBeInTheDocument();
+  });
+
+  it("shows em-dash for null diagnostic fields", () => {
+    renderRow(
+      makeRow({
+        readiness_status: "analysis_ready",
+        can_run_valuation: true,
+        can_run_signal: true,
+        mos_basis: null,
+        scenario_count: null,
+        uncertainty_category: null,
+      }),
+    );
+    fireEvent.click(screen.getByRole("button"));
+    // Three em-dashes are rendered for the three null fields
+    const dashes = screen.getAllByText("—");
+    expect(dashes.length).toBeGreaterThanOrEqual(3);
+  });
+
+  it("hides Valuation diagnostics section for tracking_only rows", () => {
+    renderRow(
+      makeRow({
+        ...trackingRow,
+        mos_basis: "iv_p10",
+        scenario_count: 3,
+        uncertainty_category: "low",
+      }),
+    );
+    fireEvent.click(screen.getByRole("button"));
+    expect(screen.queryByText("Valuation diagnostics")).not.toBeInTheDocument();
+  });
+
+  it("hides Valuation diagnostics section when can_run_valuation is false", () => {
+    renderRow(
+      makeRow({
+        can_run_valuation: false,
+        can_run_signal: true,
+        mos_basis: "iv_p10",
+        scenario_count: 2,
+      }),
+    );
+    fireEvent.click(screen.getByRole("button"));
+    expect(screen.queryByText("Valuation diagnostics")).not.toBeInTheDocument();
+  });
+
+  it("hides Valuation diagnostics when can_run_signal=false even if can_run_valuation=true", () => {
+    // Inconsistent row: tracking_only signal but valuation capability reported as true.
+    // Diagnostics must stay hidden because the readiness notice path takes over.
+    renderRow(
+      makeRow({
+        can_run_signal: false,
+        can_run_valuation: true,
+        readiness_status: "provider_limited",
+        mos_basis: "iv_p10",
+        scenario_count: 3,
+        uncertainty_category: "low",
+      }),
+    );
+    fireEvent.click(screen.getByRole("button"));
+    expect(screen.getByText("Readiness notice")).toBeInTheDocument();
+    expect(screen.queryByText("Valuation diagnostics")).not.toBeInTheDocument();
+  });
+
+  it("shows Valuation diagnostics section when can_run_valuation is null (legacy rows)", () => {
+    renderRow(
+      makeRow({
+        can_run_valuation: null,
+        can_run_signal: null,
+        mos_basis: "iv_p10",
+        scenario_count: 1,
+        uncertainty_category: "high",
+      }),
+    );
+    fireEvent.click(screen.getByRole("button"));
+    expect(screen.getByText("Valuation diagnostics")).toBeInTheDocument();
+  });
+});
+
 // ---------------------------------------------------------------------------
 
 describe("CompanyRow — null readiness fields fallback", () => {

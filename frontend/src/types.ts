@@ -45,6 +45,11 @@ export interface WatchlistRow {
   readiness_reason_codes: string[] | null;
   can_run_valuation: boolean | null;
   can_run_signal: boolean | null;
+  // Phase 11A.5: valuation diagnostic fields from valuation_runs.assumptions->diagnostics
+  mos_basis: string | null;
+  scenario_count: number | null;
+  uncertainty_category: string | null;
+  distribution_collapsed: boolean | null;
 }
 
 // ---------------------------------------------------------------------------

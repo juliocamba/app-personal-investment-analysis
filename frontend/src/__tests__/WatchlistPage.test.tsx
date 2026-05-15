@@ -82,6 +82,10 @@ function makeRow(overrides: Partial<WatchlistRow> = {}): WatchlistRow {
     readiness_reason_codes: null,
     can_run_valuation: null,
     can_run_signal: null,
+    mos_basis: null,
+    scenario_count: null,
+    uncertainty_category: null,
+    distribution_collapsed: null,
     ...overrides,
   };
 }

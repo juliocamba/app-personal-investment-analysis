@@ -18,6 +18,7 @@ from pathlib import Path
 SQL_DIR = Path(__file__).parent.parent.parent / "sql"
 
 MIGRATION_011 = SQL_DIR / "011_explicit_grants_and_rls_hardening.sql"
+MIGRATION_012 = SQL_DIR / "012_function_execute_and_effective_privilege_hardening.sql"
 
 
 def _sql_of(*filenames: str) -> str:
@@ -56,7 +57,7 @@ def test_migration_011_exists() -> None:
 
 
 def test_all_expected_migrations_exist() -> None:
-    expected = [f"0{n:02d}" for n in range(1, 12)]
+    expected = [f"0{n:02d}" for n in range(1, 13)]
     present = {p.name[:3] for p in SQL_DIR.glob("0*.sql")}
     for prefix in expected:
         assert prefix in present, f"Missing migration with prefix {prefix}"
@@ -310,4 +311,130 @@ def test_011_revokes_from_anon_on_market_data_tables() -> None:
 
     assert not missing_revoke, (
         f"Migration 011 is missing REVOKE ALL FROM anon for: {missing_revoke}"
+    )
+
+
+# ── Migration 012: function execute hardening ─────────────────────────────────
+
+
+def test_migration_012_exists() -> None:
+    assert MIGRATION_012.exists(), (
+        "Migration 012_function_execute_and_effective_privilege_hardening.sql "
+        "not found in sql/"
+    )
+
+
+def test_012_revokes_public_execute_on_get_my_app_user_id() -> None:
+    """Migration 012 must revoke PUBLIC EXECUTE on get_my_app_user_id()."""
+    sql = MIGRATION_012.read_text(encoding="utf-8").lower()
+    pattern = r"revoke\s+all\s+on\s+function\s+[^;]*get_my_app_user_id[^;]*from\s+public\b"
+    assert re.search(pattern, sql, re.IGNORECASE | re.DOTALL), (
+        "Migration 012 must revoke PUBLIC EXECUTE on public.get_my_app_user_id()."
+    )
+
+
+def test_012_revokes_anon_execute_on_get_my_app_user_id() -> None:
+    """Migration 012 must revoke anon EXECUTE on get_my_app_user_id()."""
+    sql = MIGRATION_012.read_text(encoding="utf-8").lower()
+    pattern = r"revoke\s+all\s+on\s+function\s+[^;]*get_my_app_user_id[^;]*from\s+anon\b"
+    assert re.search(pattern, sql, re.IGNORECASE | re.DOTALL), (
+        "Migration 012 must revoke anon EXECUTE on public.get_my_app_user_id()."
+    )
+
+
+def test_012_grants_execute_to_authenticated_on_get_my_app_user_id() -> None:
+    """Migration 012 must grant EXECUTE on get_my_app_user_id() to authenticated."""
+    sql = MIGRATION_012.read_text(encoding="utf-8").lower()
+    pattern = r"grant\s+execute\s+on\s+function\s+[^;]*get_my_app_user_id[^;]*to\s+authenticated\b"
+    assert re.search(pattern, sql, re.IGNORECASE | re.DOTALL), (
+        "Migration 012 must grant EXECUTE on get_my_app_user_id() to authenticated."
+    )
+
+
+def test_012_grants_execute_to_service_role_on_get_my_app_user_id() -> None:
+    """Migration 012 must grant EXECUTE on get_my_app_user_id() to service_role."""
+    sql = MIGRATION_012.read_text(encoding="utf-8").lower()
+    pattern = r"grant\s+execute\s+on\s+function\s+[^;]*get_my_app_user_id[^;]*to\s+service_role\b"
+    assert re.search(pattern, sql, re.IGNORECASE | re.DOTALL), (
+        "Migration 012 must grant EXECUTE on get_my_app_user_id() to service_role."
+    )
+
+
+def test_no_grant_execute_to_public_on_get_my_app_user_id() -> None:
+    """No migration may grant EXECUTE on get_my_app_user_id() to PUBLIC."""
+    sql = _combined_sql()
+    pattern = r"grant\s+execute\s+on\s+function\s+[^;]*get_my_app_user_id[^;]*to\s+public\b"
+    assert not re.search(pattern, sql, re.IGNORECASE | re.DOTALL), (
+        "Found GRANT EXECUTE ON get_my_app_user_id() TO PUBLIC — "
+        "PUBLIC must not be able to invoke this SECURITY DEFINER function."
+    )
+
+
+def test_no_grant_execute_to_anon_on_get_my_app_user_id() -> None:
+    """No migration may grant EXECUTE on get_my_app_user_id() to anon."""
+    sql = _combined_sql()
+    pattern = r"grant\s+execute\s+on\s+function\s+[^;]*get_my_app_user_id[^;]*to\s+anon\b"
+    assert not re.search(pattern, sql, re.IGNORECASE | re.DOTALL), (
+        "Found GRANT EXECUTE ON get_my_app_user_id() TO anon — "
+        "anon must not be able to invoke this SECURITY DEFINER function."
+    )
+
+
+def test_no_grant_execute_to_public_or_anon_on_any_public_schema_function() -> None:
+    """No migration may grant EXECUTE on any public-schema function to PUBLIC or anon.
+
+    Trigger functions (update_updated_at_column, normalize_watchlist_add_request)
+    are invoked by the database engine via the trigger mechanism, not by explicit
+    client-role EXECUTE.  They never receive GRANT EXECUTE in any migration, so
+    they are unaffected by this rule.
+
+    Allowed:
+      - REVOKE from PUBLIC/anon (stripping the PostgreSQL default)
+      - GRANT EXECUTE to authenticated or service_role
+      - Owner/internal behaviour not represented as an explicit GRANT statement
+    Forbidden:
+      - GRANT EXECUTE ON FUNCTION public.<any_function> TO PUBLIC
+      - GRANT EXECUTE ON FUNCTION public.<any_function> TO anon
+    """
+    sql = _combined_sql()
+    # Match: GRANT EXECUTE ON FUNCTION [schema.]name(...) TO PUBLIC|anon
+    # The pattern deliberately excludes REVOKE lines (different verb).
+    pattern = (
+        r"grant\s+execute\s+on\s+function\s+"
+        r"(?:public\.)?[\w.]+\s*\([^)]*\)\s*to\s+"
+        r"(?:public|anon)\b"
+    )
+    assert not re.search(pattern, sql, re.IGNORECASE | re.DOTALL), (
+        "Found GRANT EXECUTE ON FUNCTION ... TO PUBLIC or anon in one or more "
+        "migrations — no public-schema function should be callable by the PUBLIC "
+        "pseudo-role or the anon role."
+    )
+
+
+# ── Migration 012: view privilege completeness ────────────────────────────────
+
+
+def test_012_revokes_authenticated_from_all_views() -> None:
+    """Migration 012 must revoke authenticated from all public views."""
+    sql = MIGRATION_012.read_text(encoding="utf-8").lower()
+
+    views = [
+        "latest_price_eod",
+        "latest_ratios_factors",
+        "latest_valuation_runs",
+        "latest_qualitative_scores",
+        "latest_signal_runs",
+        "dashboard_watchlist_latest",
+        "dashboard_watchlist_inactive",
+        "analysis_readiness_latest",
+    ]
+
+    missing: list[str] = []
+    for view in views:
+        pattern = rf"revoke\s+all\s+on\s+{re.escape(view)}\b[^;]*\bauthenticated\b"
+        if not re.search(pattern, sql, re.IGNORECASE | re.DOTALL):
+            missing.append(view)
+
+    assert not missing, (
+        f"Migration 012 is missing REVOKE ALL FROM authenticated for views: {missing}"
     )

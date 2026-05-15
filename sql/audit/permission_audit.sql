@@ -51,9 +51,13 @@ order by table_name, grantee, privilege_type;
 
 
 -- ── 4. Authenticated write grants (INSERT/UPDATE/DELETE on full table) ─────────
--- Should only appear for: watchlist_companies (UPDATE), watchlist_add_requests
--- is covered by column-level grants, not table-level writes.
--- After 011: this query should return zero rows.
+-- Lists authenticated write privileges for review.  Intentional exceptions:
+--   watchlist_companies                 UPDATE  (soft-remove / reactivate)
+--   watchlist_add_requests column-level INSERT  (watchlist_id, requested_ticker, requested_exchange)
+--   watchlist_add_requests column-level UPDATE  (status — cancellation only)
+-- NOTE: column-level INSERT/UPDATE on watchlist_add_requests will NOT appear in
+-- this query (they appear only in role_column_grants); see Query 2 for those.
+-- Unexpected broad INSERT/UPDATE/DELETE on any other table should be investigated.
 
 select
   table_name,

@@ -144,6 +144,7 @@ Apply migrations in this order:
 9. `sql/009_price_eod_metadata_and_precedence.sql`
 10. `sql/010_analysis_readiness_latest_view.sql`
 11. `sql/011_explicit_grants_and_rls_hardening.sql`
+12. `sql/012_function_execute_and_effective_privilege_hardening.sql`
 
 Notes:
 
@@ -151,6 +152,7 @@ Notes:
 - `005_watchlist_management.sql` implements Phase 9A watchlist active-membership behavior.
 - `006_watchlist_add_requests.sql` implements Phase 9B add-company request flow and hardening.
 - `011_explicit_grants_and_rls_hardening.sql` applies explicit GRANT/REVOKE to every table and view.  Apply this migration before running the permission validator.
+- `012_function_execute_and_effective_privilege_hardening.sql` strips PUBLIC EXECUTE from `get_my_app_user_id()` and completes the view effective-privilege cleanup.
 
 ## RLS and grants model
 
@@ -169,7 +171,30 @@ schema.  Without this migration the following symptoms appear:
 - Tables that have an RLS SELECT policy but no explicit `GRANT SELECT` silently
   return empty result sets or permission errors for authenticated users.
 
-Always apply migrations 001–011 in order on a new or existing Supabase project.
+Always apply migrations 001–012 in order on a new or existing Supabase project.
+
+### Helper function execute hardening
+
+PostgreSQL grants `EXECUTE` on every new function to the `PUBLIC` pseudo-role
+by default.  For SECURITY DEFINER functions this is a defence-in-depth concern:
+the function runs as its owner regardless of the calling role, so any role —
+including `anon` — can invoke it via the Supabase Data API
+(`/rest/v1/rpc/<function_name>`) unless `PUBLIC` execute is explicitly revoked.
+
+`get_my_app_user_id()` is the only SECURITY DEFINER helper in the public schema.
+Its current correct grant state (after migration 012) is:
+
+| Grantee | Privilege | Expected |
+|---|---|---|
+| `PUBLIC` | EXECUTE | ✗ revoked |
+| `anon` | EXECUTE | ✗ revoked |
+| `authenticated` | EXECUTE | ✓ granted |
+| `service_role` | EXECUTE | ✓ granted |
+| `postgres` | EXECUTE | Supabase internal — acceptable |
+
+Any future SECURITY DEFINER function added to the public schema should
+immediately revoke `PUBLIC` and `anon` execute and grant only to the intended
+roles.
 
 ### Access tiers
 
@@ -198,7 +223,69 @@ Supabase SQL Editor:
 
 - `sql/audit/permission_audit.sql` — table and view privileges by grantee
 - `sql/audit/rls_policy_audit.sql` — RLS enabled/disabled and all policies
-- `sql/audit/view_security_audit.sql` — view `security_invoker` settings and grants
+- `sql/audit/view_security_audit.sql` — view `security_invoker` settings, grants, and function execute privileges
+
+### Manual validation queries
+
+Run the following in the Supabase SQL Editor after applying migrations 011 and 012.
+
+**Function execute privileges for `get_my_app_user_id`**
+```sql
+-- PUBLIC and anon must be absent.
+-- authenticated and service_role must be present.
+-- Owner/internal rows such as postgres may appear and are acceptable.
+select r.routine_name, rp.grantee, rp.privilege_type
+from information_schema.routines r
+join information_schema.routine_privileges rp
+  on rp.specific_schema = r.specific_schema
+ and rp.specific_name   = r.specific_name
+where r.routine_schema = 'public'
+  and r.routine_name   = 'get_my_app_user_id'
+order by rp.grantee;
+```
+
+**Effective privileges on `company_analysis_readiness` for `authenticated`**
+```sql
+-- INSERT must be false; SELECT must be true.
+select
+  has_table_privilege('authenticated', 'company_analysis_readiness', 'INSERT') as insert_allowed,
+  has_table_privilege('authenticated', 'company_analysis_readiness', 'SELECT') as select_allowed;
+```
+
+**Effective SELECT on dashboard and readiness views for `authenticated`**
+```sql
+-- All must be true.
+select
+  has_table_privilege('authenticated', 'dashboard_watchlist_latest',   'SELECT') as dash_latest,
+  has_table_privilege('authenticated', 'dashboard_watchlist_inactive',  'SELECT') as dash_inactive,
+  has_table_privilege('authenticated', 'analysis_readiness_latest',     'SELECT') as readiness_latest,
+  has_table_privilege('authenticated', 'latest_price_eod',              'SELECT') as price_eod,
+  has_table_privilege('authenticated', 'latest_signal_runs',            'SELECT') as signal_runs;
+```
+
+**`anon`/`public` must have zero table/view grants**
+```sql
+-- Expected: zero rows.
+select table_name, grantee, privilege_type
+from information_schema.role_table_grants
+where table_schema = 'public'
+  and grantee in ('anon', 'PUBLIC')
+order by table_name;
+```
+
+**Backend-only tables must have zero `authenticated` grants**
+```sql
+-- Expected: zero rows.
+select table_name, privilege_type
+from information_schema.role_table_grants
+where table_schema = 'public'
+  and grantee      = 'authenticated'
+  and table_name in (
+    'pipeline_runs', 'pipeline_run_events', 'provider_requests',
+    'raw_provider_payloads', 'statements_raw'
+  )
+order by table_name, privilege_type;
+```
 
 ### Frontend anon access
 

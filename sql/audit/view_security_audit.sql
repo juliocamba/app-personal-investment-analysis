@@ -81,3 +81,68 @@ left join information_schema.role_table_grants g
 where v.schemaname       = 'public'
   and g.privilege_type   is null
 order by v.viewname;
+
+
+-- ── 6. Function execute privileges on get_my_app_user_id (after 012) ─────────
+-- Expected rows:
+--   authenticated | EXECUTE
+--   service_role  | EXECUTE
+--   postgres      | EXECUTE  (Supabase internal superuser — acceptable)
+-- Must NOT appear:
+--   PUBLIC        | EXECUTE
+--   anon          | EXECUTE
+
+select
+  r.routine_schema,
+  r.routine_name,
+  rp.grantee,
+  rp.privilege_type
+from information_schema.routines r
+join information_schema.routine_privileges rp
+  on rp.specific_schema = r.specific_schema
+ and rp.specific_name   = r.specific_name
+where r.routine_schema = 'public'
+  and r.routine_name   = 'get_my_app_user_id'
+order by rp.grantee;
+
+
+-- ── 7. Unexpected PUBLIC or anon EXECUTE on any public-schema function ────────
+-- Expected: zero rows after 012 is applied.
+
+select
+  r.routine_name,
+  rp.grantee,
+  rp.privilege_type
+from information_schema.routines r
+join information_schema.routine_privileges rp
+  on rp.specific_schema = r.specific_schema
+ and rp.specific_name   = r.specific_name
+where r.routine_schema = 'public'
+  and rp.grantee       in ('PUBLIC', 'anon')
+order by r.routine_name, rp.grantee;
+
+
+-- ── 8. Effective privilege check — authenticated on critical objects ───────────
+-- Uses has_table_privilege() to confirm the runtime privilege state, not just
+-- the grant catalogue.  Run in Supabase SQL Editor as postgres / service_role.
+-- Expected:
+--   company_analysis_readiness  authenticated INSERT → false
+--   company_analysis_readiness  authenticated SELECT → true
+--   dashboard_watchlist_latest  authenticated SELECT → true
+--   analysis_readiness_latest   authenticated SELECT → true
+--   pipeline_run_events         authenticated SELECT → false
+
+select
+  obj,
+  privilege,
+  has_table_privilege('authenticated', obj, privilege) as granted
+from (values
+  ('company_analysis_readiness', 'INSERT'),
+  ('company_analysis_readiness', 'SELECT'),
+  ('dashboard_watchlist_latest', 'SELECT'),
+  ('dashboard_watchlist_inactive', 'SELECT'),
+  ('analysis_readiness_latest',  'SELECT'),
+  ('pipeline_run_events',        'SELECT'),
+  ('raw_provider_payloads',      'SELECT')
+) as t(obj, privilege)
+order by obj, privilege;

@@ -140,6 +140,12 @@ describe("CompanyRow — tracking_only expanded panel", () => {
     expect(screen.getByText("Provider coverage limited")).toBeInTheDocument();
   });
 
+  it("suppresses p_buy (raw) in the expanded detail panel when can_run_signal = false", () => {
+    renderRow(makeRow({ ...trackingRow, p_buy: 0.55 }));
+    fireEvent.click(screen.getByRole("button"));
+    expect(screen.queryByText("55.0%")).not.toBeInTheDocument();
+  });
+
   it("does not show 'Signal explanation' section for tracking_only rows", () => {
     renderRow(makeRow({ ...trackingRow, explanation: "Some explanation text" }));
     fireEvent.click(screen.getByRole("button"));

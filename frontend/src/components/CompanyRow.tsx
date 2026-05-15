@@ -316,7 +316,11 @@ export function CompanyRow({ row, onRemove, isRemoving = false }: Props) {
                   <div className="detail-grid__item">
                     <span className="detail-grid__label">p_buy (raw)</span>
                     <span className="detail-grid__value">
-                      {formatPct(row.p_buy)}
+                      {isTracking ? (
+                        <span className="text-muted">—</span>
+                      ) : (
+                        formatPct(row.p_buy)
+                      )}
                     </span>
                   </div>
                 </div>

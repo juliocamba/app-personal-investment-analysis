@@ -11,6 +11,9 @@ on:
      # 22:30 UTC Monday–Friday (after US market close).  
      - cron: "30 22 * * 1-5"
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 jobs:
   daily-pipeline:
     runs-on: ubuntu-latest

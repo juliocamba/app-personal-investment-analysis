@@ -4,12 +4,13 @@ This document describes the current technical architecture of the Investment Ana
 
 ## System architecture
 
-The system has four main runtime surfaces:
+The system has five main runtime surfaces:
 
 - a Python backend pipeline that ingests provider data and computes analytical outputs;
 - a Supabase/Postgres database that stores raw data, normalized data, analytical tables, views, and pipeline logs;
 - a React + Vite frontend that reads from Supabase using the anon key and Supabase Auth;
-- planned deployment and scheduling surfaces in Cloudflare Pages and GitHub Actions.
+- a GitHub Actions workflow for scheduled and manual pipeline runs;
+- planned static hosting on Cloudflare Pages.
 
 At a high level:
 
@@ -146,6 +147,8 @@ Apply migrations in this order:
 11. `sql/011_explicit_grants_and_rls_hardening.sql`
 12. `sql/012_function_execute_and_effective_privilege_hardening.sql`
 
+13. `sql/013_valuation_diagnostics_in_dashboard_view.sql`
+
 Notes:
 
 - `004_seed_watchlist_example.sql` is optional sample data.
@@ -153,6 +156,7 @@ Notes:
 - `006_watchlist_add_requests.sql` implements Phase 9B add-company request flow and hardening.
 - `011_explicit_grants_and_rls_hardening.sql` applies explicit GRANT/REVOKE to every table and view.  Apply this migration before running the permission validator.
 - `012_function_execute_and_effective_privilege_hardening.sql` strips PUBLIC EXECUTE from `get_my_app_user_id()` and completes the view effective-privilege cleanup.
+- `013_valuation_diagnostics_in_dashboard_view.sql` recreates `dashboard_watchlist_latest` with four appended diagnostic columns: `mos_basis`, `scenario_count`, `uncertainty_category`, `distribution_collapsed`.
 
 ## RLS and grants model
 
@@ -171,7 +175,7 @@ schema.  Without this migration the following symptoms appear:
 - Tables that have an RLS SELECT policy but no explicit `GRANT SELECT` silently
   return empty result sets or permission errors for authenticated users.
 
-Always apply migrations 001–012 in order on a new or existing Supabase project.
+Always apply all listed migrations in order (001–013) on a new or existing Supabase project.
 
 ### Helper function execute hardening
 
@@ -348,19 +352,29 @@ The pipeline resolves pending requests before loading active companies for the r
 
 ### FMP Stable API
 
-FMP is the primary market-data connector for profile, price, and statement data.
+FMP is the primary market-data connector for company profile, price, and financial statement data.
 
-### SEC EDGAR
+### SEC EDGAR (US fundamentals fallback)
 
-SEC requests require a valid `SEC_USER_AGENT` string and provide filing submissions and company facts.
+SEC EDGAR provides filing submissions and company facts (from the XBRL `companyfacts` endpoint) for US-listed companies. It is used as a fallback when FMP fundamental data is insufficient or missing. SEC requests require a valid `SEC_USER_AGENT` string identifying the operator.
+
+Non-US companies (for example, ASML) are not covered by SEC EDGAR and may remain as `tracking_only` if FMP does not supply sufficient fundamental data.
+
+### Twelve Data (price fallback)
+
+Twelve Data is used as a price fallback when FMP price data is unavailable or stale. It covers end-of-day prices for most major exchanges.
 
 ### ECB FX
 
-ECB is used for FX rates needed by the analytical pipeline.
+ECB is used for daily FX rates needed by the analytical pipeline for non-USD currency conversion.
 
-### GDELT
+### Finnhub and Alpha Vantage
 
-GDELT/news is optional and may remain disabled by default. The current pipeline explicitly logs when news ingestion is skipped because GDELT is disabled.
+Finnhub and Alpha Vantage keys are present in the workflow env and local env template but are not actively used as primary or fallback connectors in the current implementation. They remain available for future use.
+
+### GDELT / news
+
+GDELT/news ingestion is optional and disabled by default. The pipeline logs when news ingestion is skipped.
 
 ## Error handling and secret safety
 
@@ -370,28 +384,76 @@ GDELT/news is optional and may remain disabled by default. The current pipeline 
 - The frontend must never contain the Supabase service-role key or provider API keys.
 - SMTP and Telegram credentials must remain outside version control.
 
+## Readiness classification
+
+The pipeline computes a readiness snapshot for each company into `company_analysis_readiness` and surface fields on the dashboard.
+
+### Readiness status values
+
+Defined in `readiness.py` and constrained in `company_analysis_readiness.check_readiness_status`:
+
+| Status | Meaning |
+|---|---|
+| `analysis_ready` | Sufficient data for a full valuation and signal run. |
+| `partial_analysis` | Some data is present but incomplete. A signal may be generated with a demoted buy probability. |
+| `provider_limited` | The provider set does not supply enough data for this company. Signal is suppressed or degraded. |
+| `tracking_only` | Price data is available but fundamental data is not sufficient or not supported. No valuation or signal is generated. |
+| `unsupported_for_analysis` | The company or exchange is not supported by the current provider set. No data or signal is produced. |
+
+### Dashboard fields from readiness
+
+The `dashboard_watchlist_latest` view exposes:
+
+- `readiness_status` — the classification above.
+- `can_run_valuation` — boolean; false suppresses the valuation diagnostics panel.
+- `can_run_signal` — boolean; false suppresses the signal.
+- `provider_mix` — a coverage classification (`primary_only`, `fallback_mix`, `mixed_sources`, `price_only`, or `insufficient_coverage`).
+
+### Tracking-only behavior
+
+- A `tracking_only` company appears in the dashboard with its latest price but without an intrinsic value range, margin of safety, or signal.
+- The readiness notice is shown in the expanded detail panel instead of valuation or signal fields.
+- This state is expected for non-US companies without SEC EDGAR fundamentals coverage.
+
 ## Valuation model summary
 
-The valuation layer is designed as a daily snapshot model combining multiple approaches.
+The valuation layer (model version `valuation_v1`) is designed as a daily snapshot combining multiple approaches.
 
-Current concepts reflected in the repository and output tables:
+Current implementation:
 
-- discounted cash flow style reasoning;
-- multiple-based valuation support;
-- scenario ranges persisted as percentiles such as `iv_p10`, `iv_p50`, and `iv_p90`;
-- method and assumption diagnostics persisted in JSON fields;
-- margin-of-safety outputs for downstream signal and dashboard use.
+- multiple DCF scenarios with varied growth and terminal assumptions;
+- multiples-based valuation support;
+- scenario results stored as percentile outputs: `iv_p10`, `iv_p50`, `iv_p90`;
+- `mos_basis` records which percentile was used for the conservative margin-of-safety calculation;
+- `scenario_count` records how many DCF method variants contributed;
+- `uncertainty_category` (`low` / `moderate` / `high` / `extreme`) derived from the spread of the scenario range;
+- `distribution_collapsed` flag set when scenarios collapsed to a single point;
+- method and assumption diagnostics stored in `valuation_runs.assumptions["diagnostics"]` JSON;
+- margin-of-safety outputs consumed by the signal engine and surfaced in the dashboard.
+
+### Valuation diagnostics in dashboard
+
+Migration `013_valuation_diagnostics_in_dashboard_view.sql` adds four diagnostic columns to `dashboard_watchlist_latest`:
+
+| Column | Source |
+|---|---|
+| `mos_basis` | `assumptions->'diagnostics'->>'mos_basis'` |
+| `scenario_count` | `(assumptions->'diagnostics'->>'scenario_count')::int` |
+| `uncertainty_category` | `assumptions->'diagnostics'->>'uncertainty_category'` |
+| `distribution_collapsed` | `(assumptions->'diagnostics'->'warnings') @> '["distribution_collapsed"]'` |
 
 ## Signal model summary
 
-The signal layer persists:
+The signal layer uses model version `signal_rule_v2`.
 
-- `p_buy`;
-- `p_buy_adjusted`;
-- `p_sell`;
-- `final_signal`.
+Persisted outputs:
 
-Allowed `final_signal` values are constrained in SQL and currently include:
+- `p_buy` — raw buy probability before quality adjustment;
+- `p_buy_adjusted` — buy probability after partial-analysis demotion;
+- `p_sell` — sell pressure probability;
+- `final_signal` — the classified signal.
+
+Allowed `final_signal` values are constrained in SQL (`signal_runs.check_final_signal`):
 
 - `strong_buy`
 - `buy`
@@ -400,7 +462,25 @@ Allowed `final_signal` values are constrained in SQL and currently include:
 - `strong_sell`
 - `insufficient_data`
 
+> **`tracking_only` is not a stored signal value.** It is a readiness/display state. When `can_run_signal = false` the frontend shows a readiness badge instead of a signal, and the `TRACKING_ONLY` filter in the dashboard selects rows by `can_run_signal = false`, not by `final_signal`.
+
+### Signal rule v2 behaviour
+
+- **Near-fair-value epsilon band**: MoS values within `±0.5%` (i.e. `abs(mos) ≤ 0.005`) are clamped to zero before sell-pressure calculation. This prevents floating-point noise near zero from generating spurious sell signals (observed with values such as `-1.5e-16` for near-fair-value companies).
+- **STRONG_SELL confirmation requirement**: A `strong_sell` classification requires both elevated sell pressure (`p_sell` above threshold) **and** at least one confirming bearish red flag. Elevated price alone is not sufficient.
+- **Partial-analysis buy demotion**: When `readiness_status = partial_analysis`, `p_buy_adjusted` is reduced from `p_buy` to reflect reduced data confidence.
+- **Tracking-only passthrough**: Companies with `tracking_only` or `unsupported_for_analysis` readiness have `can_run_signal = false`. The signal engine is not invoked and no `signal_runs` row is written for those companies.
+
 The signal output also stores red flags, explanation text, top feature contributors, and freshness indicators.
+
+## Model interpretation and limitations
+
+- Outputs are rule-based analytical signals, not statistically calibrated probabilities.
+- `p_buy_adj` and `p_sell` reflect formula outputs against thresholds, not historical win rates.
+- Valuation models rely on assumptions. Small changes to growth or discount rate inputs can materially shift the intrinsic value range.
+- The `uncertainty_category` field gives a qualitative sense of model confidence, but even a `low` uncertainty category does not imply accuracy.
+- Non-US companies may have degraded or missing fundamental data, which can result in `tracking_only` or `provider_limited` states regardless of company quality.
+- Do not treat any output as a recommendation. Use outputs as a starting point for further research.
 
 ## Frontend architecture
 
@@ -430,7 +510,8 @@ Key characteristics:
 
 The repository includes [.github/workflows/daily_pipeline.yml](.github/workflows/daily_pipeline.yml), which:
 
-- manual-only via `workflow_dispatch` — weekday cron schedule is disabled;
+- runs on both `workflow_dispatch` (manual) and a weekday cron schedule (`30 22 * * 1-5`, 22:30 UTC Monday–Friday);
+- sets `FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true` at workflow level to opt into Node.js 24 for `actions/checkout` and `actions/setup-python` before GitHub forces the migration;
 - fails early when required secrets are absent;
 - sets up Python and installs dependencies;
 - runs unit tests;

@@ -1,48 +1,43 @@
 # Investment Analysis MVP
 
-A private research application that tracks a watchlist of public companies, ingests market and filing data, computes daily analytics, and exposes the latest results in a Supabase-backed dashboard.
+A personal, private research application that tracks a watchlist of public companies, runs a daily analytical pipeline, and surfaces buy/hold/sell signals in a dashboard.
+
+> **This is a personal decision-support tool, not financial advice.** Outputs are analytical signals based on quantitative models and rule-based heuristics. They are not recommendations to buy or sell any security. Always verify independently before acting on any signal.
 
 This repository contains both the Python backend pipeline and the React frontend.
 
 For implementation detail, schema notes, RLS behavior, and the operational model, see [README-TECHNICAL.md](README-TECHNICAL.md).
 
-## Project overview
+## What this app does
 
-The app is designed for a single-operator or small trusted-user deployment.
+Each day, the pipeline:
 
-It combines:
+1. **Collects company data** — prices, financial statements, SEC filings, and FX rates from multiple providers.
+2. **Validates data availability** — checks whether each company has enough recent, reliable data to support a signal.
+3. **Calculates financial ratios** — growth rates, margins, leverage, and return metrics.
+4. **Estimates an intrinsic value range** — using multiple DCF scenarios and multiples-based methods, producing low/mid/high estimates.
+5. **Calculates margin of safety** — how far the current price is from the estimated intrinsic value.
+6. **Assesses quality and risks** — a qualitative score combining profitability, leverage, competitive position, and red flag detection.
+7. **Generates a probabilistic buy/sell signal** — combining valuation, quality, and risk factors into a single signal with buy and sell probabilities.
+8. **Classifies readiness** — marks companies as signal-ready, provider-limited, or tracking-only based on data availability.
 
-- provider ingestion from FMP Stable API, SEC EDGAR, and ECB FX;
-- a Supabase/Postgres analytical store with Row Level Security;
-- a daily Python pipeline for ingestion, normalization, analytics, and alerts;
-- a React + Vite dashboard that reads from Supabase using the anon key plus Supabase Auth.
+Results appear in the dashboard within minutes of the pipeline completing.
 
-## What the app does
+## Current capabilities
 
-On each pipeline run, the system can:
-
-- refresh company profile, price, statement, filing, and FX data;
-- store raw provider payloads before normalization;
-- compute ratios and features;
-- compute valuation ranges and margin of safety outputs;
-- compute qualitative scores;
-- compute probabilistic buy, hold, and sell signals;
-- optionally evaluate alerts;
-- keep watchlist history intact when companies are removed or reactivated.
-
-## Current MVP capabilities
-
-- Supabase schema is applied and validated.
-- FMP Stable API ingestion works.
-- SEC EDGAR ingestion works.
-- ECB FX ingestion works.
-- Daily pipeline runs successfully.
-- Dashboard works locally.
-- Phase 9A watchlist active-membership management is implemented and manually tested.
-- Phase 9B add-new-company request flow is implemented and ready; manual testing is in progress.
-- Alerts exist but remain disabled by default.
-- Cloudflare Pages deployment is planned.
-- GitHub Actions daily pipeline is included in the repo and is configurable once secrets are set.
+- Authenticated React dashboard (Supabase Auth).
+- FMP Stable API as primary provider for prices, profiles, and statements.
+- SEC EDGAR as fallback for US company fundamentals.
+- Twelve Data as fallback for price data.
+- ECB FX rates for non-USD currency conversion.
+- Daily pipeline via GitHub Actions (scheduled weekday runs + manual dispatch).
+- Watchlist management: add, remove, and reactivate companies.
+- Full analytical stack: ratios, valuation, qualitative score, probabilistic signal.
+- Readiness classification: signals are only generated when data meets quality thresholds.
+- Valuation diagnostics in the dashboard: MoS basis, DCF scenario count, uncertainty category, distribution-collapsed warning.
+- Signal rule v2 with near-fair-value epsilon band calibration.
+- Alerts present but disabled by default.
+- Cloudflare Pages deployment is planned but not yet live.
 
 ## High-level architecture
 
@@ -50,7 +45,7 @@ On each pipeline run, the system can:
 |---|---|
 | Python backend | Ingests provider data, stores raw payloads, normalizes data, computes analytics, writes results |
 | Supabase / Postgres | Operational database, analytical tables, views, RLS, auth-backed frontend access |
-| GitHub Actions | Planned scheduler/runner for the daily pipeline and manual workflow dispatch |
+| GitHub Actions | Scheduled weekday runner and manual dispatch for the daily pipeline |
 | React + Vite frontend | Dashboard UI for watchlist, add requests, and alert history |
 | Cloudflare Pages | Planned static hosting target for the frontend |
 
@@ -63,9 +58,86 @@ On each pipeline run, the system can:
 | Scheduler | GitHub Actions |
 | Frontend | React 18 + Vite 5 + TypeScript |
 | Frontend hosting | Cloudflare Pages |
-| Market/provider data | FMP Stable API |
-| Filings | SEC EDGAR |
+| Market/provider data | FMP Stable API (primary), Twelve Data (price fallback) |
+| Filings / fundamentals | SEC EDGAR (US fundamentals fallback) |
 | FX rates | ECB FX |
+
+## Dashboard field guide
+
+Each row in the dashboard represents one company. The columns mean:
+
+| Field | What it shows |
+|---|---|
+| **Signal** | The overall analysis verdict: STRONG_BUY, BUY, HOLD, SELL, STRONG_SELL, or INSUFFICIENT_DATA. |
+| **Price** | The latest end-of-day closing price. |
+| **p_buy_adj** | Adjusted probability of a buy signal (0–1). Reduced when data quality is partial. |
+| **p_sell** | Probability of a sell signal (0–1). Elevated when price is significantly above estimated fair value, or when bearish flags are present. |
+| **Quality** | A qualitative score (0–100) based on profitability, leverage, competitive position, and management signals. |
+| **IV Range** | Intrinsic value range: low / mid / high estimate from DCF and multiples scenarios. |
+| **MoS** | Margin of safety: how far the current price is below (positive) or above (negative) the estimated intrinsic value. A large positive MoS means the price looks cheap relative to the model. |
+| **Freshness** | How recent the underlying data is. Stale data can reduce signal reliability. |
+| **Readiness status** | Data availability classification: `analysis_ready`, `partial_analysis`, `provider_limited`, `tracking_only`, or `unsupported_for_analysis`. |
+| **Provider coverage** | A coverage classification showing whether data came from primary sources only, a fallback mix, or price-only coverage. |
+| **Red flags** | Specific bearish concerns detected: high debt, declining revenue, margin compression, etc. |
+| **Valuation uncertainty** | Low / moderate / high / extreme — reflects how spread the DCF scenario range is. |
+| **DCF scenarios** | How many DCF method variants contributed to the intrinsic value estimate (out of 3 possible). |
+
+### Signal labels
+
+| Signal | Meaning |
+|---|---|
+| **STRONG_BUY** | High buy probability, low sell pressure, strong quality. |
+| **BUY** | Elevated buy probability with acceptable quality and limited sell pressure. |
+| **HOLD** | Neutral or mixed evidence. Can mean the price is near fair value, the quality is mixed, or there is not enough conviction in either direction. A HOLD does not mean "safe to hold" — it means the model found no strong signal. |
+| **SELL** | Elevated sell pressure, typically from price significantly above fair value or bearish quality signals. |
+| **STRONG_SELL** | Strong sell requires both elevated sell pressure **and** at least one confirming bearish red flag. A high price alone is not sufficient for STRONG_SELL. |
+| **INSUFFICIENT_DATA** | Not enough reliable data to generate any signal. The company is visible but not actionable. |
+
+> **Note on tracking-only companies:** A company with readiness status `tracking_only` or `unsupported_for_analysis` appears in the dashboard with its latest price but without a valuation or signal. The signal column shows a readiness badge rather than a signal value. Non-US companies without SEC EDGAR coverage (for example, ASML) may remain in this state. `TRACKING_ONLY` is a readiness/display state, not a stored signal value.
+
+### Signal calibration note
+
+A margin of safety within ±0.5% of zero is treated as near fair value and does not contribute sell pressure. This avoids spurious signals from floating-point rounding near zero.
+
+## How to read a company row
+
+Example: you open the dashboard and see:
+
+> **AAPL** | Signal: **HOLD** | Price: $195 | p_buy_adj: 0.42 | p_sell: 0.18 | Quality: 78 | IV Range: $160–$200–$240 | MoS: +2.6% | Readiness: analysis_ready | Uncertainty: moderate | DCF: 3/3
+
+This means:
+- The model estimates fair value between $160 and $240, with a mid-point near $200.
+- At $195, the price is close to the mid-point, giving a small positive margin of safety.
+- Quality is good (78/100) but not exceptional.
+- No strong buy or sell conviction — HOLD means "no strong edge either way."
+- All three DCF scenarios ran successfully; moderate uncertainty is normal.
+
+If the same row showed `p_sell: 0.72` and a red flag of `high_debt`, the signal might be **SELL** or **STRONG_SELL** — the sell pressure is confirmed by a bearish flag.
+
+## What to do before acting on a signal
+
+Before making any real decision based on a signal:
+
+1. **Check data freshness.** Stale data can produce misleading signals. If the freshness indicator is old, wait for the next pipeline run.
+2. **Check readiness status.** A `provider_limited` or `tracking_only` company has incomplete data. Treat its signal with extra caution or ignore it entirely.
+3. **Check provider mix.** If the company is on SEC fallback or Twelve Data fallback, the data source is less complete than FMP primary. The dashboard shows which providers contributed.
+4. **Check red flags.** Even a BUY signal can carry red flags. Review them before acting.
+5. **Check valuation uncertainty.** An `extreme` uncertainty category means the DCF scenarios are very spread. The intrinsic value range is wide and less reliable.
+6. **Verify externally.** This tool is a starting point for research, not a conclusion. Check company filings, news, and analyst views before acting.
+
+## Provider coverage
+
+The pipeline uses a cascading fallback for data:
+
+| Data type | Primary | Fallback |
+|---|---|---|
+| Price (EOD) | FMP | Twelve Data |
+| Financial statements | FMP | SEC EDGAR (US companies only) |
+| Company profile | FMP | — |
+| SEC filings | SEC EDGAR | — |
+| FX rates | ECB | — |
+
+**Non-US companies** (for example, ASML listed on Euronext) may remain as `tracking_only` if FMP does not supply sufficient fundamental data and SEC EDGAR does not cover the company. This is a known limitation of the current provider set.
 
 ## Safe setup summary
 
@@ -189,6 +261,13 @@ Apply the SQL files in order in the Supabase SQL editor:
 4. `sql/004_seed_watchlist_example.sql` (optional sample data)
 5. `sql/005_watchlist_management.sql`
 6. `sql/006_watchlist_add_requests.sql`
+7. `sql/007_statements_norm_metadata.sql`
+8. `sql/008_statements_norm_raw_payload_id.sql`
+9. `sql/009_price_eod_metadata_and_precedence.sql`
+10. `sql/010_analysis_readiness_latest_view.sql`
+11. `sql/011_explicit_grants_and_rls_hardening.sql`
+12. `sql/012_function_execute_and_effective_privilege_hardening.sql`
+13. `sql/013_valuation_diagnostics_in_dashboard_view.sql`
 
 Before using the optional seed file, replace any placeholder email with your own test or operator email in a local copy or directly in the SQL editor. Do not commit personal addresses.
 
@@ -236,7 +315,8 @@ GitHub only executes workflow files placed under `.github/workflows/`. The file 
 
 Current workflow characteristics:
 
-- manual-only via `workflow_dispatch` — weekday cron schedule is disabled;
+- runs on both `workflow_dispatch` (manual) and a weekday cron schedule (`30 22 * * 1-5`, 22:30 UTC Monday–Friday);
+- opts into Node.js 24 for JavaScript actions (`FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true`);
 - fails early with a clear error when required secrets are absent;
 - runs unit tests before the live pipeline step;
 - validates Supabase schema before running the pipeline;
@@ -298,12 +378,15 @@ Do not put `SUPABASE_SERVICE_ROLE_KEY` into Cloudflare Pages.
 
 ## Current limitations
 
+- **Not investment advice.** This is a personal research tool. Signals are rule-based heuristics, not statistically calibrated probabilities or professional recommendations.
+- **Data may be incomplete.** Free-tier providers have rate limits and coverage gaps. Missing data can suppress signals or cause partial analysis.
+- **Non-US fundamentals may not be fully supported.** Companies without SEC EDGAR coverage may remain as tracking-only if the primary provider does not supply sufficient fundamental data.
+- **Valuation models are based on assumptions, not predictions.** DCF outputs are scenario estimates. Small changes in growth or discount rate assumptions can materially change the intrinsic value range.
+- **Probabilities are rule-based, not statistically calibrated.** `p_buy_adj` and `p_sell` reflect formula outputs, not historical win rates.
+- **Near-zero margin of safety is treated as near fair value.** Values within ±0.5% of zero are clamped to zero in signal calibration.
+- **Cloudflare Pages deployment is planned but not yet live.** The frontend currently runs locally.
+- **Alerts are disabled by default.** No alert evaluation or delivery occurs unless `ALERTS_ENABLED=true`.
 - The app is designed for a private deployment, not a public multi-tenant product.
-- The frontend reads directly from Supabase; there is no separate backend API layer for dashboard queries.
-- Cloudflare Pages deployment is documented but not described here as already live.
-- GitHub Actions automation depends on repository secrets being configured.
-- GDELT/news ingestion is optional and can remain disabled.
-- Alerts exist but are intentionally off by default.
 - Per-user watchlist isolation beyond the current trusted-user model is not implemented.
 
 ## Roadmap / post-MVP ideas
@@ -331,6 +414,11 @@ Do not put `SUPABASE_SERVICE_ROLE_KEY` into Cloudflare Pages.
 | 8 | Frontend Dashboard | Complete |
 | 9A | Watchlist Active Membership | Complete and manually tested |
 | 9B | Add New Company Request Flow | Implemented, ready; manual testing in progress |
+| 10A | SEC Fundamentals Fallback | Complete |
+| 10B | Twelve Data Price Fallback | Complete |
+| 10C | Provider Orchestration | Complete |
+| 10D | Finnhub Optional Layer | Deferred — connectors are placeholder stubs; no active fallback |
+| 11A | Signal Calibration & Valuation Diagnostics | Complete |
 
 ## Financial disclaimer
 

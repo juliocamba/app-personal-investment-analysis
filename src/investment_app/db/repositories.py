@@ -922,3 +922,18 @@ def upsert_company_analysis_readiness(
     )
     return len(response.data)
 
+
+def upsert_company_data_quality_snapshots(
+    rows: list[dict[str, Any]], *, client: Any = None
+) -> int:
+    """Upsert one per-company per-date diagnostics snapshot row."""
+    if not rows:
+        return 0
+    response = (
+        _db(client)
+        .table("company_data_quality_snapshots")
+        .upsert(rows, on_conflict="company_id,snapshot_date")
+        .execute()
+    )
+    return len(response.data)
+

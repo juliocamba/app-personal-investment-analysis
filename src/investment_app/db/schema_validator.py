@@ -19,10 +19,12 @@ REQUIRED_TABLES: tuple[str, ...] = (
     "qualitative_scores",
     "valuation_runs",
     "signal_runs",
+    "positions",
     "alert_rules",
     "alert_history",
     "pipeline_runs",
     "company_analysis_readiness",
+    "company_data_quality_snapshots",
 )
 
 

@@ -5,7 +5,15 @@
  * Supabase Auth). No backend provider APIs are called from here.
  */
 import { supabase } from "./supabase";
-import type { AlertHistoryRow, InactiveWatchlistRow, WatchlistAddRequest, WatchlistRow } from "../types";
+import type {
+  AlertHistoryRow,
+  CompanyOption,
+  InactiveWatchlistRow,
+  PositionInput,
+  PositionRow,
+  WatchlistAddRequest,
+  WatchlistRow,
+} from "../types";
 
 /**
  * Fetch all rows from the `dashboard_watchlist_latest` view, ordered by ticker.
@@ -153,5 +161,86 @@ export async function cancelWatchlistAddRequest(requestId: string): Promise<void
     .update({ status: "cancelled" })
     .eq("id", requestId);
   if (error) throw new Error(error.message);
+}
+
+// ---------------------------------------------------------------------------
+// Phase 12B.1: manual positions
+// ---------------------------------------------------------------------------
+
+export async function fetchCompaniesForPositions(): Promise<CompanyOption[]> {
+  const { data, error } = await supabase
+    .from("companies")
+    .select("id, ticker, name, currency")
+    .order("ticker");
+  if (error) throw new Error(error.message);
+  return (data ?? []) as CompanyOption[];
+}
+
+export async function fetchPositions(): Promise<PositionRow[]> {
+  const { data, error } = await supabase
+    .from("positions")
+    .select("*")
+    .order("status")
+    .order("entry_date", { ascending: false });
+  if (error) throw new Error(error.message);
+  return (data ?? []) as PositionRow[];
+}
+
+export async function createPosition(input: PositionInput): Promise<PositionRow> {
+  const { data, error } = await supabase
+    .from("positions")
+    .insert({
+      company_id: input.company_id,
+      entry_date: input.entry_date,
+      quantity: input.quantity,
+      average_entry_price: input.average_entry_price,
+      currency: input.currency.trim().toUpperCase(),
+      fees: input.fees ?? null,
+      notes: input.notes?.trim() || null,
+      status: input.status,
+      closed_at: input.closed_at ?? null,
+    })
+    .select("*")
+    .single();
+  if (error) throw new Error(error.message);
+  return data as PositionRow;
+}
+
+export async function updatePosition(
+  positionId: string,
+  input: PositionInput,
+): Promise<PositionRow> {
+  const { data, error } = await supabase
+    .from("positions")
+    .update({
+      company_id: input.company_id,
+      entry_date: input.entry_date,
+      quantity: input.quantity,
+      average_entry_price: input.average_entry_price,
+      currency: input.currency.trim().toUpperCase(),
+      fees: input.fees ?? null,
+      notes: input.notes?.trim() || null,
+      status: input.status,
+      closed_at: input.closed_at ?? null,
+    })
+    .eq("id", positionId)
+    .select("*")
+    .single();
+  if (error) throw new Error(error.message);
+  return data as PositionRow;
+}
+
+export async function closePosition(positionId: string): Promise<PositionRow> {
+  const { data, error } = await supabase
+    .from("positions")
+    .update({
+      status: "closed",
+      closed_at: new Date().toISOString(),
+    })
+    .eq("id", positionId)
+    .select("*")
+    .single();
+  if (error) throw new Error(error.message);
+  return data as PositionRow;
 }
 

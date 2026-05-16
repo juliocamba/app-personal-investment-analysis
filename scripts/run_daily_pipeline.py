@@ -998,6 +998,143 @@ def _try_sec_statements_fallback(
     )
 
 
+def _run_price_cross_provider_validation(
+    *,
+    repo_module: Any,
+    companies: list[dict[str, Any]],
+    run_id: str,
+    factor_date: str,
+    metrics: dict[str, int],
+) -> None:
+    """Emit non-blocking FMP-vs-Twelve price diagnostics for the latest overlap."""
+    from investment_app.data_quality import (
+        PRICE_VALIDATION_CRITICAL,
+        PRICE_VALIDATION_NOT_COMPARABLE,
+        PRICE_VALIDATION_WARNING,
+        build_data_quality_snapshot_row,
+        build_price_validation_payload,
+        compare_latest_overlapping_provider_prices,
+        evaluate_fundamentals_provider_overlap,
+        evaluate_statement_completeness,
+    )
+
+    repo_module.log_pipeline_event(
+        run_id,
+        stage="data_quality",
+        message="Starting cross-provider price validation.",
+    )
+
+    for company in companies:
+        ticker: str = company.get("ticker", "")
+        company_id = _resolve_company_id(company, repo_module)
+        if not company_id:
+            continue
+
+        metrics["price_validation_companies_checked"] += 1
+
+        try:
+            price_rows = repo_module.get_prices_for_company(
+                company_id,
+                as_of_date=factor_date,
+                limit=60,
+            )
+            statement_rows = repo_module.get_statements_for_company(
+                company_id,
+                as_of_date=factor_date,
+                limit=10,
+            )
+            result = compare_latest_overlapping_provider_prices(price_rows)
+            statement_diagnostics = evaluate_statement_completeness(statement_rows)
+            fundamentals_diagnostics = evaluate_fundamentals_provider_overlap(statement_rows)
+            payload = build_price_validation_payload(ticker=ticker, result=result)
+            status = payload["status"]
+            snapshot_row = build_data_quality_snapshot_row(
+                company_id=company_id,
+                snapshot_date=factor_date,
+                result=result,
+                statement_diagnostics=statement_diagnostics,
+                fundamentals_diagnostics=fundamentals_diagnostics,
+            )
+
+            if status == PRICE_VALIDATION_NOT_COMPARABLE:
+                metrics["price_validation_not_comparable"] += 1
+                level = "info"
+                message = (
+                    f"Price cross-provider validation not comparable for {ticker}: "
+                    "no overlapping FMP and Twelve Data prices."
+                )
+            else:
+                metrics["price_validation_comparisons"] += 1
+                if status == PRICE_VALIDATION_CRITICAL:
+                    metrics["price_validation_critical"] += 1
+                    level = "warning"
+                    message = (
+                        f"Critical cross-provider price divergence for {ticker}."
+                    )
+                elif status == PRICE_VALIDATION_WARNING:
+                    metrics["price_validation_warnings"] += 1
+                    level = "warning"
+                    message = (
+                        f"Warning cross-provider price divergence for {ticker}."
+                    )
+                else:
+                    level = "info"
+                    message = f"Cross-provider price validation ok for {ticker}."
+
+            repo_module.log_pipeline_event(
+                run_id,
+                stage="data_quality",
+                level=level,
+                company_id=company_id,
+                message=message,
+                details=payload,
+            )
+            try:
+                repo_module.upsert_company_data_quality_snapshots([snapshot_row])
+            except Exception as exc:  # noqa: BLE001
+                logger.warning(
+                    "Data-quality snapshot persist failed for %s (%s)",
+                    ticker,
+                    type(exc).__name__,
+                )
+                repo_module.log_pipeline_event(
+                    run_id,
+                    stage="data_quality",
+                    level="warning",
+                    company_id=company_id,
+                    message=(
+                        f"Data-quality snapshot persist failed for {ticker} "
+                        "and was skipped."
+                    ),
+                    details={
+                        "ticker": ticker,
+                        "event": "company_data_quality_snapshot_persist_failed",
+                        "error_type": type(exc).__name__,
+                    },
+                )
+        except Exception as exc:  # noqa: BLE001
+            logger.warning(
+                "Cross-provider price validation failed for %s (%s)",
+                ticker,
+                type(exc).__name__,
+            )
+            repo_module.log_pipeline_event(
+                run_id,
+                stage="data_quality",
+                level="warning",
+                company_id=company_id,
+                message=(
+                    f"Cross-provider price validation failed for {ticker} "
+                    "and was skipped."
+                ),
+                details={
+                    "ticker": ticker,
+                    "event": "price_cross_provider_validation_error",
+                    "error_type": type(exc).__name__,
+                },
+            )
+
+
 def _run_live_pipeline(
     *,
     repo_module: Any,
@@ -1045,6 +1182,12 @@ def _run_live_pipeline(
         "sec_fallback_upserted": 0,
         # Phase 10B
         "price_fallback_upserted": 0,
+        # Phase 12A.2
+        "price_validation_companies_checked": 0,
+        "price_validation_comparisons": 0,
+        "price_validation_warnings": 0,
+        "price_validation_critical": 0,
+        "price_validation_not_comparable": 0,
         # Phase 10C
         "readiness_classified": 0,
         "readiness_skipped_valuation": 0,
@@ -1259,6 +1402,16 @@ def _run_live_pipeline(
         from datetime import date as _date
 
         factor_date = _date.today().isoformat()
+
+        # Phase 12A.2: operational-only diagnostics plus persisted snapshots.
+        if companies:
+            _run_price_cross_provider_validation(
+                repo_module=repo_module,
+                companies=companies,
+                run_id=run_id,
+                factor_date=factor_date,
+                metrics=metrics,
+            )
 
         if compute_features_fn is not None and companies:
             repo_module.log_pipeline_event(

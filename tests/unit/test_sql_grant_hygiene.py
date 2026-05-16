@@ -57,7 +57,7 @@ def test_migration_011_exists() -> None:
 
 
 def test_all_expected_migrations_exist() -> None:
-    expected = [f"0{n:02d}" for n in range(1, 13)]
+    expected = [f"0{n:02d}" for n in range(1, 17)]
     present = {p.name[:3] for p in SQL_DIR.glob("0*.sql")}
     for prefix in expected:
         assert prefix in present, f"Missing migration with prefix {prefix}"
@@ -68,7 +68,7 @@ def test_all_expected_migrations_exist() -> None:
 
 def test_service_role_insert_all_write_tables() -> None:
     """Migration 011 must grant INSERT on every table the backend writes to."""
-    sql = MIGRATION_011.read_text(encoding="utf-8").lower()
+    sql = _combined_sql()
 
     write_tables = [
         # backend-only (5)
@@ -77,7 +77,7 @@ def test_service_role_insert_all_write_tables() -> None:
         "provider_requests",
         "raw_provider_payloads",
         "statements_raw",
-        # backend-rw, authenticated read-only (12)
+        # backend-rw, authenticated read-only (13)
         "companies",
         "price_eod",
         "fx_rates",
@@ -90,11 +90,13 @@ def test_service_role_insert_all_write_tables() -> None:
         "news_events",
         "corporate_actions",
         "company_analysis_readiness",
+        "company_data_quality_snapshots",
         # user-writable with backend authority (6)
         "app_users",
         "watchlists",
         "watchlist_companies",
         "watchlist_add_requests",
+        "positions",
         "alert_rules",
         "alert_history",
     ]
@@ -177,6 +179,62 @@ def test_authenticated_select_on_company_analysis_readiness_exists() -> None:
     )
 
 
+def test_no_authenticated_insert_on_company_data_quality_snapshots() -> None:
+    sql = _combined_sql()
+    assert not _has_grant(
+        sql, "company_data_quality_snapshots", "authenticated", "insert"
+    ), (
+        "Found GRANT INSERT on company_data_quality_snapshots TO authenticated — "
+        "only service_role may write diagnostics snapshots."
+    )
+
+
+def test_no_authenticated_update_on_company_data_quality_snapshots() -> None:
+    sql = _combined_sql()
+    assert not _has_grant(
+        sql, "company_data_quality_snapshots", "authenticated", "update"
+    ), (
+        "Found GRANT UPDATE on company_data_quality_snapshots TO authenticated."
+    )
+
+
+def test_authenticated_select_on_company_data_quality_snapshots_exists() -> None:
+    sql = _combined_sql()
+    assert _has_grant(
+        sql, "company_data_quality_snapshots", "authenticated", "select"
+    ), (
+        "No GRANT SELECT on company_data_quality_snapshots TO authenticated found."
+    )
+
+
+def test_authenticated_select_on_positions_exists() -> None:
+    sql = _combined_sql()
+    assert _has_grant(sql, "positions", "authenticated", "select"), (
+        "No GRANT SELECT on positions TO authenticated found."
+    )
+
+
+def test_authenticated_insert_on_positions_exists() -> None:
+    sql = _combined_sql()
+    assert _has_grant(sql, "positions", "authenticated", "insert"), (
+        "No GRANT INSERT on positions TO authenticated found."
+    )
+
+
+def test_authenticated_update_on_positions_exists() -> None:
+    sql = _combined_sql()
+    assert _has_grant(sql, "positions", "authenticated", "update"), (
+        "No GRANT UPDATE on positions TO authenticated found."
+    )
+
+
+def test_no_anon_grants_on_positions() -> None:
+    sql = _combined_sql()
+    assert not _has_any_grant_to_role(sql, "positions", "anon"), (
+        "Found grant on positions to anon."
+    )
+
+
 # ── watchlist_add_requests column-scoped grants ───────────────────────────────
 
 
@@ -218,6 +276,15 @@ def test_analysis_readiness_latest_auth_select_exists() -> None:
     sql = _combined_sql()
     assert _has_any_grant_to_role(sql, "analysis_readiness_latest", "authenticated"), (
         "No grant on analysis_readiness_latest to authenticated found."
+    )
+
+
+def test_latest_company_data_quality_snapshots_auth_select_exists() -> None:
+    sql = _combined_sql()
+    assert _has_any_grant_to_role(
+        sql, "latest_company_data_quality_snapshots", "authenticated"
+    ), (
+        "No grant on latest_company_data_quality_snapshots to authenticated found."
     )
 
 

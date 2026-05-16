@@ -5,8 +5,9 @@ import { Disclaimer } from "./components/Disclaimer";
 import { LoginPage } from "./pages/LoginPage";
 import { WatchlistPage } from "./pages/WatchlistPage";
 import { AlertsPage } from "./pages/AlertsPage";
+import { PositionsPage } from "./pages/PositionsPage";
 
-type Page = "watchlist" | "alerts";
+type Page = "watchlist" | "positions" | "alerts";
 
 /**
  * Root application component.
@@ -68,6 +69,13 @@ export default function App() {
             Watchlist
           </button>
           <button
+            className={`nav__link ${page === "positions" ? "nav__link--active" : ""}`}
+            onClick={() => setPage("positions")}
+            aria-current={page === "positions" ? "page" : undefined}
+          >
+            Positions
+          </button>
+          <button
             className={`nav__link ${page === "alerts" ? "nav__link--active" : ""}`}
             onClick={() => setPage("alerts")}
             aria-current={page === "alerts" ? "page" : undefined}
@@ -89,7 +97,13 @@ export default function App() {
 
       {/* ── Main content ─────────────────────────────────── */}
       <main className="main-content" id="main">
-        {page === "watchlist" ? <WatchlistPage /> : <AlertsPage />}
+        {page === "watchlist" ? (
+          <WatchlistPage />
+        ) : page === "positions" ? (
+          <PositionsPage />
+        ) : (
+          <AlertsPage />
+        )}
       </main>
     </div>
   );

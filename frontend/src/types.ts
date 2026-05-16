@@ -50,6 +50,14 @@ export interface WatchlistRow {
   scenario_count: number | null;
   uncertainty_category: string | null;
   distribution_collapsed: boolean | null;
+  // Phase 12A.5: data-quality diagnostics lane from latest company_data_quality_snapshots
+  data_quality_status: string | null;
+  data_quality_warning_codes: string[] | null;
+  price_validation_status: string | null;
+  statement_completeness_status: string | null;
+  statement_completeness_summary: string | null;
+  fundamentals_provider_comparison_status: string | null;
+  fundamentals_provider_comparison_summary: string | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -116,4 +124,45 @@ export interface WatchlistAddRequest {
   processed_at: string | null;
   created_at: string;
   updated_at: string;
+}
+
+// ---------------------------------------------------------------------------
+// companies table (frontend-readable subset for positions UI)
+// ---------------------------------------------------------------------------
+export interface CompanyOption {
+  id: string;
+  ticker: string;
+  name: string;
+  currency: string;
+}
+
+// ---------------------------------------------------------------------------
+// positions table (016_positions.sql)
+// ---------------------------------------------------------------------------
+export interface PositionRow {
+  id: string;
+  user_id: string;
+  company_id: string;
+  entry_date: string;
+  quantity: number;
+  average_entry_price: number;
+  currency: string;
+  fees: number | null;
+  notes: string | null;
+  status: "active" | "closed";
+  closed_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface PositionInput {
+  company_id: string;
+  entry_date: string;
+  quantity: number;
+  average_entry_price: number;
+  currency: string;
+  fees?: number | null;
+  notes?: string | null;
+  status: "active" | "closed";
+  closed_at?: string | null;
 }

@@ -23,6 +23,10 @@ Each day, the pipeline:
 
 Results appear in the dashboard within minutes of the pipeline completing.
 
+Phase 12A has started with non-blocking data-quality diagnostics. These checks currently compare overlapping FMP and Twelve Data prices when both exist for the same company/date, summarize normalized statement completeness, and compare overlapping annual FMP vs SEC fundamentals when both normalized sources exist. They emit pipeline events/metrics, persist evidence, and surface a separate dashboard data-quality lane only; they do not change readiness, valuation, signal generation, or alerts.
+
+Phase 12B.1 adds a separate manual positions foundation. Positions are user-entered ownership records with entry date, quantity, average entry price, currency, fees, notes, and active/closed status. They are tracked separately from watchlist analytics and do not change signals, readiness, valuation, alerts, or data-quality diagnostics.
+
 ## Current capabilities
 
 - Authenticated React dashboard (Supabase Auth).
@@ -32,10 +36,12 @@ Results appear in the dashboard within minutes of the pipeline completing.
 - ECB FX rates for non-USD currency conversion.
 - Daily pipeline via GitHub Actions (scheduled weekday runs + manual dispatch).
 - Watchlist management: add, remove, and reactivate companies.
+- Manual positions tracking: add, edit, list, and close user-owned positions.
 - Full analytical stack: ratios, valuation, qualitative score, probabilistic signal.
 - Readiness classification: signals are only generated when data meets quality thresholds.
 - Valuation diagnostics in the dashboard: MoS basis, DCF scenario count, uncertainty category, distribution-collapsed warning.
 - Signal rule v2 with near-fair-value epsilon band calibration.
+- Phase 12A.5 dashboard data-quality lane: persisted price-validation, statement-completeness, and FMP-vs-SEC annual diagnostics now surface as a separate dashboard lane, with no model gating impact.
 - Alerts present but disabled by default.
 - Cloudflare Pages deployment is planned but not yet live.
 
@@ -46,7 +52,7 @@ Results appear in the dashboard within minutes of the pipeline completing.
 | Python backend | Ingests provider data, stores raw payloads, normalizes data, computes analytics, writes results |
 | Supabase / Postgres | Operational database, analytical tables, views, RLS, auth-backed frontend access |
 | GitHub Actions | Scheduled weekday runner and manual dispatch for the daily pipeline |
-| React + Vite frontend | Dashboard UI for watchlist, add requests, and alert history |
+| React + Vite frontend | Dashboard UI for watchlist, positions, add requests, and alert history |
 | Cloudflare Pages | Planned static hosting target for the frontend |
 
 ## Main stack
@@ -78,6 +84,7 @@ Each row in the dashboard represents one company. The columns mean:
 | **Freshness** | How recent the underlying data is. Stale data can reduce signal reliability. |
 | **Readiness status** | Data availability classification: `analysis_ready`, `partial_analysis`, `provider_limited`, `tracking_only`, or `unsupported_for_analysis`. |
 | **Provider coverage** | A coverage classification showing whether data came from primary sources only, a fallback mix, or price-only coverage. |
+| **Data quality** | A separate diagnostic lane in the expanded row showing validation health, warning codes, statement completeness evidence, and FMP-vs-SEC comparison summaries. It is explanatory only. |
 | **Red flags** | Specific bearish concerns detected: high debt, declining revenue, margin compression, etc. |
 | **Valuation uncertainty** | Low / moderate / high / extreme — reflects how spread the DCF scenario range is. |
 | **DCF scenarios** | How many DCF method variants contributed to the intrinsic value estimate (out of 3 possible). |
@@ -94,6 +101,8 @@ Each row in the dashboard represents one company. The columns mean:
 | **INSUFFICIENT_DATA** | Not enough reliable data to generate any signal. The company is visible but not actionable. |
 
 > **Note on tracking-only companies:** A company with readiness status `tracking_only` or `unsupported_for_analysis` appears in the dashboard with its latest price but without a valuation or signal. The signal column shows a readiness badge rather than a signal value. Non-US companies without SEC EDGAR coverage (for example, ASML) may remain in this state. `TRACKING_ONLY` is a readiness/display state, not a stored signal value.
+
+> **Note on data-quality warnings:** The dashboard now shows a separate data-quality lane inside the expanded company panel. These warnings are diagnostic evidence only. They are not signal labels, not readiness states, and not investment advice.
 
 ### Signal calibration note
 
@@ -268,6 +277,9 @@ Apply the SQL files in order in the Supabase SQL editor:
 11. `sql/011_explicit_grants_and_rls_hardening.sql`
 12. `sql/012_function_execute_and_effective_privilege_hardening.sql`
 13. `sql/013_valuation_diagnostics_in_dashboard_view.sql`
+14. `sql/014_company_data_quality_snapshots.sql`
+15. `sql/015_dashboard_data_quality_lane.sql`
+16. `sql/016_positions.sql`
 
 Before using the optional seed file, replace any placeholder email with your own test or operator email in a local copy or directly in the SQL editor. Do not commit personal addresses.
 
@@ -292,8 +304,17 @@ The dashboard supports two watchlist flows.
 - A user can submit a request with ticker and optional exchange.
 - The pipeline validates the request before creating or reusing a company row.
 - Approved requests create or reactivate the watchlist membership.
-- Ambiguous tickers are rejected unless an exact exchange match can be resolved safely.
-- Analysis appears after the next successful pipeline run.
+
+## Manual positions
+
+Positions are a separate manual tracking surface from the watchlist.
+
+- A position records what you currently own or previously owned.
+- It includes company, entry date, quantity, average entry price, currency, optional fees, optional notes, and active/closed status.
+- Positions are created manually from companies that already exist in the app catalog.
+- It does not alter watchlist analytics, readiness, valuation, signal generation, alerts, or data-quality warnings in this phase.
+- Creating a position does not trigger provider validation, pipeline analysis, or automatic signal behavior.
+- It is recordkeeping and decision support only, not automated investment advice.
 
 ## Alerts
 
@@ -419,6 +440,7 @@ Do not put `SUPABASE_SERVICE_ROLE_KEY` into Cloudflare Pages.
 | 10C | Provider Orchestration | Complete |
 | 10D | Finnhub Optional Layer | Deferred — connectors are placeholder stubs; no active fallback |
 | 11A | Signal Calibration & Valuation Diagnostics | Complete |
+| 12A.5 | Dashboard Data-Quality Lane | Started: separate dashboard diagnostics lane for price-validation, statement-completeness, and FMP-vs-SEC annual checks |
 
 ## Financial disclaimer
 

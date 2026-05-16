@@ -26,6 +26,56 @@ interface Props {
   isRemoving?: boolean;
 }
 
+function dataQualityLabel(status: string | null): string {
+  switch (status) {
+    case "healthy":
+      return "Healthy";
+    case "warning":
+      return "Warning";
+    case "critical":
+      return "Critical";
+    case "not_comparable":
+      return "Not comparable";
+    case "no_diagnostics":
+    case null:
+      return "No diagnostics";
+    default:
+      return status.replaceAll("_", " ");
+  }
+}
+
+function dataQualityBadgeClass(status: string | null): string {
+  switch (status) {
+    case "healthy":
+      return "badge badge--healthy";
+    case "warning":
+      return "badge badge--warning";
+    case "critical":
+      return "badge badge--critical";
+    case "not_comparable":
+      return "badge badge--not-comparable";
+    case "no_diagnostics":
+    case null:
+      return "badge badge--unknown";
+    default:
+      return "badge badge--unknown";
+  }
+}
+
+function formatDataQualityCode(code: string): string {
+  return code.replaceAll("_", " ");
+}
+
+function formatSubStatus(status: string | null): string {
+  if (status == null) {
+    return "No diagnostics";
+  }
+  if (status === "ok") {
+    return "Healthy";
+  }
+  return dataQualityLabel(status);
+}
+
 /**
  * Single watchlist table row with an expandable detail panel.
  *
@@ -36,13 +86,13 @@ interface Props {
 export function CompanyRow({ row, onRemove, isRemoving = false }: Props) {
   const [expanded, setExpanded] = useState(false);
 
-  // can_run_signal === false → price-only tracking; suppress investment signal display.
+  // can_run_signal === false â†’ price-only tracking; suppress investment signal display.
   const isTracking = row.can_run_signal === false;
 
   const ivRange =
     row.iv_p25 != null && row.iv_p75 != null
-      ? `${formatPrice(row.iv_p25, row.currency)} – ${formatPrice(row.iv_p75, row.currency)}`
-      : "—";
+      ? `${formatPrice(row.iv_p25, row.currency)} â€“ ${formatPrice(row.iv_p75, row.currency)}`
+      : "-";
 
   const ivMid = row.iv_p50 != null ? formatPrice(row.iv_p50, row.currency) : null;
 
@@ -90,29 +140,29 @@ export function CompanyRow({ row, onRemove, isRemoving = false }: Props) {
           )}
         </td>
 
-        {/* p_buy_adjusted — hidden for tracking-only rows */}
+        {/* p_buy_adjusted - hidden for tracking-only rows */}
         <td className="company-row__num">
           {isTracking ? (
-            <span className="text-muted">—</span>
+            <span className="text-muted">-</span>
           ) : row.p_buy_adjusted != null ? (
             <span className={row.p_buy_adjusted >= 0.6 ? "num--positive" : ""}>
               {formatPct(row.p_buy_adjusted)}
             </span>
           ) : (
-            <span className="text-muted">—</span>
+            <span className="text-muted">-</span>
           )}
         </td>
 
-        {/* p_sell — hidden for tracking-only rows */}
+        {/* p_sell - hidden for tracking-only rows */}
         <td className="company-row__num">
           {isTracking ? (
-            <span className="text-muted">—</span>
+            <span className="text-muted">-</span>
           ) : row.p_sell != null ? (
             <span className={row.p_sell >= 0.4 ? "num--negative" : ""}>
               {formatPct(row.p_sell)}
             </span>
           ) : (
-            <span className="text-muted">—</span>
+            <span className="text-muted">-</span>
           )}
         </td>
 
@@ -121,7 +171,7 @@ export function CompanyRow({ row, onRemove, isRemoving = false }: Props) {
           {row.final_quality_score != null ? (
             <span>{formatNum(row.final_quality_score, 0)}</span>
           ) : (
-            <span className="text-muted">—</span>
+            <span className="text-muted">-</span>
           )}
         </td>
 
@@ -143,7 +193,7 @@ export function CompanyRow({ row, onRemove, isRemoving = false }: Props) {
               {formatPct(row.margin_of_safety_conservative)}
             </span>
           ) : (
-            <span className="text-muted">—</span>
+            <span className="text-muted">-</span>
           )}
         </td>
 
@@ -168,7 +218,7 @@ export function CompanyRow({ row, onRemove, isRemoving = false }: Props) {
               aria-label={`Remove ${row.ticker} from watchlist`}
               title="Remove from watchlist"
             >
-              ✕
+              âœ•
             </button>
           )}
           <span
@@ -179,7 +229,7 @@ export function CompanyRow({ row, onRemove, isRemoving = false }: Props) {
               setExpanded((v) => !v);
             }}
           >
-            {expanded ? "▲" : "▼"}
+            {expanded ? "â–²" : "â–¼"}
           </span>
         </td>
       </tr>
@@ -230,6 +280,63 @@ export function CompanyRow({ row, onRemove, isRemoving = false }: Props) {
                 </div>
               ) : null}
 
+              {/* Data quality diagnostics lane */}
+              <div className="detail-section" data-testid="data-quality-section">
+                <div className="detail-section__header">
+                  <h4 className="detail-section__title">Data quality</h4>
+                  <span
+                    className={dataQualityBadgeClass(row.data_quality_status)}
+                    data-testid="data-quality-badge"
+                  >
+                    {dataQualityLabel(row.data_quality_status)}
+                  </span>
+                </div>
+                <p className="detail-section__text">
+                  Diagnostic-only validation evidence. These warnings do not change
+                  readiness, valuation, or signal labels.
+                </p>
+                <div className="detail-grid">
+                  <div className="detail-grid__item">
+                    <span className="detail-grid__label">Overall status</span>
+                    <span className="detail-grid__value">
+                      {dataQualityLabel(row.data_quality_status)}
+                    </span>
+                  </div>
+                  <div className="detail-grid__item">
+                    <span className="detail-grid__label">Warning codes</span>
+                    <span className="detail-grid__value">
+                      {row.data_quality_warning_codes && row.data_quality_warning_codes.length > 0
+                        ? row.data_quality_warning_codes.map(formatDataQualityCode).join(", ")
+                        : "None"}
+                    </span>
+                  </div>
+                  <div className="detail-grid__item">
+                    <span className="detail-grid__label">Price validation</span>
+                    <span className="detail-grid__value">
+                      {row.price_validation_status != null
+                        ? formatSubStatus(row.price_validation_status)
+                        : "-"}
+                    </span>
+                  </div>
+                  <div className="detail-grid__item">
+                    <span className="detail-grid__label">Statement completeness</span>
+                    <span className="detail-grid__value">
+                      {row.statement_completeness_status != null
+                        ? `${formatSubStatus(row.statement_completeness_status)}: ${row.statement_completeness_summary ?? "Review diagnostics"}`
+                        : "-"}
+                    </span>
+                  </div>
+                  <div className="detail-grid__item">
+                    <span className="detail-grid__label">Provider comparison</span>
+                    <span className="detail-grid__value">
+                      {row.fundamentals_provider_comparison_status != null
+                        ? `${formatSubStatus(row.fundamentals_provider_comparison_status)}: ${row.fundamentals_provider_comparison_summary ?? "Review diagnostics"}`
+                        : "-"}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
               {/* Red flags */}
               <div className="detail-section">
                 <h4 className="detail-section__title">Red flags</h4>
@@ -249,7 +356,7 @@ export function CompanyRow({ row, onRemove, isRemoving = false }: Props) {
                   <div className="detail-grid__item">
                     <span className="detail-grid__label">P50 (mid)</span>
                     <span className="detail-grid__value">
-                      {ivMid ?? "—"}
+                      {ivMid ?? "-"}
                     </span>
                   </div>
                   <div className="detail-grid__item">
@@ -279,7 +386,7 @@ export function CompanyRow({ row, onRemove, isRemoving = false }: Props) {
                 </div>
               </div>
 
-              {/* Valuation diagnostics — hidden for tracking_only (isTracking) and can_run_valuation=false */}
+              {/* Valuation diagnostics - hidden for tracking_only (isTracking) and can_run_valuation=false */}
               {!isTracking && row.can_run_valuation !== false && (
                 <div className="detail-section" data-testid="valuation-diagnostics">
                   <h4 className="detail-section__title">Valuation diagnostics</h4>
@@ -287,13 +394,13 @@ export function CompanyRow({ row, onRemove, isRemoving = false }: Props) {
                     <div className="detail-grid__item">
                       <span className="detail-grid__label">MoS basis</span>
                       <span className="detail-grid__value">
-                        {row.mos_basis ?? "—"}
+                        {row.mos_basis ?? "-"}
                       </span>
                     </div>
                     <div className="detail-grid__item">
                       <span className="detail-grid__label">DCF scenarios</span>
                       <span className="detail-grid__value">
-                        {row.scenario_count != null ? `${row.scenario_count}/3` : "—"}
+                        {row.scenario_count != null ? `${row.scenario_count}/3` : "-"}
                       </span>
                     </div>
                     <div className="detail-grid__item">
@@ -302,7 +409,7 @@ export function CompanyRow({ row, onRemove, isRemoving = false }: Props) {
                         {row.uncertainty_category != null
                           ? row.uncertainty_category.charAt(0).toUpperCase() +
                             row.uncertainty_category.slice(1)
-                          : "—"}
+                          : "-"}
                       </span>
                     </div>
                   </div>
@@ -311,7 +418,7 @@ export function CompanyRow({ row, onRemove, isRemoving = false }: Props) {
                       className="detail-section__warning"
                       data-testid="distribution-collapsed-warning"
                     >
-                      Valuation distribution collapsed — limited scenario/method diversity.
+                      Valuation distribution collapsed - limited scenario/method diversity.
                     </p>
                   )}
                 </div>
@@ -355,7 +462,7 @@ export function CompanyRow({ row, onRemove, isRemoving = false }: Props) {
                     <span className="detail-grid__label">p_buy (raw)</span>
                     <span className="detail-grid__value">
                       {isTracking ? (
-                        <span className="text-muted">—</span>
+                        <span className="text-muted">-</span>
                       ) : (
                         formatPct(row.p_buy)
                       )}

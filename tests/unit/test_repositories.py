@@ -473,3 +473,43 @@ def test_upsert_company_analysis_readiness_writes_expected_payload() -> None:
     repo.upsert_company_analysis_readiness([row], client=client)
     client.table.assert_called_once_with("company_analysis_readiness")
     client.table.return_value.upsert.assert_called_once_with([row], on_conflict="company_id")
+
+
+def test_upsert_company_data_quality_snapshots_returns_count() -> None:
+    rows = [
+        {
+            "company_id": "c1",
+            "snapshot_date": "2024-01-02",
+            "price_validation_status": "warning",
+            "warning_codes": ["price_divergence_warning"],
+            "details": {"price_validation": {"comparison_date": "2024-01-02"}},
+        }
+    ]
+    client = _make_read_client(rows)
+    result = repo.upsert_company_data_quality_snapshots(rows, client=client)
+    assert result == 1
+
+
+def test_upsert_company_data_quality_snapshots_returns_zero_for_empty_rows() -> None:
+    client = _make_read_client([])
+    result = repo.upsert_company_data_quality_snapshots([], client=client)
+    assert result == 0
+    client.table.assert_not_called()
+
+
+def test_upsert_company_data_quality_snapshots_uses_company_date_conflict_key() -> None:
+    rows = [
+        {
+            "company_id": "c1",
+            "snapshot_date": "2024-01-02",
+            "price_validation_status": "ok",
+            "warning_codes": [],
+            "details": {"price_validation": {"comparison_date": "2024-01-02"}},
+        }
+    ]
+    client = _make_read_client(rows)
+    repo.upsert_company_data_quality_snapshots(rows, client=client)
+    client.table.assert_called_once_with("company_data_quality_snapshots")
+    client.table.return_value.upsert.assert_called_once_with(
+        rows, on_conflict="company_id,snapshot_date"
+    )

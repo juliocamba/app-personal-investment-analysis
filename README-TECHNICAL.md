@@ -27,6 +27,12 @@ At a high level:
 - `watchlist_companies` represents membership in the watchlist and is the source of truth for active or inactive membership.
 - `watchlist_add_requests` stores pending, approved, rejected, failed, or cancelled request state for new-company requests.
 
+### Positions
+
+- `positions` stores manual user-owned position records.
+- Positions are separate from watchlist membership and all analytical output lanes.
+- In Phase 12B.1 they do not influence pipeline execution, readiness, valuation, signals, alerts, or data-quality diagnostics.
+
 ### Provider ingestion
 
 - FMP Stable API provides company profile, price, and statement data.
@@ -66,9 +72,16 @@ At a high level:
 
 - Phase 7 evaluates enabled alert rules and writes to `alert_history` when alerts are enabled.
 
+### Data-quality diagnostics
+
+- Phase 12A.5 persists non-blocking diagnostics into `company_data_quality_snapshots`, `pipeline_run_events`, and pipeline metrics.
+- These diagnostics currently include overlapping FMP vs Twelve Data price comparison, latest-annual statement completeness evidence from `statements_norm`, and overlapping annual FMP vs SEC fundamentals comparison when both normalized sources exist.
+- They do not change readiness, valuation, signal generation, or alerts. The dashboard now surfaces them in a separate diagnostic lane only.
+
 ### Dashboard
 
 - The frontend reads the latest analytical state primarily through `dashboard_watchlist_latest` and other authenticated surfaces.
+- Manual positions are read and written through the `positions` table directly under authenticated RLS.
 
 ## Pipeline stages in execution order
 
@@ -79,12 +92,13 @@ The live daily pipeline in [scripts/run_daily_pipeline.py](scripts/run_daily_pip
 3. load active companies from `watchlist_companies.active`, falling back to YAML only on technical failure;
 4. for each active company: FMP profile, prices, statements, SEC data, optional news;
 5. fetch ECB FX rates;
-6. compute Phase 3 ratios and features;
-7. compute Phase 4 valuation outputs;
-8. compute Phase 5 qualitative scores;
-9. compute Phase 6 probabilistic signals;
-10. evaluate Phase 7 alerts if enabled;
-11. finish the pipeline run with metrics and status.
+6. run Phase 12A.5 data-quality diagnostics and persist backend-owned snapshots;
+7. compute Phase 3 ratios and features;
+8. compute Phase 4 valuation outputs;
+9. compute Phase 5 qualitative scores;
+10. compute Phase 6 probabilistic signals;
+11. evaluate Phase 7 alerts if enabled;
+12. finish the pipeline run with metrics and status.
 
 Dry-run mode validates configuration and prints the planned pipeline flow without persisting provider-derived outputs.
 
@@ -98,6 +112,7 @@ Dry-run mode validates configuration and prints the planned pipeline flow withou
 | `watchlists` | User-owned watchlists |
 | `watchlist_companies` | Membership table linking companies into watchlists, including `active` state |
 | `watchlist_add_requests` | User-submitted requests to add new companies to a watchlist |
+| `positions` | Manual user-owned position records |
 
 ### Ingestion and raw data tables
 
@@ -120,6 +135,7 @@ Dry-run mode validates configuration and prints the planned pipeline flow withou
 | `valuation_runs` | Daily valuation model outputs |
 | `qualitative_scores` | Daily qualitative scoring outputs and overrides |
 | `signal_runs` | Daily probabilistic signal outputs |
+| `company_data_quality_snapshots` | Daily persisted diagnostic snapshot for Phase 12A data-quality checks |
 
 ### Alerts and operations tables
 
@@ -146,8 +162,10 @@ Apply migrations in this order:
 10. `sql/010_analysis_readiness_latest_view.sql`
 11. `sql/011_explicit_grants_and_rls_hardening.sql`
 12. `sql/012_function_execute_and_effective_privilege_hardening.sql`
-
 13. `sql/013_valuation_diagnostics_in_dashboard_view.sql`
+14. `sql/014_company_data_quality_snapshots.sql`
+15. `sql/015_dashboard_data_quality_lane.sql`
+16. `sql/016_positions.sql`
 
 Notes:
 
@@ -157,6 +175,9 @@ Notes:
 - `011_explicit_grants_and_rls_hardening.sql` applies explicit GRANT/REVOKE to every table and view.  Apply this migration before running the permission validator.
 - `012_function_execute_and_effective_privilege_hardening.sql` strips PUBLIC EXECUTE from `get_my_app_user_id()` and completes the view effective-privilege cleanup.
 - `013_valuation_diagnostics_in_dashboard_view.sql` recreates `dashboard_watchlist_latest` with four appended diagnostic columns: `mos_basis`, `scenario_count`, `uncertainty_category`, `distribution_collapsed`.
+- `014_company_data_quality_snapshots.sql` adds a backend-owned diagnostics snapshot table keyed by `(company_id, snapshot_date)` for Phase 12A data-quality persistence.
+- `015_dashboard_data_quality_lane.sql` creates `latest_company_data_quality_snapshots` and recreates `dashboard_watchlist_latest` with appended data-quality fields for the expanded dashboard panel.
+- `016_positions.sql` adds the manual positions table with one active position per user/company, scoped RLS, and explicit grants.
 
 ## RLS and grants model
 
@@ -175,7 +196,7 @@ schema.  Without this migration the following symptoms appear:
 - Tables that have an RLS SELECT policy but no explicit `GRANT SELECT` silently
   return empty result sets or permission errors for authenticated users.
 
-Always apply all listed migrations in order (001–013) on a new or existing Supabase project.
+Always apply all listed migrations in order (001–016) on a new or existing Supabase project.
 
 ### Helper function execute hardening
 
@@ -205,8 +226,8 @@ roles.
 | Tier | Tables | authenticated | service_role | anon / public |
 |---|---|---|---|---|
 | **backend_only** | `pipeline_runs`, `pipeline_run_events`, `provider_requests`, `raw_provider_payloads`, `statements_raw` | none | SELECT/INSERT/UPDATE/DELETE | none |
-| **backend_rw_auth_r** | `companies`, `price_eod`, `fx_rates`, `filings_index`, `statements_norm`, `ratios_factors`, `qualitative_scores`, `valuation_runs`, `signal_runs`, `news_events`, `corporate_actions`, `company_analysis_readiness` | SELECT only | SELECT/INSERT/UPDATE/DELETE | none |
-| **auth_scoped_write** | `app_users`, `watchlists`, `alert_rules`, `alert_history` | SELECT only (own rows via RLS) | SELECT/INSERT/UPDATE/DELETE | none |
+| **backend_rw_auth_r** | `companies`, `price_eod`, `fx_rates`, `filings_index`, `statements_norm`, `ratios_factors`, `qualitative_scores`, `valuation_runs`, `signal_runs`, `news_events`, `corporate_actions`, `company_analysis_readiness`, `company_data_quality_snapshots` | SELECT only | SELECT/INSERT/UPDATE/DELETE | none |
+| **auth_scoped_write** | `app_users`, `watchlists`, `positions`, `alert_rules`, `alert_history` | SELECT/INSERT/UPDATE/DELETE (own rows via RLS) | SELECT/INSERT/UPDATE/DELETE | none |
 | **auth_scoped_write** | `watchlist_companies` | SELECT + UPDATE (own rows via RLS) | SELECT/INSERT/UPDATE/DELETE | none |
 | **auth_scoped_write** | `watchlist_add_requests` | SELECT + column-scoped INSERT + UPDATE(status) | SELECT/INSERT/UPDATE/DELETE | none |
 | **views** | all `latest_*`, `dashboard_*`, `analysis_readiness_latest` | SELECT | SELECT | none |
@@ -408,6 +429,24 @@ The `dashboard_watchlist_latest` view exposes:
 - `can_run_valuation` — boolean; false suppresses the valuation diagnostics panel.
 - `can_run_signal` — boolean; false suppresses the signal.
 - `provider_mix` — a coverage classification (`primary_only`, `fallback_mix`, `mixed_sources`, `price_only`, or `insufficient_coverage`).
+
+### Dashboard data-quality lane
+
+Migration `015_dashboard_data_quality_lane.sql` appends a separate diagnostic lane to `dashboard_watchlist_latest`.
+
+It exposes:
+
+- `data_quality_status` â€” `healthy`, `warning`, `critical`, `not_comparable`, or `no_diagnostics`.
+- `data_quality_warning_codes` â€” compact warning-code array derived from the latest snapshot.
+- `price_validation_status` â€” latest FMP vs Twelve Data comparison status.
+- `statement_completeness_status` and `statement_completeness_summary` â€” compact latest-annual completeness evidence.
+- `fundamentals_provider_comparison_status` and `fundamentals_provider_comparison_summary` â€” compact FMP vs SEC annual overlap evidence.
+
+These fields are read-only diagnostic summaries. They are intentionally separate from:
+
+- persisted signal labels in `signal_runs.final_signal`;
+- readiness snapshots in `company_analysis_readiness.readiness_status`;
+- frontend display substitutions such as the tracking-only readiness badge.
 
 ### Tracking-only behavior
 

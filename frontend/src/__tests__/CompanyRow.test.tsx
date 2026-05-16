@@ -6,7 +6,7 @@
  * "Readiness notice" in the expanded detail panel.
  */
 import React from "react";
-import { render, screen, fireEvent } from "@testing-library/react";
+import { render, screen, fireEvent, within } from "@testing-library/react";
 import { describe, it, expect } from "vitest";
 import { CompanyRow } from "../components/CompanyRow";
 import type { WatchlistRow } from "../types";
@@ -53,6 +53,13 @@ function makeRow(overrides: Partial<WatchlistRow> = {}): WatchlistRow {
     scenario_count: null,
     uncertainty_category: null,
     distribution_collapsed: null,
+    data_quality_status: "no_diagnostics",
+    data_quality_warning_codes: null,
+    price_validation_status: null,
+    statement_completeness_status: null,
+    statement_completeness_summary: null,
+    fundamentals_provider_comparison_status: null,
+    fundamentals_provider_comparison_summary: null,
     ...overrides,
   };
 }
@@ -80,6 +87,124 @@ const trackingRow = makeRow({
   can_run_signal: false,
 });
 
+describe("CompanyRow - data quality lane", () => {
+  it("shows a Healthy badge when diagnostics have no warnings", () => {
+    renderRow(
+      makeRow({
+        data_quality_status: "healthy",
+        data_quality_warning_codes: [],
+        price_validation_status: "ok",
+        statement_completeness_status: "ok",
+        statement_completeness_summary: "Complete",
+        fundamentals_provider_comparison_status: "ok",
+        fundamentals_provider_comparison_summary:
+          "FMP and SEC annual overlap broadly matches",
+      }),
+    );
+
+    fireEvent.click(screen.getByRole("button"));
+    expect(screen.getByTestId("data-quality-badge")).toHaveTextContent("Healthy");
+    expect(screen.getByText("Data quality")).toBeInTheDocument();
+    expect(
+      within(screen.getByTestId("data-quality-section")).getByText("None"),
+    ).toBeInTheDocument();
+    expect(screen.getByText("Healthy: Complete")).toBeInTheDocument();
+    expect(
+      screen.getByText("Healthy: FMP and SEC annual overlap broadly matches"),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/\bok\b/)).not.toBeInTheDocument();
+  });
+
+  it("shows a Warning badge when diagnostics are cautionary", () => {
+    renderRow(
+      makeRow({
+        data_quality_status: "warning",
+        data_quality_warning_codes: [
+          "missing_key_fields",
+          "fundamentals_provider_discrepancy",
+        ],
+        price_validation_status: "ok",
+        statement_completeness_status: "warning",
+        statement_completeness_summary: "Missing key fields",
+        fundamentals_provider_comparison_status: "warning",
+        fundamentals_provider_comparison_summary: "Differences in revenue",
+      }),
+    );
+
+    fireEvent.click(screen.getByRole("button"));
+    expect(screen.getByTestId("data-quality-badge")).toHaveTextContent("Warning");
+    expect(screen.getByText("Healthy")).toBeInTheDocument();
+    expect(screen.getByText("Warning: Missing key fields")).toBeInTheDocument();
+    expect(screen.getByText("Warning: Differences in revenue")).toBeInTheDocument();
+    expect(
+      screen.getByText(/missing key fields, fundamentals provider discrepancy/i),
+    ).toBeInTheDocument();
+    expect(screen.getByText(/Differences in revenue/i)).toBeInTheDocument();
+  });
+
+  it("shows a Critical badge when diagnostics are critical", () => {
+    renderRow(
+      makeRow({
+        data_quality_status: "critical",
+        data_quality_warning_codes: ["price_divergence_critical"],
+        price_validation_status: "critical",
+      }),
+    );
+
+    fireEvent.click(screen.getByRole("button"));
+    expect(screen.getByTestId("data-quality-badge")).toHaveTextContent("Critical");
+    expect(screen.getAllByText("Critical").length).toBeGreaterThanOrEqual(2);
+  });
+
+  it("shows a Not comparable badge when diagnostics cannot be compared", () => {
+    renderRow(
+      makeRow({
+        data_quality_status: "not_comparable",
+        data_quality_warning_codes: ["fundamentals_provider_overlap_missing"],
+        price_validation_status: "not_comparable",
+        fundamentals_provider_comparison_status: "not_comparable",
+        fundamentals_provider_comparison_summary:
+          "No overlapping FMP and SEC annual periods",
+      }),
+    );
+
+    fireEvent.click(screen.getByRole("button"));
+    expect(screen.getByTestId("data-quality-badge")).toHaveTextContent(
+      "Not comparable",
+    );
+    expect(
+      screen.getByText("Not comparable: No overlapping FMP and SEC annual periods"),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(/No overlapping FMP and SEC annual periods/i),
+    ).toBeInTheDocument();
+  });
+
+  it("shows a No diagnostics badge when no snapshot exists yet", () => {
+    renderRow(makeRow({ data_quality_status: "no_diagnostics" }));
+
+    fireEvent.click(screen.getByRole("button"));
+    expect(screen.getByTestId("data-quality-badge")).toHaveTextContent(
+      "No diagnostics",
+    );
+    expect(screen.getAllByText("No diagnostics").length).toBeGreaterThanOrEqual(1);
+  });
+
+  it("keeps signal rendering separate from data-quality warnings", () => {
+    renderRow(
+      makeRow({
+        final_signal: "BUY",
+        can_run_signal: true,
+        data_quality_status: "warning",
+        data_quality_warning_codes: ["missing_key_fields"],
+      }),
+    );
+
+    expect(screen.getByTestId("signal-badge")).toBeInTheDocument();
+    expect(screen.queryByTestId("readiness-badge")).not.toBeInTheDocument();
+  });
+});
+
 const analysisReadyRow = makeRow({
   ticker: "AAPL",
   name: "Apple Inc.",
@@ -94,10 +219,10 @@ const analysisReadyRow = makeRow({
 });
 
 // ---------------------------------------------------------------------------
-// tracking_only row — compact view
+// tracking_only row â€” compact view
 // ---------------------------------------------------------------------------
 
-describe("CompanyRow — tracking_only compact view", () => {
+describe("CompanyRow â€” tracking_only compact view", () => {
   it("shows ReadinessBadge instead of SignalBadge when can_run_signal = false", () => {
     renderRow(trackingRow);
     expect(screen.getByTestId("readiness-badge")).toBeInTheDocument();
@@ -110,7 +235,6 @@ describe("CompanyRow — tracking_only compact view", () => {
   });
 
   it("suppresses p_buy_adjusted value when can_run_signal = false", () => {
-    // Set a non-null value to confirm it is actively suppressed
     renderRow(makeRow({ ...trackingRow, p_buy_adjusted: 0.72 }));
     expect(screen.queryByText("72.0%")).not.toBeInTheDocument();
   });
@@ -122,10 +246,10 @@ describe("CompanyRow — tracking_only compact view", () => {
 });
 
 // ---------------------------------------------------------------------------
-// tracking_only row — expanded detail panel
+// tracking_only row â€” expanded detail panel
 // ---------------------------------------------------------------------------
 
-describe("CompanyRow — tracking_only expanded panel", () => {
+describe("CompanyRow â€” tracking_only expanded panel", () => {
   it("shows 'Readiness notice' heading in the expanded panel", () => {
     renderRow(trackingRow);
     fireEvent.click(screen.getByRole("button"));
@@ -161,7 +285,7 @@ describe("CompanyRow — tracking_only expanded panel", () => {
 // analysis_ready row
 // ---------------------------------------------------------------------------
 
-describe("CompanyRow — analysis_ready row", () => {
+describe("CompanyRow â€” analysis_ready row", () => {
   it("shows SignalBadge when can_run_signal = true", () => {
     renderRow(analysisReadyRow);
     expect(screen.getByTestId("signal-badge")).toBeInTheDocument();
@@ -190,14 +314,10 @@ describe("CompanyRow — analysis_ready row", () => {
 });
 
 // ---------------------------------------------------------------------------
-// Null / legacy readiness fields — fallback behaviour
+// Valuation diagnostics section â€” Phase 11A.5
 // ---------------------------------------------------------------------------
 
-// ---------------------------------------------------------------------------
-// Valuation diagnostics section — Phase 11A.5
-// ---------------------------------------------------------------------------
-
-describe("CompanyRow — valuation diagnostics section", () => {
+describe("CompanyRow â€” valuation diagnostics section", () => {
   const withDiagnostics = makeRow({
     ticker: "ORCL",
     name: "Oracle Corp.",
@@ -252,9 +372,7 @@ describe("CompanyRow — valuation diagnostics section", () => {
       screen.getByTestId("distribution-collapsed-warning"),
     ).toBeInTheDocument();
     expect(
-      screen.getByText(
-        "Valuation distribution collapsed — limited scenario/method diversity.",
-      ),
+      screen.getByText(/Valuation distribution collapsed .* limited scenario\/method diversity\./),
     ).toBeInTheDocument();
   });
 
@@ -278,8 +396,7 @@ describe("CompanyRow — valuation diagnostics section", () => {
       }),
     );
     fireEvent.click(screen.getByRole("button"));
-    // Three em-dashes are rendered for the three null fields
-    const dashes = screen.getAllByText("—");
+    const dashes = screen.getAllByText("-");
     expect(dashes.length).toBeGreaterThanOrEqual(3);
   });
 
@@ -310,8 +427,6 @@ describe("CompanyRow — valuation diagnostics section", () => {
   });
 
   it("hides Valuation diagnostics when can_run_signal=false even if can_run_valuation=true", () => {
-    // Inconsistent row: tracking_only signal but valuation capability reported as true.
-    // Diagnostics must stay hidden because the readiness notice path takes over.
     renderRow(
       makeRow({
         can_run_signal: false,
@@ -342,9 +457,7 @@ describe("CompanyRow — valuation diagnostics section", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-
-describe("CompanyRow — null readiness fields fallback", () => {
+describe("CompanyRow â€” null readiness fields fallback", () => {
   it("shows SignalBadge normally when all readiness fields are null", () => {
     renderRow(makeRow({ ticker: "GOOG", final_signal: "HOLD" }));
     expect(screen.getByTestId("signal-badge")).toBeInTheDocument();

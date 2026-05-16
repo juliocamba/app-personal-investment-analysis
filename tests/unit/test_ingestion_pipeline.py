@@ -154,6 +154,7 @@ def test_run_live_pipeline_creates_audit_records_and_uses_schema_fields():
             self.finished_runs: list[dict[str, object]] = []
             self.logged_events: list[dict[str, object]] = []
             self.filing_rows: list[dict[str, object]] = []
+            self.price_rows: list[dict[str, object]] = []
 
         def list_watchlist_active_companies(self):
             return [
@@ -197,6 +198,7 @@ def test_run_live_pipeline_creates_audit_records_and_uses_schema_fields():
             return {"id": company_id, **fields}
 
         def upsert_price_eod(self, rows):
+            self.price_rows.extend(rows)
             return len(rows)
 
         def upsert_statements_norm(self, rows):
@@ -211,6 +213,9 @@ def test_run_live_pipeline_creates_audit_records_and_uses_schema_fields():
 
         def upsert_news_events(self, rows):
             return len(rows)
+
+        def get_prices_for_company(self, company_id: str, **kwargs):
+            return [row for row in self.price_rows if row.get("company_id") == company_id]
 
     class FakeFMP:
         def get_profile(self, ticker: str):
@@ -1362,6 +1367,8 @@ class _PriceRepo(_SimpleRepo):
     def __init__(self):
         super().__init__()
         self.price_rows: list[dict] = []
+        self.statement_rows: list[dict] = []
+        self.data_quality_snapshots: list[dict] = []
 
     def upsert_price_eod(self, rows):
         self.price_rows.extend(rows)
@@ -1369,6 +1376,7 @@ class _PriceRepo(_SimpleRepo):
 
     def upsert_statements_norm(self, rows):
         self.upserted.extend(rows)
+        self.statement_rows.extend(rows)
         return len(rows)
 
     def upsert_filings_index(self, rows):
@@ -1379,6 +1387,23 @@ class _PriceRepo(_SimpleRepo):
 
     def update_company_profile(self, cid, fields):
         return {}
+
+    def get_prices_for_company(self, company_id, **kwargs):
+        rows = [row for row in self.price_rows if row.get("company_id") == company_id]
+        rows.sort(key=lambda row: (str(row.get("price_date") or ""), str(row.get("provider") or "")), reverse=True)
+        return rows
+
+    def get_statements_for_company(self, company_id, **kwargs):
+        rows = [
+            row for row in self.statement_rows
+            if row.get("company_id") in (None, company_id)
+        ]
+        rows.sort(key=lambda row: (str(row.get("period_end_date") or ""), int(row.get("fiscal_year") or 0)), reverse=True)
+        return rows
+
+    def upsert_company_data_quality_snapshots(self, rows):
+        self.data_quality_snapshots.extend(rows)
+        return len(rows)
 
 
 class _PriceRepoWithPipelineSupport(_PriceRepo):
@@ -1567,7 +1592,7 @@ def _run_pipeline_10b(fmp_stub, twelve_stub, repo=None, extra_kwargs=None):
             else []
         ),
         normalize_statements_fn=lambda *a, **kw: [
-            {"fiscal_year": 2023, "fiscal_period": "annual", "period_end_date": "2023-09-30",
+            {"company_id": "company-orcl", "fiscal_year": 2023, "fiscal_period": "annual", "period_end_date": "2023-09-30",
              "revenue": 50_000_000_000, "net_income": 8_000_000_000,
              "total_assets": 100_000_000_000,
              "operating_income": None, "cfo": None, "free_cash_flow": None,
@@ -1878,3 +1903,316 @@ def test_10b_successful_fallback_increments_metric():
     ]
     assert succeeded_events
     assert succeeded_events[0]["details"]["rows_upserted"] == 1
+
+
+# ---------------------------------------------------------------------------
+# Phase 12A.1: cross-provider price diagnostics
+# ---------------------------------------------------------------------------
+
+
+def test_12a1_price_validation_not_comparable_when_only_one_provider_exists():
+    metrics, repo = _run_pipeline_10b(_FakeFMPPriceSuccess(), twelve_stub=None)
+
+    assert metrics["price_validation_companies_checked"] == 1
+    assert metrics["price_validation_comparisons"] == 0
+    assert metrics["price_validation_not_comparable"] == 1
+
+    validation_events = [
+        e for e in repo.events
+        if e.get("details", {}).get("event") == "price_cross_provider_validation"
+    ]
+    assert validation_events
+    assert validation_events[0]["details"]["status"] == "not_comparable"
+    assert len(repo.data_quality_snapshots) == 1
+    assert repo.data_quality_snapshots[0]["price_validation_status"] == "not_comparable"
+
+
+def test_12a1_price_validation_warning_for_overlapping_prices():
+    repo = _PriceRepoWithPipelineSupport()
+    repo.price_rows.append(
+        {
+            "company_id": "company-orcl",
+            "price_date": "2024-01-02",
+            "close": 101.5,
+            "provider": "twelve_data",
+            "created_at": "2024-01-02T22:31:00+00:00",
+        }
+    )
+
+    metrics, _repo = _run_pipeline_10b(
+        _FakeFMPPriceSuccess(),
+        twelve_stub=None,
+        repo=repo,
+        extra_kwargs={
+            "normalize_prices_fn": lambda payload, cid, ticker, currency, raw_id=None: [
+                {
+                    "price_date": "2024-01-02",
+                    "close": 100.0,
+                    "provider": "fmp",
+                    "company_id": cid,
+                    "created_at": "2024-01-02T22:30:00+00:00",
+                }
+            ],
+        },
+    )
+
+    assert metrics["price_validation_companies_checked"] == 1
+    assert metrics["price_validation_comparisons"] == 1
+    assert metrics["price_validation_warnings"] == 1
+    assert metrics["price_validation_critical"] == 0
+
+    validation_events = [
+        e for e in repo.events
+        if e.get("details", {}).get("event") == "price_cross_provider_validation"
+    ]
+    assert validation_events
+    assert validation_events[0]["details"]["status"] == "warning"
+    assert validation_events[0]["level"] == "warning"
+    assert len(repo.data_quality_snapshots) == 1
+    snapshot = repo.data_quality_snapshots[0]
+    assert snapshot["price_validation_status"] == "warning"
+    assert "price_divergence_warning" in snapshot["warning_codes"]
+
+
+def test_12a1_price_validation_critical_and_payload_is_safe():
+    repo = _PriceRepoWithPipelineSupport()
+    repo.price_rows.append(
+        {
+            "company_id": "company-orcl",
+            "price_date": "2024-01-02",
+            "close": 106.5,
+            "provider": "twelve_data",
+            "created_at": "2024-01-02T22:31:00+00:00",
+        }
+    )
+
+    metrics, _repo = _run_pipeline_10b(
+        _FakeFMPPriceSuccess(),
+        twelve_stub=None,
+        repo=repo,
+        extra_kwargs={
+            "normalize_prices_fn": lambda payload, cid, ticker, currency, raw_id=None: [
+                {
+                    "price_date": "2024-01-02",
+                    "close": 100.0,
+                    "provider": "fmp",
+                    "company_id": cid,
+                    "created_at": "2024-01-02T22:30:00+00:00",
+                }
+            ],
+        },
+    )
+
+    assert metrics["price_validation_comparisons"] == 1
+    assert metrics["price_validation_warnings"] == 0
+    assert metrics["price_validation_critical"] == 1
+
+    validation_events = [
+        e for e in repo.events
+        if e.get("details", {}).get("event") == "price_cross_provider_validation"
+    ]
+    assert validation_events
+    details = validation_events[0]["details"]
+    assert details["status"] == "critical"
+    assert "reference_price" not in details
+    assert "comparison_price" not in details
+    lowered = str(details).lower()
+    for forbidden in ("apikey", "api_key", "bearer", "supabase", "financialmodelingprep", "https://"):
+        assert forbidden not in lowered
+    assert len(repo.data_quality_snapshots) == 1
+    snapshot = repo.data_quality_snapshots[0]
+    assert snapshot["price_validation_status"] == "critical"
+    assert "price_divergence_critical" in snapshot["warning_codes"]
+    assert "reference_price" not in str(snapshot["details"]).lower()
+    assert "comparison_price" not in str(snapshot["details"]).lower()
+
+
+def test_12a2_snapshot_persist_failure_is_non_blocking():
+    class _SnapshotErrorRepo(_PriceRepoWithPipelineSupport):
+        def upsert_company_data_quality_snapshots(self, rows):
+            raise RuntimeError("snapshot write failed")
+
+    repo = _SnapshotErrorRepo()
+    repo.price_rows.append(
+        {
+            "company_id": "company-orcl",
+            "price_date": "2024-01-02",
+            "close": 101.5,
+            "provider": "twelve_data",
+            "created_at": "2024-01-02T22:31:00+00:00",
+        }
+    )
+
+    metrics, _repo = _run_pipeline_10b(
+        _FakeFMPPriceSuccess(),
+        twelve_stub=None,
+        repo=repo,
+        extra_kwargs={
+            "normalize_prices_fn": lambda payload, cid, ticker, currency, raw_id=None: [
+                {
+                    "price_date": "2024-01-02",
+                    "close": 100.0,
+                    "provider": "fmp",
+                    "company_id": cid,
+                    "created_at": "2024-01-02T22:30:00+00:00",
+                }
+            ],
+        },
+    )
+
+    assert metrics["companies_processed"] == 1
+    failed_events = [
+        e for e in repo.events
+        if e.get("details", {}).get("event") == "company_data_quality_snapshot_persist_failed"
+    ]
+    assert failed_events
+
+
+def test_12a3_snapshot_includes_no_statements_warning_non_blocking() -> None:
+    metrics, repo = _run_pipeline_10b(
+        _FakeFMPPriceSuccess(),
+        twelve_stub=None,
+        extra_kwargs={"normalize_statements_fn": lambda *a, **kw: []},
+    )
+
+    assert metrics["companies_processed"] == 1
+    assert len(repo.data_quality_snapshots) == 1
+    snapshot = repo.data_quality_snapshots[0]
+    assert snapshot["price_validation_status"] == "not_comparable"
+    assert "no_statements_available" in snapshot["warning_codes"]
+    stmt = snapshot["details"]["statement_completeness"]
+    assert stmt["annual_periods_found"] == 0
+    assert stmt["missing_statement_domains"] == ["income", "cashflow", "balance"]
+
+
+def test_12a3_snapshot_includes_statement_completeness_details() -> None:
+    repo = _PriceRepoWithPipelineSupport()
+    repo.price_rows.append(
+        {
+            "company_id": "company-orcl",
+            "price_date": "2024-01-02",
+            "close": 101.5,
+            "provider": "twelve_data",
+            "created_at": "2024-01-02T22:31:00+00:00",
+        }
+    )
+
+    metrics, _repo = _run_pipeline_10b(
+        _FakeFMPPriceSuccess(),
+        twelve_stub=None,
+        repo=repo,
+        extra_kwargs={
+            "normalize_prices_fn": lambda payload, cid, ticker, currency, raw_id=None: [
+                {
+                    "price_date": "2024-01-02",
+                    "close": 100.0,
+                    "provider": "fmp",
+                    "company_id": cid,
+                    "created_at": "2024-01-02T22:30:00+00:00",
+                }
+            ],
+            "normalize_statements_fn": lambda *a, **kw: [
+                {
+                    "company_id": "company-orcl",
+                    "fiscal_year": 2024,
+                    "fiscal_period": "annual",
+                    "period_end_date": "2024-12-31",
+                    "revenue": 50_000_000_000,
+                    "net_income": 8_000_000_000,
+                    "cfo": None,
+                    "capex": None,
+                    "total_assets": 100_000_000_000,
+                    "total_liabilities": None,
+                    "total_debt": None,
+                    "total_equity": None,
+                    "diluted_shares": None,
+                    "source": "fmp",
+                }
+            ],
+        },
+    )
+
+    assert metrics["price_validation_warnings"] == 1
+    assert len(repo.data_quality_snapshots) == 1
+    snapshot = repo.data_quality_snapshots[0]
+    assert "incomplete_statement_set" in snapshot["warning_codes"]
+    assert "missing_key_fields" in snapshot["warning_codes"]
+    assert "insufficient_period_coverage" in snapshot["warning_codes"]
+    stmt = snapshot["details"]["statement_completeness"]
+    assert stmt["latest_source"] == "fmp"
+    assert stmt["annual_periods_found"] == 1
+    assert "cashflow" in stmt["missing_statement_domains"]
+    assert "cfo" in stmt["missing_fields"]
+    assert "total_liabilities_or_debt" in stmt["missing_fields"]
+
+
+def test_12a3_statement_diagnostics_do_not_change_signal_or_readiness_metrics() -> None:
+    metrics, _repo = _run_pipeline_10b(_FakeFMPPriceSuccess(), twelve_stub=None)
+
+    assert metrics["price_validation_companies_checked"] == 1
+    assert metrics["signal_runs_upserted"] == 0
+
+
+def test_12a4_snapshot_includes_fundamentals_overlap_missing_when_only_fmp_exists() -> None:
+    metrics, repo = _run_pipeline_10b(_FakeFMPPriceSuccess(), twelve_stub=None)
+
+    assert metrics["companies_processed"] == 1
+    assert len(repo.data_quality_snapshots) == 1
+    snapshot = repo.data_quality_snapshots[0]
+    assert "fundamentals_provider_overlap_missing" in snapshot["warning_codes"]
+    fundamentals = snapshot["details"]["fundamentals_provider_comparison"]
+    assert fundamentals["overlapping_period_count"] == 0
+    assert fundamentals["discrepancy_level"] == "not_comparable"
+
+
+def test_12a4_snapshot_includes_fundamentals_provider_discrepancy() -> None:
+    repo = _PriceRepoWithPipelineSupport()
+    repo.statement_rows.append(
+        {
+            "company_id": "company-orcl",
+            "fiscal_year": 2023,
+            "fiscal_period": "annual",
+            "period_end_date": "2023-09-30",
+            "source": "sec_edgar",
+            "revenue": 57_000_000_000,
+            "net_income": 8_000_000_000,
+            "total_assets": 100_000_000_000,
+            "total_liabilities": 60_000_000_000,
+            "total_equity": 40_000_000_000,
+        }
+    )
+
+    metrics, _repo = _run_pipeline_10b(_FakeFMPPriceSuccess(), twelve_stub=None, repo=repo)
+
+    assert metrics["companies_processed"] == 1
+    assert len(repo.data_quality_snapshots) == 1
+    snapshot = repo.data_quality_snapshots[0]
+    assert "fundamentals_provider_discrepancy" in snapshot["warning_codes"]
+    fundamentals = snapshot["details"]["fundamentals_provider_comparison"]
+    assert fundamentals["overlapping_period_count"] == 1
+    assert fundamentals["discrepancy_level"] == "warning"
+    assert "revenue" in fundamentals["discrepant_fields"]
+    assert fundamentals["max_relative_difference_pct"] == 0.122807
+
+
+def test_12a4_fundamentals_diagnostics_do_not_change_readiness_or_signal_behavior() -> None:
+    repo = _PriceRepoWithPipelineSupport()
+    repo.statement_rows.append(
+        {
+            "company_id": "company-orcl",
+            "fiscal_year": 2023,
+            "fiscal_period": "annual",
+            "period_end_date": "2023-09-30",
+            "source": "sec_edgar",
+            "revenue": 50_000_000_000,
+            "net_income": 8_000_000_000,
+            "total_assets": 100_000_000_000,
+            "total_liabilities": 60_000_000_000,
+            "total_equity": 40_000_000_000,
+        }
+    )
+
+    metrics, _repo = _run_pipeline_10b(_FakeFMPPriceSuccess(), twelve_stub=None, repo=repo)
+
+    assert metrics["price_validation_companies_checked"] == 1
+    assert metrics["signal_runs_upserted"] == 0

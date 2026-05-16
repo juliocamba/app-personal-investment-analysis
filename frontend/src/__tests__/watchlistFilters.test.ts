@@ -55,6 +55,13 @@ function makeRow(overrides: Partial<WatchlistRow>): WatchlistRow {
     scenario_count: null,
     uncertainty_category: null,
     distribution_collapsed: null,
+    data_quality_status: "no_diagnostics",
+    data_quality_warning_codes: null,
+    price_validation_status: null,
+    statement_completeness_status: null,
+    statement_completeness_summary: null,
+    fundamentals_provider_comparison_status: null,
+    fundamentals_provider_comparison_summary: null,
     ...overrides,
   };
 }

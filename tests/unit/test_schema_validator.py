@@ -91,9 +91,11 @@ def test_required_tables_contains_all_mandatory_names() -> None:
         "qualitative_scores",
         "valuation_runs",
         "signal_runs",
+        "positions",
         "alert_rules",
         "alert_history",
         "pipeline_runs",
+        "company_data_quality_snapshots",
     }
     assert mandatory.issubset(set(REQUIRED_TABLES))
 

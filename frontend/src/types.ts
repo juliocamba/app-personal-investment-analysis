@@ -277,3 +277,94 @@ export interface PositionEntryProfileInput {
   catalysts?: string | null;
   invalidation_criteria?: string | null;
 }
+
+export interface PortfolioBreakdownCount {
+  signal?: string;
+  confidence_level?: string;
+  count: number;
+}
+
+export interface PortfolioExposureItem {
+  ticker?: string;
+  name?: string;
+  sector?: string;
+  country?: string;
+  current_value: number;
+  weight_pct: number | null;
+}
+
+export interface PortfolioPositionRow {
+  id: string;
+  user_id: string;
+  company_id: string;
+  ticker: string;
+  name: string;
+  sector: string | null;
+  country: string | null;
+  entry_date: string;
+  quantity: number;
+  average_entry_price: number;
+  currency: string;
+  fees: number | null;
+  notes: string | null;
+  status: "active" | "closed";
+  closed_at: string | null;
+  price_date: string | null;
+  current_price: number | null;
+  price_currency: string | null;
+  cost_basis: number | null;
+  current_value: number | null;
+  unrealized_gain_loss: number | null;
+  unrealized_return_pct: number | null;
+  current_signal: string | null;
+  current_readiness_status: string | null;
+  current_data_quality_status: string | null;
+  current_quality_score: number | null;
+  current_valuation_low: number | null;
+  current_valuation_mid: number | null;
+  current_valuation_high: number | null;
+  current_margin_of_safety: number | null;
+  current_uncertainty_category: string | null;
+  thesis_confidence_level: "low" | "medium" | "high" | null;
+  open_review_alert_count: number;
+  highest_open_review_alert_severity: "info" | "warning" | "critical" | null;
+  missing_current_price: boolean;
+  currency_mismatch: boolean;
+  value_computable: boolean;
+  position_weight_pct: number | null;
+}
+
+export interface PortfolioSummaryRow {
+  active_position_count: number;
+  closed_position_count: number;
+  active_positions_with_price: number;
+  active_positions_missing_price: number;
+  active_positions_currency_mismatch: number;
+  computable_total_cost_basis: number;
+  computable_total_market_value: number;
+  computable_total_unrealized_gain_loss: number;
+  computable_total_unrealized_return_pct: number | null;
+  open_review_alert_count: number;
+  critical_data_quality_count: number;
+  positions_by_signal: PortfolioBreakdownCount[];
+  positions_by_thesis_confidence: PortfolioBreakdownCount[];
+  company_concentration: PortfolioExposureItem[];
+  sector_exposure: PortfolioExposureItem[];
+  geography_exposure: PortfolioExposureItem[];
+}
+
+export interface PortfolioPositionFxEurRow extends PortfolioPositionRow {
+  normalized_cost_basis_eur: number | null;
+  normalized_current_value_eur: number | null;
+  normalized_unrealized_gain_loss_eur: number | null;
+  normalized_position_weight_pct: number | null;
+}
+
+export interface PortfolioSummaryFxEurRow {
+  normalized_total_cost_basis_eur: number;
+  normalized_total_market_value_eur: number;
+  normalized_total_unrealized_gain_loss_eur: number;
+  normalized_total_unrealized_return_pct: number | null;
+  positions_missing_fx_rate: number;
+  positions_fx_normalized_count: number;
+}

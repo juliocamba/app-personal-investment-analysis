@@ -13,6 +13,10 @@ import type {
   PositionEntryProfileInput,
   PositionEntryProfileRow,
   PositionInput,
+  PortfolioPositionFxEurRow,
+  PortfolioPositionRow,
+  PortfolioSummaryFxEurRow,
+  PortfolioSummaryRow,
   PositionReviewAlertLifecycleStatus,
   PositionRow,
   PositionReviewAlertRow,
@@ -189,6 +193,46 @@ export async function fetchPositions(): Promise<PositionDashboardRow[]> {
     .order("entry_date", { ascending: false });
   if (error) throw new Error(error.message);
   return (data ?? []) as PositionDashboardRow[];
+}
+
+export async function fetchPortfolioPositions(): Promise<PortfolioPositionRow[]> {
+  const { data, error } = await supabase
+    .from("dashboard_portfolio_positions")
+    .select("*")
+    .order("status")
+    .order("current_value", { ascending: false, nullsFirst: false })
+    .order("ticker");
+  if (error) throw new Error(error.message);
+  return (data ?? []) as PortfolioPositionRow[];
+}
+
+export async function fetchPortfolioSummary(): Promise<PortfolioSummaryRow> {
+  const { data, error } = await supabase
+    .from("dashboard_portfolio_summary")
+    .select("*")
+    .single();
+  if (error) throw new Error(error.message);
+  return data as PortfolioSummaryRow;
+}
+
+export async function fetchPortfolioPositionsFxEur(): Promise<PortfolioPositionFxEurRow[]> {
+  const { data, error } = await supabase
+    .from("dashboard_portfolio_positions_fx_eur")
+    .select("*")
+    .order("status")
+    .order("normalized_current_value_eur", { ascending: false, nullsFirst: false })
+    .order("ticker");
+  if (error) throw new Error(error.message);
+  return (data ?? []) as PortfolioPositionFxEurRow[];
+}
+
+export async function fetchPortfolioSummaryFxEur(): Promise<PortfolioSummaryFxEurRow> {
+  const { data, error } = await supabase
+    .from("dashboard_portfolio_summary_fx_eur")
+    .select("*")
+    .single();
+  if (error) throw new Error(error.message);
+  return data as PortfolioSummaryFxEurRow;
 }
 
 export async function fetchPositionEntryProfiles(): Promise<PositionEntryProfileRow[]> {

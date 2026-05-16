@@ -6,8 +6,8 @@ import {
   fetchPositions,
   updatePosition,
 } from "../lib/api";
-import { formatDate, formatPrice, formatNum } from "../lib/formatters";
-import type { CompanyOption, PositionInput, PositionRow } from "../types";
+import { formatDate, formatPct, formatPrice, formatNum } from "../lib/formatters";
+import type { CompanyOption, PositionDashboardRow, PositionInput } from "../types";
 
 interface PositionFormState {
   company_id: string;
@@ -33,8 +33,23 @@ const EMPTY_FORM: PositionFormState = {
   closed_at: "",
 };
 
-function statusLabel(status: PositionRow["status"]): string {
+function statusLabel(status: PositionDashboardRow["status"]): string {
   return status === "active" ? "Active" : "Closed";
+}
+
+function formatDisplayPrice(value: number | null, currency: string | null): string {
+  if (value == null || !currency) return "-";
+  return formatPrice(value, currency);
+}
+
+function formatDisplayPercent(value: number | null): string {
+  if (value == null) return "-";
+  return formatPct(value, 1);
+}
+
+function displayClass(value: number | null): string | undefined {
+  if (value == null || value === 0) return undefined;
+  return value > 0 ? "num--positive" : "num--negative";
 }
 
 function buildPayload(form: PositionFormState): PositionInput {
@@ -52,7 +67,7 @@ function buildPayload(form: PositionFormState): PositionInput {
 }
 
 export function PositionsPage() {
-  const [positions, setPositions] = useState<PositionRow[]>([]);
+  const [positions, setPositions] = useState<PositionDashboardRow[]>([]);
   const [companies, setCompanies] = useState<CompanyOption[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -62,18 +77,30 @@ export function PositionsPage() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState<PositionFormState>(EMPTY_FORM);
 
+  async function loadPositionsAndCompanies(): Promise<void> {
+    const [positionRows, companyRows] = await Promise.all([
+      fetchPositions(),
+      fetchCompaniesForPositions(),
+    ]);
+    setPositions(positionRows);
+    setCompanies(companyRows);
+    if (companyRows.length > 0) {
+      setForm((prev) => ({
+        ...prev,
+        company_id: prev.company_id || companyRows[0].id,
+        currency: prev.currency || companyRows[0].currency || "USD",
+      }));
+    }
+  }
+
+  async function refreshPositions(): Promise<void> {
+    const positionRows = await fetchPositions();
+    setPositions(positionRows);
+  }
+
   useEffect(() => {
-    Promise.all([fetchPositions(), fetchCompaniesForPositions()])
-      .then(([positionRows, companyRows]) => {
-        setPositions(positionRows);
-        setCompanies(companyRows);
-        if (companyRows.length > 0) {
-          setForm((prev) => ({
-            ...prev,
-            company_id: prev.company_id || companyRows[0].id,
-            currency: prev.currency || companyRows[0].currency || "USD",
-          }));
-        }
+    loadPositionsAndCompanies()
+      .then(() => {
         setLoading(false);
       })
       .catch((err: unknown) => {
@@ -106,7 +133,7 @@ export function PositionsPage() {
     }));
   }
 
-  function handleEdit(position: PositionRow): void {
+  function handleEdit(position: PositionDashboardRow): void {
     setEditingId(position.id);
     setSaveError(null);
     setForm({
@@ -122,31 +149,18 @@ export function PositionsPage() {
     });
   }
 
-  function upsertLocalPosition(next: PositionRow): void {
-    setPositions((prev) => {
-      const existing = prev.some((row) => row.id === next.id);
-      const updated = existing
-        ? prev.map((row) => (row.id === next.id ? next : row))
-        : [next, ...prev];
-      return updated.sort((a, b) => {
-        if (a.status !== b.status) {
-          return a.status === "active" ? -1 : 1;
-        }
-        return a.entry_date < b.entry_date ? 1 : -1;
-      });
-    });
-  }
-
   async function handleSubmit(e: React.FormEvent): Promise<void> {
     e.preventDefault();
     setIsSaving(true);
     setSaveError(null);
     try {
       const payload = buildPayload(form);
-      const saved = editingId
-        ? await updatePosition(editingId, payload)
-        : await createPosition(payload);
-      upsertLocalPosition(saved);
+      if (editingId) {
+        await updatePosition(editingId, payload);
+      } else {
+        await createPosition(payload);
+      }
+      await refreshPositions();
       resetForm();
     } catch (err: unknown) {
       setSaveError(err instanceof Error ? err.message : String(err));
@@ -159,8 +173,8 @@ export function PositionsPage() {
     setClosingId(positionId);
     setSaveError(null);
     try {
-      const saved = await closePosition(positionId);
-      upsertLocalPosition(saved);
+      await closePosition(positionId);
+      await refreshPositions();
       if (editingId === positionId) {
         resetForm();
       }
@@ -174,8 +188,8 @@ export function PositionsPage() {
   if (loading) {
     return (
       <div className="page-state" aria-live="polite" aria-busy="true">
-        <div className="spinner" aria-label="Loading positions…" />
-        <p>Loading positions…</p>
+        <div className="spinner" aria-label="Loading positions..." />
+        <p>Loading positions...</p>
       </div>
     );
   }
@@ -202,7 +216,11 @@ export function PositionsPage() {
             {editingId ? "Edit position" : "Add position"}
           </h2>
           {editingId && (
-            <button type="button" className="positions-btn positions-btn--ghost" onClick={() => resetForm()}>
+            <button
+              type="button"
+              className="positions-btn positions-btn--ghost"
+              onClick={() => resetForm()}
+            >
               Cancel edit
             </button>
           )}
@@ -218,7 +236,7 @@ export function PositionsPage() {
             >
               {companies.map((company) => (
                 <option key={company.id} value={company.id}>
-                  {company.ticker} — {company.name}
+                  {company.ticker} - {company.name}
                 </option>
               ))}
             </select>
@@ -320,8 +338,12 @@ export function PositionsPage() {
           </label>
 
           <div className="positions-form__actions">
-            <button type="submit" className="positions-btn" disabled={isSaving || companies.length === 0}>
-              {isSaving ? "Saving…" : editingId ? "Save changes" : "Add position"}
+            <button
+              type="submit"
+              className="positions-btn"
+              disabled={isSaving || companies.length === 0}
+            >
+              {isSaving ? "Saving..." : editingId ? "Save changes" : "Add position"}
             </button>
           </div>
         </form>
@@ -351,6 +373,11 @@ export function PositionsPage() {
                 <th scope="col">Entry date</th>
                 <th scope="col">Quantity</th>
                 <th scope="col">Avg entry</th>
+                <th scope="col">Current price</th>
+                <th scope="col">Cost basis</th>
+                <th scope="col">Current value</th>
+                <th scope="col">Unrealized P&amp;L</th>
+                <th scope="col">Unrealized return</th>
                 <th scope="col">Currency</th>
                 <th scope="col">Fees</th>
                 <th scope="col">Status</th>
@@ -360,42 +387,53 @@ export function PositionsPage() {
               </tr>
             </thead>
             <tbody>
-              {positions.map((position) => {
-                const company = companyMap.get(position.company_id);
-                return (
-                  <tr key={position.id}>
-                    <td>{company?.ticker ?? "Unknown"}</td>
-                    <td>{company?.name ?? "Unknown company"}</td>
-                    <td>{formatDate(position.entry_date)}</td>
-                    <td>{formatNum(position.quantity, 4)}</td>
-                    <td>{formatPrice(position.average_entry_price, position.currency)}</td>
-                    <td>{position.currency}</td>
-                    <td>{formatPrice(position.fees, position.currency)}</td>
-                    <td>{statusLabel(position.status)}</td>
-                    <td>{formatDate(position.closed_at)}</td>
-                    <td>{position.notes || "-"}</td>
-                    <td className="positions-table__actions">
+              {positions.map((position) => (
+                <tr key={position.id}>
+                  <td>{position.ticker}</td>
+                  <td>{position.name}</td>
+                  <td>{formatDate(position.entry_date)}</td>
+                  <td>{formatNum(position.quantity, 4)}</td>
+                  <td>{formatPrice(position.average_entry_price, position.currency)}</td>
+                  <td>
+                    {formatDisplayPrice(position.current_price, position.price_currency)}
+                    {position.price_date && (
+                      <span className="date-hint">{formatDate(position.price_date)}</span>
+                    )}
+                  </td>
+                  <td>{formatDisplayPrice(position.cost_basis, position.currency)}</td>
+                  <td>{formatDisplayPrice(position.current_value, position.currency)}</td>
+                  <td className={displayClass(position.unrealized_gain_loss)}>
+                    {formatDisplayPrice(position.unrealized_gain_loss, position.currency)}
+                  </td>
+                  <td className={displayClass(position.unrealized_return_pct)}>
+                    {formatDisplayPercent(position.unrealized_return_pct)}
+                  </td>
+                  <td>{position.currency}</td>
+                  <td>{formatPrice(position.fees, position.currency)}</td>
+                  <td>{statusLabel(position.status)}</td>
+                  <td>{formatDate(position.closed_at)}</td>
+                  <td>{position.notes || "-"}</td>
+                  <td className="positions-table__actions">
+                    <button
+                      type="button"
+                      className="positions-btn positions-btn--ghost"
+                      onClick={() => handleEdit(position)}
+                    >
+                      Edit
+                    </button>
+                    {position.status === "active" && (
                       <button
                         type="button"
                         className="positions-btn positions-btn--ghost"
-                        onClick={() => handleEdit(position)}
+                        onClick={() => handleClose(position.id)}
+                        disabled={closingId === position.id}
                       >
-                        Edit
+                        {closingId === position.id ? "Closing..." : "Close"}
                       </button>
-                      {position.status === "active" && (
-                        <button
-                          type="button"
-                          className="positions-btn positions-btn--ghost"
-                          onClick={() => handleClose(position.id)}
-                          disabled={closingId === position.id}
-                        >
-                          {closingId === position.id ? "Closing…" : "Close"}
-                        </button>
-                      )}
-                    </td>
-                  </tr>
-                );
-              })}
+                    )}
+                  </td>
+                </tr>
+              ))}
             </tbody>
           </table>
         </div>

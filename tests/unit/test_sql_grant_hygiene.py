@@ -57,7 +57,7 @@ def test_migration_011_exists() -> None:
 
 
 def test_all_expected_migrations_exist() -> None:
-    expected = [f"0{n:02d}" for n in range(1, 17)]
+    expected = [f"0{n:02d}" for n in range(1, 18)]
     present = {p.name[:3] for p in SQL_DIR.glob("0*.sql")}
     for prefix in expected:
         assert prefix in present, f"Missing migration with prefix {prefix}"
@@ -269,6 +269,13 @@ def test_dashboard_watchlist_latest_auth_select_exists() -> None:
     sql = _combined_sql()
     assert _has_any_grant_to_role(sql, "dashboard_watchlist_latest", "authenticated"), (
         "No grant on dashboard_watchlist_latest to authenticated found."
+    )
+
+
+def test_dashboard_positions_latest_auth_select_exists() -> None:
+    sql = _combined_sql()
+    assert _has_any_grant_to_role(sql, "dashboard_positions_latest", "authenticated"), (
+        "No grant on dashboard_positions_latest to authenticated found."
     )
 
 

@@ -9,6 +9,7 @@ import type {
   AlertHistoryRow,
   CompanyOption,
   InactiveWatchlistRow,
+  PositionDashboardRow,
   PositionInput,
   PositionRow,
   WatchlistAddRequest,
@@ -176,14 +177,14 @@ export async function fetchCompaniesForPositions(): Promise<CompanyOption[]> {
   return (data ?? []) as CompanyOption[];
 }
 
-export async function fetchPositions(): Promise<PositionRow[]> {
+export async function fetchPositions(): Promise<PositionDashboardRow[]> {
   const { data, error } = await supabase
-    .from("positions")
+    .from("dashboard_positions_latest")
     .select("*")
     .order("status")
     .order("entry_date", { ascending: false });
   if (error) throw new Error(error.message);
-  return (data ?? []) as PositionRow[];
+  return (data ?? []) as PositionDashboardRow[];
 }
 
 export async function createPosition(input: PositionInput): Promise<PositionRow> {

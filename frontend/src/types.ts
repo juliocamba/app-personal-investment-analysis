@@ -155,6 +155,32 @@ export interface PositionRow {
   updated_at: string;
 }
 
+// ---------------------------------------------------------------------------
+// dashboard_positions_latest view (017_positions_display_metrics.sql)
+// ---------------------------------------------------------------------------
+export interface PositionDashboardRow {
+  id: string;
+  user_id: string;
+  company_id: string;
+  ticker: string;
+  name: string;
+  entry_date: string;
+  quantity: number;
+  average_entry_price: number;
+  currency: string;
+  fees: number | null;
+  notes: string | null;
+  status: "active" | "closed";
+  closed_at: string | null;
+  price_date: string | null;
+  current_price: number | null;
+  price_currency: string | null;
+  cost_basis: number | null;
+  current_value: number | null;
+  unrealized_gain_loss: number | null;
+  unrealized_return_pct: number | null;
+}
+
 export interface PositionInput {
   company_id: string;
   entry_date: string;

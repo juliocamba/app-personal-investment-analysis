@@ -32,6 +32,7 @@ At a high level:
 - `positions` stores manual user-owned position records.
 - Positions are separate from watchlist membership and all analytical output lanes.
 - In Phase 12B.1 they do not influence pipeline execution, readiness, valuation, signals, alerts, or data-quality diagnostics.
+- Phase 12B.2 adds a separate read-only `dashboard_positions_latest` view for display metrics. It uses the latest stored price only and does not influence any analytical lane or pipeline stage.
 
 ### Provider ingestion
 
@@ -81,7 +82,8 @@ At a high level:
 ### Dashboard
 
 - The frontend reads the latest analytical state primarily through `dashboard_watchlist_latest` and other authenticated surfaces.
-- Manual positions are read and written through the `positions` table directly under authenticated RLS.
+- Manual positions are written through the `positions` table directly under authenticated RLS.
+- The positions page now reads display metrics through `dashboard_positions_latest`, which joins `positions`, `companies`, and `latest_price_eod`.
 
 ## Pipeline stages in execution order
 
@@ -166,6 +168,7 @@ Apply migrations in this order:
 14. `sql/014_company_data_quality_snapshots.sql`
 15. `sql/015_dashboard_data_quality_lane.sql`
 16. `sql/016_positions.sql`
+17. `sql/017_positions_display_metrics.sql`
 
 Notes:
 
@@ -178,6 +181,7 @@ Notes:
 - `014_company_data_quality_snapshots.sql` adds a backend-owned diagnostics snapshot table keyed by `(company_id, snapshot_date)` for Phase 12A data-quality persistence.
 - `015_dashboard_data_quality_lane.sql` creates `latest_company_data_quality_snapshots` and recreates `dashboard_watchlist_latest` with appended data-quality fields for the expanded dashboard panel.
 - `016_positions.sql` adds the manual positions table with one active position per user/company, scoped RLS, and explicit grants.
+- `017_positions_display_metrics.sql` adds the read-only `dashboard_positions_latest` view with current price, cost basis, current value, and unrealized P&L metrics when an active position has a same-currency latest price.
 
 ## RLS and grants model
 
@@ -196,7 +200,7 @@ schema.  Without this migration the following symptoms appear:
 - Tables that have an RLS SELECT policy but no explicit `GRANT SELECT` silently
   return empty result sets or permission errors for authenticated users.
 
-Always apply all listed migrations in order (001–016) on a new or existing Supabase project.
+Always apply all listed migrations in order (001–017) on a new or existing Supabase project.
 
 ### Helper function execute hardening
 
@@ -326,6 +330,40 @@ Examples:
 
 - `watchlist_companies` is hardened so authenticated users do not get INSERT or DELETE privileges; only scoped UPDATE is allowed for their own watchlist memberships.
 - `watchlist_add_requests` is hardened so authenticated users can insert only `watchlist_id`, `requested_ticker`, and `requested_exchange`, and can update only `status` for cancellation.
+- `dashboard_positions_latest` is a read-only view. Authenticated users may read it, but position writes still go only to `positions` under RLS.
+
+## Positions display metrics
+
+Phase 12B.2 adds a display-only positions view:
+
+- `dashboard_positions_latest`
+
+It exposes:
+
+- base position fields (`id`, `user_id`, `company_id`, `ticker`, `name`, `entry_date`, `quantity`, `average_entry_price`, `currency`, `fees`, `notes`, `status`, `closed_at`);
+- latest price fields (`price_date`, `current_price`, `price_currency`);
+- derived display fields (`cost_basis`, `current_value`, `unrealized_gain_loss`, `unrealized_return_pct`).
+
+Formulas:
+
+- `cost_basis = quantity * average_entry_price + coalesce(fees, 0)`
+- `current_value = quantity * current_price`
+- `unrealized_gain_loss = current_value - cost_basis`
+- `unrealized_return_pct = unrealized_gain_loss / cost_basis`
+
+Null behavior:
+
+- all derived fields are `null` when no latest stored price exists;
+- all derived fields are `null` when `price_currency <> positions.currency`;
+- all derived fields are `null` for `status = 'closed'`;
+- no FX conversion is performed in this phase.
+
+This view is intentionally separate from:
+
+- `dashboard_watchlist_latest`;
+- `signal_runs.final_signal`;
+- `company_analysis_readiness.readiness_status`;
+- `company_data_quality_snapshots`.
 
 ### Service-role backend access
 

@@ -57,7 +57,7 @@ def test_migration_011_exists() -> None:
 
 
 def test_all_expected_migrations_exist() -> None:
-    expected = [f"0{n:02d}" for n in range(1, 18)]
+    expected = [f"0{n:02d}" for n in range(1, 20)]
     present = {p.name[:3] for p in SQL_DIR.glob("0*.sql")}
     for prefix in expected:
         assert prefix in present, f"Missing migration with prefix {prefix}"
@@ -97,6 +97,7 @@ def test_service_role_insert_all_write_tables() -> None:
         "watchlist_companies",
         "watchlist_add_requests",
         "positions",
+        "position_entry_profiles",
         "alert_rules",
         "alert_history",
     ]
@@ -225,6 +226,27 @@ def test_authenticated_update_on_positions_exists() -> None:
     sql = _combined_sql()
     assert _has_grant(sql, "positions", "authenticated", "update"), (
         "No GRANT UPDATE on positions TO authenticated found."
+    )
+
+
+def test_authenticated_select_on_position_entry_profiles_exists() -> None:
+    sql = _combined_sql()
+    assert _has_grant(sql, "position_entry_profiles", "authenticated", "select"), (
+        "No GRANT SELECT on position_entry_profiles TO authenticated found."
+    )
+
+
+def test_authenticated_update_on_position_entry_profiles_exists() -> None:
+    sql = _combined_sql()
+    assert _has_grant(sql, "position_entry_profiles", "authenticated", "update"), (
+        "No GRANT UPDATE on position_entry_profiles TO authenticated found."
+    )
+
+
+def test_no_anon_grants_on_position_entry_profiles() -> None:
+    sql = _combined_sql()
+    assert not _has_any_grant_to_role(sql, "position_entry_profiles", "anon"), (
+        "Found grant on position_entry_profiles to anon."
     )
 
 

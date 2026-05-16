@@ -179,6 +179,50 @@ export interface PositionDashboardRow {
   current_value: number | null;
   unrealized_gain_loss: number | null;
   unrealized_return_pct: number | null;
+  current_signal: string | null;
+  current_readiness_status: string | null;
+  current_data_quality_status: string | null;
+  current_quality_score: number | null;
+  current_valuation_low: number | null;
+  current_valuation_mid: number | null;
+  current_valuation_high: number | null;
+  current_margin_of_safety: number | null;
+  current_uncertainty_category: string | null;
+}
+
+// ---------------------------------------------------------------------------
+// position_entry_profiles table (018_position_entry_profiles.sql)
+// ---------------------------------------------------------------------------
+export interface PositionEntryProfileRow {
+  id: string;
+  position_id: string;
+  user_id: string;
+  snapshot_taken_at: string;
+  thesis_summary: string | null;
+  why_bought: string | null;
+  key_risks: string | null;
+  target_price: number | null;
+  target_price_currency: string | null;
+  expected_holding_period: string | null;
+  confidence_level: "low" | "medium" | "high" | null;
+  catalysts: string | null;
+  invalidation_criteria: string | null;
+  entry_price: number | null;
+  entry_price_date: string | null;
+  entry_price_currency: string | null;
+  entry_signal: string | null;
+  entry_readiness_status: string | null;
+  entry_data_quality_status: string | null;
+  entry_quality_score: number | null;
+  entry_current_price: number | null;
+  entry_valuation_low: number | null;
+  entry_valuation_mid: number | null;
+  entry_valuation_high: number | null;
+  entry_margin_of_safety: number | null;
+  entry_uncertainty_category: string | null;
+  entry_snapshot_details: Record<string, unknown>;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface PositionInput {
@@ -191,4 +235,16 @@ export interface PositionInput {
   notes?: string | null;
   status: "active" | "closed";
   closed_at?: string | null;
+}
+
+export interface PositionEntryProfileInput {
+  thesis_summary?: string | null;
+  why_bought?: string | null;
+  key_risks?: string | null;
+  target_price?: number | null;
+  target_price_currency?: string | null;
+  expected_holding_period?: string | null;
+  confidence_level?: "low" | "medium" | "high" | null;
+  catalysts?: string | null;
+  invalidation_criteria?: string | null;
 }

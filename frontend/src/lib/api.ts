@@ -10,6 +10,8 @@ import type {
   CompanyOption,
   InactiveWatchlistRow,
   PositionDashboardRow,
+  PositionEntryProfileInput,
+  PositionEntryProfileRow,
   PositionInput,
   PositionRow,
   WatchlistAddRequest,
@@ -185,6 +187,61 @@ export async function fetchPositions(): Promise<PositionDashboardRow[]> {
     .order("entry_date", { ascending: false });
   if (error) throw new Error(error.message);
   return (data ?? []) as PositionDashboardRow[];
+}
+
+export async function fetchPositionEntryProfiles(): Promise<PositionEntryProfileRow[]> {
+  const { data, error } = await supabase
+    .from("position_entry_profiles")
+    .select("*")
+    .order("created_at", { ascending: false });
+  if (error) throw new Error(error.message);
+  return (data ?? []) as PositionEntryProfileRow[];
+}
+
+export async function savePositionEntryProfile(
+  positionId: string,
+  input: PositionEntryProfileInput,
+): Promise<PositionEntryProfileRow> {
+  const thesisPayload = {
+    thesis_summary: input.thesis_summary?.trim() || null,
+    why_bought: input.why_bought?.trim() || null,
+    key_risks: input.key_risks?.trim() || null,
+    target_price: input.target_price ?? null,
+    target_price_currency: input.target_price_currency?.trim().toUpperCase() || null,
+    expected_holding_period: input.expected_holding_period?.trim() || null,
+    confidence_level: input.confidence_level ?? null,
+    catalysts: input.catalysts?.trim() || null,
+    invalidation_criteria: input.invalidation_criteria?.trim() || null,
+  };
+
+  const { data: existing, error: existingError } = await supabase
+    .from("position_entry_profiles")
+    .select("id")
+    .eq("position_id", positionId)
+    .maybeSingle();
+  if (existingError) throw new Error(existingError.message);
+
+  if (existing) {
+    const { data, error } = await supabase
+      .from("position_entry_profiles")
+      .update(thesisPayload)
+      .eq("position_id", positionId)
+      .select("*")
+      .single();
+    if (error) throw new Error(error.message);
+    return data as PositionEntryProfileRow;
+  }
+
+  const { data, error } = await supabase
+    .from("position_entry_profiles")
+    .insert({
+      position_id: positionId,
+      ...thesisPayload,
+    })
+    .select("*")
+    .single();
+  if (error) throw new Error(error.message);
+  return data as PositionEntryProfileRow;
 }
 
 export async function createPosition(input: PositionInput): Promise<PositionRow> {

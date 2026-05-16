@@ -3,11 +3,19 @@ import {
   closePosition,
   createPosition,
   fetchCompaniesForPositions,
+  fetchPositionEntryProfiles,
   fetchPositions,
+  savePositionEntryProfile,
   updatePosition,
 } from "../lib/api";
 import { formatDate, formatPct, formatPrice, formatNum } from "../lib/formatters";
-import type { CompanyOption, PositionDashboardRow, PositionInput } from "../types";
+import type {
+  CompanyOption,
+  PositionDashboardRow,
+  PositionEntryProfileInput,
+  PositionEntryProfileRow,
+  PositionInput,
+} from "../types";
 
 interface PositionFormState {
   company_id: string;
@@ -19,6 +27,15 @@ interface PositionFormState {
   notes: string;
   status: "active" | "closed";
   closed_at: string;
+  thesis_summary: string;
+  why_bought: string;
+  key_risks: string;
+  target_price: string;
+  target_price_currency: string;
+  expected_holding_period: string;
+  confidence_level: "" | "low" | "medium" | "high";
+  catalysts: string;
+  invalidation_criteria: string;
 }
 
 const EMPTY_FORM: PositionFormState = {
@@ -31,6 +48,15 @@ const EMPTY_FORM: PositionFormState = {
   notes: "",
   status: "active",
   closed_at: "",
+  thesis_summary: "",
+  why_bought: "",
+  key_risks: "",
+  target_price: "",
+  target_price_currency: "USD",
+  expected_holding_period: "",
+  confidence_level: "",
+  catalysts: "",
+  invalidation_criteria: "",
 };
 
 function statusLabel(status: PositionDashboardRow["status"]): string {
@@ -47,12 +73,46 @@ function formatDisplayPercent(value: number | null): string {
   return formatPct(value, 1);
 }
 
+function formatDisplayText(value: string | null | undefined): string {
+  if (!value) return "-";
+  return value;
+}
+
+function formatStatusText(value: string | null | undefined): string {
+  if (!value) return "-";
+  if (value === value.toUpperCase()) return value;
+  return value
+    .split("_")
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
+}
+
+function formatValuationRange(
+  low: number | null,
+  mid: number | null,
+  high: number | null,
+  currency: string | null,
+): string {
+  if (low == null || mid == null || high == null || !currency) return "-";
+  return `${formatPrice(low, currency)} / ${formatPrice(mid, currency)} / ${formatPrice(high, currency)}`;
+}
+
+function formatPriceWithDate(
+  value: number | null,
+  currency: string | null,
+  date: string | null | undefined,
+): string {
+  if (value == null || !currency) return "-";
+  const dateText = formatDate(date ?? null);
+  return dateText === "-" ? formatPrice(value, currency) : `${formatPrice(value, currency)} (${dateText})`;
+}
+
 function displayClass(value: number | null): string | undefined {
   if (value == null || value === 0) return undefined;
   return value > 0 ? "num--positive" : "num--negative";
 }
 
-function buildPayload(form: PositionFormState): PositionInput {
+function buildPositionPayload(form: PositionFormState): PositionInput {
   return {
     company_id: form.company_id,
     entry_date: form.entry_date,
@@ -66,8 +126,36 @@ function buildPayload(form: PositionFormState): PositionInput {
   };
 }
 
+function buildEntryProfilePayload(form: PositionFormState): PositionEntryProfileInput {
+  return {
+    thesis_summary: form.thesis_summary,
+    why_bought: form.why_bought,
+    key_risks: form.key_risks,
+    target_price: form.target_price.trim() ? Number(form.target_price) : null,
+    target_price_currency: form.target_price_currency,
+    expected_holding_period: form.expected_holding_period,
+    confidence_level: form.confidence_level || null,
+    catalysts: form.catalysts,
+    invalidation_criteria: form.invalidation_criteria,
+  };
+}
+
+function hasAnyThesisInput(payload: PositionEntryProfileInput): boolean {
+  return Boolean(
+    payload.thesis_summary
+      || payload.why_bought
+      || payload.key_risks
+      || payload.target_price != null
+      || payload.expected_holding_period
+      || payload.confidence_level
+      || payload.catalysts
+      || payload.invalidation_criteria,
+  );
+}
+
 export function PositionsPage() {
   const [positions, setPositions] = useState<PositionDashboardRow[]>([]);
+  const [profiles, setProfiles] = useState<PositionEntryProfileRow[]>([]);
   const [companies, setCompanies] = useState<CompanyOption[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -75,31 +163,39 @@ export function PositionsPage() {
   const [isSaving, setIsSaving] = useState(false);
   const [closingId, setClosingId] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [showThesisFields, setShowThesisFields] = useState(false);
   const [form, setForm] = useState<PositionFormState>(EMPTY_FORM);
 
-  async function loadPositionsAndCompanies(): Promise<void> {
-    const [positionRows, companyRows] = await Promise.all([
+  async function loadPageState(): Promise<void> {
+    const [positionRows, companyRows, profileRows] = await Promise.all([
       fetchPositions(),
       fetchCompaniesForPositions(),
+      fetchPositionEntryProfiles(),
     ]);
     setPositions(positionRows);
     setCompanies(companyRows);
+    setProfiles(profileRows);
     if (companyRows.length > 0) {
       setForm((prev) => ({
         ...prev,
         company_id: prev.company_id || companyRows[0].id,
         currency: prev.currency || companyRows[0].currency || "USD",
+        target_price_currency: prev.target_price_currency || prev.currency || companyRows[0].currency || "USD",
       }));
     }
   }
 
-  async function refreshPositions(): Promise<void> {
-    const positionRows = await fetchPositions();
+  async function refreshPositionData(): Promise<void> {
+    const [positionRows, profileRows] = await Promise.all([
+      fetchPositions(),
+      fetchPositionEntryProfiles(),
+    ]);
     setPositions(positionRows);
+    setProfiles(profileRows);
   }
 
   useEffect(() => {
-    loadPositionsAndCompanies()
+    loadPageState()
       .then(() => {
         setLoading(false);
       })
@@ -114,13 +210,20 @@ export function PositionsPage() {
     [companies],
   );
 
+  const profileMap = useMemo(
+    () => new Map(profiles.map((profile) => [profile.position_id, profile])),
+    [profiles],
+  );
+
   function resetForm(nextCompanies = companies): void {
     setEditingId(null);
     setSaveError(null);
+    setShowThesisFields(false);
     setForm({
       ...EMPTY_FORM,
       company_id: nextCompanies[0]?.id ?? "",
       currency: nextCompanies[0]?.currency ?? "USD",
+      target_price_currency: nextCompanies[0]?.currency ?? "USD",
     });
   }
 
@@ -130,12 +233,24 @@ export function PositionsPage() {
       ...prev,
       company_id: companyId,
       currency: selected?.currency ?? prev.currency,
+      target_price_currency: prev.target_price_currency || selected?.currency || prev.currency,
     }));
   }
 
   function handleEdit(position: PositionDashboardRow): void {
+    const profile = profileMap.get(position.id);
     setEditingId(position.id);
     setSaveError(null);
+    setShowThesisFields(Boolean(
+      profile?.thesis_summary
+        || profile?.why_bought
+        || profile?.key_risks
+        || profile?.target_price != null
+        || profile?.expected_holding_period
+        || profile?.confidence_level
+        || profile?.catalysts
+        || profile?.invalidation_criteria,
+    ));
     setForm({
       company_id: position.company_id,
       entry_date: position.entry_date,
@@ -146,6 +261,15 @@ export function PositionsPage() {
       notes: position.notes ?? "",
       status: position.status,
       closed_at: position.closed_at ? position.closed_at.slice(0, 10) : "",
+      thesis_summary: profile?.thesis_summary ?? "",
+      why_bought: profile?.why_bought ?? "",
+      key_risks: profile?.key_risks ?? "",
+      target_price: profile?.target_price != null ? String(profile.target_price) : "",
+      target_price_currency: profile?.target_price_currency ?? position.currency,
+      expected_holding_period: profile?.expected_holding_period ?? "",
+      confidence_level: profile?.confidence_level ?? "",
+      catalysts: profile?.catalysts ?? "",
+      invalidation_criteria: profile?.invalidation_criteria ?? "",
     });
   }
 
@@ -154,13 +278,23 @@ export function PositionsPage() {
     setIsSaving(true);
     setSaveError(null);
     try {
-      const payload = buildPayload(form);
+      const positionPayload = buildPositionPayload(form);
+      const thesisPayload = buildEntryProfilePayload(form);
+      let positionId = editingId;
+
       if (editingId) {
-        await updatePosition(editingId, payload);
+        const updated = await updatePosition(editingId, positionPayload);
+        positionId = updated.id;
       } else {
-        await createPosition(payload);
+        const created = await createPosition(positionPayload);
+        positionId = created.id;
       }
-      await refreshPositions();
+
+      if (positionId && (showThesisFields || hasAnyThesisInput(thesisPayload))) {
+        await savePositionEntryProfile(positionId, thesisPayload);
+      }
+
+      await refreshPositionData();
       resetForm();
     } catch (err: unknown) {
       setSaveError(err instanceof Error ? err.message : String(err));
@@ -174,7 +308,7 @@ export function PositionsPage() {
     setSaveError(null);
     try {
       await closePosition(positionId);
-      await refreshPositions();
+      await refreshPositionData();
       if (editingId === positionId) {
         resetForm();
       }
@@ -337,7 +471,14 @@ export function PositionsPage() {
             />
           </label>
 
-          <div className="positions-form__actions">
+          <div className="positions-form__actions positions-form__actions--split">
+            <button
+              type="button"
+              className="positions-btn positions-btn--ghost"
+              onClick={() => setShowThesisFields((prev) => !prev)}
+            >
+              {showThesisFields ? "Hide entry thesis" : "Add entry thesis"}
+            </button>
             <button
               type="submit"
               className="positions-btn"
@@ -346,6 +487,111 @@ export function PositionsPage() {
               {isSaving ? "Saving..." : editingId ? "Save changes" : "Add position"}
             </button>
           </div>
+
+          {showThesisFields && (
+            <div className="positions-thesis">
+              <h3 className="positions-thesis__title">Entry thesis</h3>
+
+              <label className="positions-form__field positions-form__field--wide">
+                <span>Thesis summary</span>
+                <textarea
+                  value={form.thesis_summary}
+                  rows={2}
+                  onChange={(e) => setForm((prev) => ({ ...prev, thesis_summary: e.target.value }))}
+                />
+              </label>
+
+              <label className="positions-form__field positions-form__field--wide">
+                <span>Why I bought</span>
+                <textarea
+                  value={form.why_bought}
+                  rows={3}
+                  onChange={(e) => setForm((prev) => ({ ...prev, why_bought: e.target.value }))}
+                />
+              </label>
+
+              <label className="positions-form__field positions-form__field--wide">
+                <span>Key risks</span>
+                <textarea
+                  value={form.key_risks}
+                  rows={3}
+                  onChange={(e) => setForm((prev) => ({ ...prev, key_risks: e.target.value }))}
+                />
+              </label>
+
+              <label className="positions-form__field">
+                <span>Target price</span>
+                <input
+                  type="number"
+                  min="0.000001"
+                  step="0.000001"
+                  value={form.target_price}
+                  onChange={(e) => setForm((prev) => ({ ...prev, target_price: e.target.value }))}
+                />
+              </label>
+
+              <label className="positions-form__field">
+                <span>Target price currency</span>
+                <input
+                  type="text"
+                  maxLength={10}
+                  value={form.target_price_currency}
+                  onChange={(e) =>
+                    setForm((prev) => ({ ...prev, target_price_currency: e.target.value }))
+                  }
+                />
+              </label>
+
+              <label className="positions-form__field">
+                <span>Expected holding period</span>
+                <input
+                  type="text"
+                  value={form.expected_holding_period}
+                  onChange={(e) =>
+                    setForm((prev) => ({ ...prev, expected_holding_period: e.target.value }))
+                  }
+                />
+              </label>
+
+              <label className="positions-form__field">
+                <span>Confidence level</span>
+                <select
+                  value={form.confidence_level}
+                  onChange={(e) =>
+                    setForm((prev) => ({
+                      ...prev,
+                      confidence_level: e.target.value as "" | "low" | "medium" | "high",
+                    }))
+                  }
+                >
+                  <option value="">-</option>
+                  <option value="low">Low</option>
+                  <option value="medium">Medium</option>
+                  <option value="high">High</option>
+                </select>
+              </label>
+
+              <label className="positions-form__field positions-form__field--wide">
+                <span>Catalysts</span>
+                <textarea
+                  value={form.catalysts}
+                  rows={2}
+                  onChange={(e) => setForm((prev) => ({ ...prev, catalysts: e.target.value }))}
+                />
+              </label>
+
+              <label className="positions-form__field positions-form__field--wide">
+                <span>Invalidation criteria</span>
+                <textarea
+                  value={form.invalidation_criteria}
+                  rows={2}
+                  onChange={(e) =>
+                    setForm((prev) => ({ ...prev, invalidation_criteria: e.target.value }))
+                  }
+                />
+              </label>
+            </div>
+          )}
         </form>
 
         {saveError && (
@@ -364,84 +610,289 @@ export function PositionsPage() {
           </p>
         </div>
       ) : (
-        <div className="table-wrapper">
-          <table className="positions-table" aria-label="Manual positions">
-            <thead>
-              <tr>
-                <th scope="col">Ticker</th>
-                <th scope="col">Company</th>
-                <th scope="col">Entry date</th>
-                <th scope="col">Quantity</th>
-                <th scope="col">Avg entry</th>
-                <th scope="col">Current price</th>
-                <th scope="col">Cost basis</th>
-                <th scope="col">Current value</th>
-                <th scope="col">Unrealized P&amp;L</th>
-                <th scope="col">Unrealized return</th>
-                <th scope="col">Currency</th>
-                <th scope="col">Fees</th>
-                <th scope="col">Status</th>
-                <th scope="col">Closed</th>
-                <th scope="col">Notes</th>
-                <th scope="col">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {positions.map((position) => (
-                <tr key={position.id}>
-                  <td>{position.ticker}</td>
-                  <td>{position.name}</td>
-                  <td>{formatDate(position.entry_date)}</td>
-                  <td>{formatNum(position.quantity, 4)}</td>
-                  <td>{formatPrice(position.average_entry_price, position.currency)}</td>
-                  <td>
-                    {formatDisplayPrice(position.current_price, position.price_currency)}
-                    {position.price_date && (
-                      <span className="date-hint">{formatDate(position.price_date)}</span>
-                    )}
-                  </td>
-                  <td>{formatDisplayPrice(position.cost_basis, position.currency)}</td>
-                  <td>{formatDisplayPrice(position.current_value, position.currency)}</td>
-                  <td className={displayClass(position.unrealized_gain_loss)}>
-                    {formatDisplayPrice(position.unrealized_gain_loss, position.currency)}
-                  </td>
-                  <td className={displayClass(position.unrealized_return_pct)}>
-                    {formatDisplayPercent(position.unrealized_return_pct)}
-                  </td>
-                  <td>{position.currency}</td>
-                  <td>{formatPrice(position.fees, position.currency)}</td>
-                  <td>{statusLabel(position.status)}</td>
-                  <td>{formatDate(position.closed_at)}</td>
-                  <td>{position.notes || "-"}</td>
-                  <td className="positions-table__actions">
-                    <button
-                      type="button"
-                      className="positions-btn positions-btn--ghost"
-                      onClick={() => handleEdit(position)}
-                    >
-                      Edit
-                    </button>
-                    {position.status === "active" && (
+        <>
+          <div className="table-wrapper">
+            <table className="positions-table" aria-label="Manual positions">
+              <thead>
+                <tr>
+                  <th scope="col">Ticker</th>
+                  <th scope="col">Company</th>
+                  <th scope="col">Entry date</th>
+                  <th scope="col">Quantity</th>
+                  <th scope="col">Avg entry</th>
+                  <th scope="col">Current price</th>
+                  <th scope="col">Cost basis</th>
+                  <th scope="col">Current value</th>
+                  <th scope="col">Unrealized P&amp;L</th>
+                  <th scope="col">Unrealized return</th>
+                  <th scope="col">Currency</th>
+                  <th scope="col">Fees</th>
+                  <th scope="col">Status</th>
+                  <th scope="col">Closed</th>
+                  <th scope="col">Notes</th>
+                  <th scope="col">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {positions.map((position) => (
+                  <tr key={position.id}>
+                    <td>{position.ticker}</td>
+                    <td>{position.name}</td>
+                    <td>{formatDate(position.entry_date)}</td>
+                    <td>{formatNum(position.quantity, 4)}</td>
+                    <td>{formatPrice(position.average_entry_price, position.currency)}</td>
+                    <td>
+                      {formatDisplayPrice(position.current_price, position.price_currency)}
+                      {position.price_date && (
+                        <span className="date-hint">{formatDate(position.price_date)}</span>
+                      )}
+                    </td>
+                    <td>{formatDisplayPrice(position.cost_basis, position.currency)}</td>
+                    <td>{formatDisplayPrice(position.current_value, position.currency)}</td>
+                    <td className={displayClass(position.unrealized_gain_loss)}>
+                      {formatDisplayPrice(position.unrealized_gain_loss, position.currency)}
+                    </td>
+                    <td className={displayClass(position.unrealized_return_pct)}>
+                      {formatDisplayPercent(position.unrealized_return_pct)}
+                    </td>
+                    <td>{position.currency}</td>
+                    <td>{formatPrice(position.fees, position.currency)}</td>
+                    <td>{statusLabel(position.status)}</td>
+                    <td>{formatDate(position.closed_at)}</td>
+                    <td>{position.notes || "-"}</td>
+                    <td className="positions-table__actions">
                       <button
                         type="button"
                         className="positions-btn positions-btn--ghost"
-                        onClick={() => handleClose(position.id)}
-                        disabled={closingId === position.id}
+                        onClick={() => handleEdit(position)}
                       >
-                        {closingId === position.id ? "Closing..." : "Close"}
+                        Edit
                       </button>
+                      {position.status === "active" && (
+                        <button
+                          type="button"
+                          className="positions-btn positions-btn--ghost"
+                          onClick={() => handleClose(position.id)}
+                          disabled={closingId === position.id}
+                        >
+                          {closingId === position.id ? "Closing..." : "Close"}
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          <section className="positions-snapshots" aria-labelledby="entry-snapshot-title">
+            <div className="positions-panel__header">
+              <h2 id="entry-snapshot-title" className="positions-panel__title">
+                Entry snapshots
+              </h2>
+            </div>
+            <div className="positions-snapshots__grid">
+              {positions.map((position) => {
+                const profile = profileMap.get(position.id);
+                return (
+                  <article key={`${position.id}-profile`} className="positions-snapshot-card">
+                    <div className="positions-snapshot-card__header">
+                      <h3 className="positions-snapshot-card__title">
+                        {position.ticker} - {position.name}
+                      </h3>
+                      <span className="positions-snapshot-card__date">
+                        Snapshot: {formatDate(profile?.snapshot_taken_at ?? null)}
+                      </span>
+                    </div>
+
+                    {!profile ? (
+                      <p className="page-state__hint">
+                        No entry profile captured yet for this position.
+                      </p>
+                    ) : (
+                      <>
+                        <section className="positions-snapshot-card__section" aria-label="Entry thesis">
+                          <h4 className="positions-snapshot-card__section-title">Entry thesis</h4>
+                          <div className="detail-grid">
+                            <div className="detail-grid__item detail-grid__item--full">
+                              <span className="detail-grid__label">Thesis summary</span>
+                              <span className="detail-grid__value detail-grid__value--wrap">
+                                {formatDisplayText(profile.thesis_summary)}
+                              </span>
+                            </div>
+                            <div className="detail-grid__item detail-grid__item--full">
+                              <span className="detail-grid__label">Why I bought</span>
+                              <span className="detail-grid__value detail-grid__value--wrap">
+                                {formatDisplayText(profile.why_bought)}
+                              </span>
+                            </div>
+                            <div className="detail-grid__item detail-grid__item--full">
+                              <span className="detail-grid__label">Key risks</span>
+                              <span className="detail-grid__value detail-grid__value--wrap">
+                                {formatDisplayText(profile.key_risks)}
+                              </span>
+                            </div>
+                            <div className="detail-grid__item">
+                              <span className="detail-grid__label">Target price</span>
+                              <span className="detail-grid__value">
+                                {formatDisplayPrice(profile.target_price, profile.target_price_currency)}
+                              </span>
+                            </div>
+                            <div className="detail-grid__item">
+                              <span className="detail-grid__label">Holding period</span>
+                              <span className="detail-grid__value">
+                                {formatDisplayText(profile.expected_holding_period)}
+                              </span>
+                            </div>
+                            <div className="detail-grid__item">
+                              <span className="detail-grid__label">Confidence</span>
+                              <span className="detail-grid__value">
+                                {formatStatusText(profile.confidence_level)}
+                              </span>
+                            </div>
+                            <div className="detail-grid__item detail-grid__item--full">
+                              <span className="detail-grid__label">Catalysts</span>
+                              <span className="detail-grid__value detail-grid__value--wrap">
+                                {formatDisplayText(profile.catalysts)}
+                              </span>
+                            </div>
+                            <div className="detail-grid__item detail-grid__item--full">
+                              <span className="detail-grid__label">Invalidation criteria</span>
+                              <span className="detail-grid__value detail-grid__value--wrap">
+                                {formatDisplayText(profile.invalidation_criteria)}
+                              </span>
+                            </div>
+                          </div>
+                        </section>
+
+                        <div className="positions-snapshot-card__divider" />
+
+                        <section className="positions-snapshot-card__section" aria-label="Entry and current comparison">
+                          <h4 className="positions-snapshot-card__section-title">Entry vs current</h4>
+                          <div className="positions-comparison">
+                            <div className="positions-comparison__header">Metric</div>
+                            <div className="positions-comparison__header">At entry</div>
+                            <div className="positions-comparison__header">Current</div>
+
+                            <div className="positions-comparison__label">Price</div>
+                            <div className="positions-comparison__value">
+                              {formatPriceWithDate(
+                                profile.entry_price,
+                                profile.entry_price_currency,
+                                profile.entry_price_date,
+                              )}
+                            </div>
+                            <div className="positions-comparison__value">
+                              {formatPriceWithDate(
+                                position.current_price,
+                                position.price_currency,
+                                position.price_date,
+                              )}
+                            </div>
+
+                            <div className="positions-comparison__label">Signal</div>
+                            <div className="positions-comparison__value">
+                              {formatStatusText(profile.entry_signal)}
+                            </div>
+                            <div className="positions-comparison__value">
+                              {formatStatusText(position.current_signal)}
+                            </div>
+
+                            <div className="positions-comparison__label">Readiness</div>
+                            <div className="positions-comparison__value">
+                              {formatStatusText(profile.entry_readiness_status)}
+                            </div>
+                            <div className="positions-comparison__value">
+                              {formatStatusText(position.current_readiness_status)}
+                            </div>
+
+                            <div className="positions-comparison__label">Data quality</div>
+                            <div className="positions-comparison__value">
+                              {formatStatusText(profile.entry_data_quality_status)}
+                            </div>
+                            <div className="positions-comparison__value">
+                              {formatStatusText(position.current_data_quality_status)}
+                            </div>
+
+                            <div className="positions-comparison__label">Quality score</div>
+                            <div className="positions-comparison__value">
+                              {profile.entry_quality_score != null
+                                ? formatNum(profile.entry_quality_score, 1)
+                                : "-"}
+                            </div>
+                            <div className="positions-comparison__value">
+                              {position.current_quality_score != null
+                                ? formatNum(position.current_quality_score, 1)
+                                : "-"}
+                            </div>
+
+                            <div className="positions-comparison__label">Valuation range</div>
+                            <div className="positions-comparison__value">
+                              {formatValuationRange(
+                                profile.entry_valuation_low,
+                                profile.entry_valuation_mid,
+                                profile.entry_valuation_high,
+                                profile.entry_price_currency,
+                              )}
+                            </div>
+                            <div className="positions-comparison__value">
+                              {formatValuationRange(
+                                position.current_valuation_low,
+                                position.current_valuation_mid,
+                                position.current_valuation_high,
+                                position.price_currency ?? position.currency,
+                              )}
+                            </div>
+
+                            <div className="positions-comparison__label">Margin of safety</div>
+                            <div className="positions-comparison__value">
+                              {formatDisplayPercent(profile.entry_margin_of_safety)}
+                            </div>
+                            <div className="positions-comparison__value">
+                              {formatDisplayPercent(position.current_margin_of_safety)}
+                            </div>
+                          </div>
+                        </section>
+
+                        <div className="positions-snapshot-card__divider" />
+
+                        <section className="positions-snapshot-card__section" aria-label="Frozen entry snapshot details">
+                          <h4 className="positions-snapshot-card__section-title">Frozen entry snapshot</h4>
+                          <div className="detail-grid">
+                            <div className="detail-grid__item">
+                              <span className="detail-grid__label">Entry price currency</span>
+                              <span className="detail-grid__value">
+                                {formatDisplayText(profile.entry_price_currency)}
+                              </span>
+                            </div>
+                            <div className="detail-grid__item">
+                              <span className="detail-grid__label">Entry uncertainty</span>
+                              <span className="detail-grid__value">
+                                {formatStatusText(profile.entry_uncertainty_category)}
+                              </span>
+                            </div>
+                            <div className="detail-grid__item">
+                              <span className="detail-grid__label">Current uncertainty</span>
+                              <span className="detail-grid__value">
+                                {formatStatusText(position.current_uncertainty_category)}
+                              </span>
+                            </div>
+                          </div>
+                        </section>
+                      </>
                     )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+                  </article>
+                );
+              })}
+            </div>
+          </section>
+        </>
       )}
 
       <p className="page__footer-note">
-        Positions are manual recordkeeping only in Phase 12B. They do not modify
-        watchlist analytics, readiness, valuation, or signal output.
+        Positions are manual recordkeeping only in Phase 12C. Entry snapshots are
+        stored reference points and do not modify watchlist analytics, readiness,
+        valuation, or signal output.
       </p>
     </div>
   );

@@ -92,6 +92,7 @@ def test_required_tables_contains_all_mandatory_names() -> None:
         "valuation_runs",
         "signal_runs",
         "positions",
+        "position_entry_profiles",
         "alert_rules",
         "alert_history",
         "pipeline_runs",

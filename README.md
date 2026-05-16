@@ -25,7 +25,7 @@ Results appear in the dashboard within minutes of the pipeline completing.
 
 Phase 12A has started with non-blocking data-quality diagnostics. These checks currently compare overlapping FMP and Twelve Data prices when both exist for the same company/date, summarize normalized statement completeness, and compare overlapping annual FMP vs SEC fundamentals when both normalized sources exist. They emit pipeline events/metrics, persist evidence, and surface a separate dashboard data-quality lane only; they do not change readiness, valuation, signal generation, or alerts.
 
-Phase 12B.1 adds a separate manual positions foundation. Positions are user-entered ownership records with entry date, quantity, average entry price, currency, fees, notes, and active/closed status. They are tracked separately from watchlist analytics and do not change signals, readiness, valuation, alerts, or data-quality diagnostics. Phase 12B.2 adds display-only current value and unrealized P&L using the latest stored price when an active position has a matching price currency; it does not add realized P&L, FX conversion, or investment advice.
+Phase 12B.1 adds a separate manual positions foundation. Positions are user-entered ownership records with entry date, quantity, average entry price, currency, fees, notes, and active/closed status. They are tracked separately from watchlist analytics and do not change signals, readiness, valuation, alerts, or data-quality diagnostics. Phase 12B.2 adds display-only current value and unrealized P&L using the latest stored price when an active position has a matching price currency; it does not add realized P&L, FX conversion, or investment advice. Phase 12C.1 adds an entry thesis + entry snapshot foundation so each position can keep optional thesis notes plus a frozen snapshot of already-stored app state at the time the profile is captured. Phase 12C.2 improves thesis readability and adds a neutral entry-vs-current comparison using already-persisted current signal, readiness, data-quality, quality score, valuation, and margin-of-safety state only.
 
 ## Current capabilities
 
@@ -38,6 +38,8 @@ Phase 12B.1 adds a separate manual positions foundation. Positions are user-ente
 - Watchlist management: add, remove, and reactivate companies.
 - Manual positions tracking: add, edit, list, and close user-owned positions.
 - Display-only position metrics: current price, cost basis, current value, unrealized gain/loss, and unrealized return when the latest stored price is usable.
+- Entry thesis + snapshot tracking: optional thesis notes plus a frozen reference snapshot of signal/readiness/valuation/data-quality state for positions.
+- Entry-vs-current comparison for positions: a display-only comparison of the frozen entry snapshot against the latest stored signal, readiness, data-quality, quality-score, valuation-range, and margin-of-safety state.
 - Full analytical stack: ratios, valuation, qualitative score, probabilistic signal.
 - Readiness classification: signals are only generated when data meets quality thresholds.
 - Valuation diagnostics in the dashboard: MoS basis, DCF scenario count, uncertainty category, distribution-collapsed warning.
@@ -282,6 +284,8 @@ Apply the SQL files in order in the Supabase SQL editor:
 15. `sql/015_dashboard_data_quality_lane.sql`
 16. `sql/016_positions.sql`
 17. `sql/017_positions_display_metrics.sql`
+18. `sql/018_position_entry_profiles.sql`
+19. `sql/019_positions_current_comparison_fields.sql`
 
 Before using the optional seed file, replace any placeholder email with your own test or operator email in a local copy or directly in the SQL editor. Do not commit personal addresses.
 
@@ -318,6 +322,11 @@ Positions are a separate manual tracking surface from the watchlist.
 - Creating a position does not trigger provider validation, pipeline analysis, or automatic signal behavior.
 - The positions page can now show display-only current price, cost basis, current value, unrealized gain/loss, and unrealized return using the latest stored price.
 - Those display metrics remain blank when no latest price exists, when the latest price currency does not match the position currency, or when the position is already closed.
+- Positions can also store an optional entry thesis with summary, rationale, risks, catalysts, holding period, confidence, target price, and invalidation criteria.
+- A separate entry snapshot is captured from already-stored database state only. It can include the latest stored market price, signal, readiness, data-quality status, quality score, valuation range, and margin of safety that were available at capture time.
+- The positions page can compare that frozen entry snapshot against the latest stored current state for price, signal, readiness, data quality, quality score, valuation range, and margin of safety.
+- Entry snapshot fields are historical reference points. They do not recalculate automatically and do not change pipeline behavior, signals, readiness, valuation, or alerts.
+- The comparison is descriptive only. It does not create alerts, review prompts, or buy/sell/reduce recommendations in this phase.
 - No FX conversion, realized P&L, tax logic, or recommendation logic is added in this phase.
 - It is recordkeeping and decision support only, not automated investment advice.
 

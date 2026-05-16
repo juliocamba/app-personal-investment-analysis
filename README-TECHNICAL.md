@@ -33,6 +33,8 @@ At a high level:
 - Positions are separate from watchlist membership and all analytical output lanes.
 - In Phase 12B.1 they do not influence pipeline execution, readiness, valuation, signals, alerts, or data-quality diagnostics.
 - Phase 12B.2 adds a separate read-only `dashboard_positions_latest` view for display metrics. It uses the latest stored price only and does not influence any analytical lane or pipeline stage.
+- Phase 12C.1 adds `position_entry_profiles`, a separate entry-thesis and frozen entry-snapshot lane keyed one-to-one to `positions`.
+- Phase 12C.2 extends `dashboard_positions_latest` additively with current read-only signal, readiness, data-quality, quality-score, valuation-range, margin-of-safety, and uncertainty fields for entry-vs-current comparison.
 
 ### Provider ingestion
 
@@ -84,6 +86,7 @@ At a high level:
 - The frontend reads the latest analytical state primarily through `dashboard_watchlist_latest` and other authenticated surfaces.
 - Manual positions are written through the `positions` table directly under authenticated RLS.
 - The positions page now reads display metrics through `dashboard_positions_latest`, which joins `positions`, `companies`, and `latest_price_eod`.
+- Entry thesis and snapshot data are read from and written to `position_entry_profiles` under separate RLS and column-scoped grants.
 
 ## Pipeline stages in execution order
 
@@ -115,6 +118,7 @@ Dry-run mode validates configuration and prints the planned pipeline flow withou
 | `watchlist_companies` | Membership table linking companies into watchlists, including `active` state |
 | `watchlist_add_requests` | User-submitted requests to add new companies to a watchlist |
 | `positions` | Manual user-owned position records |
+| `position_entry_profiles` | One entry thesis + frozen snapshot profile per position |
 
 ### Ingestion and raw data tables
 
@@ -169,6 +173,8 @@ Apply migrations in this order:
 15. `sql/015_dashboard_data_quality_lane.sql`
 16. `sql/016_positions.sql`
 17. `sql/017_positions_display_metrics.sql`
+18. `sql/018_position_entry_profiles.sql`
+19. `sql/019_positions_current_comparison_fields.sql`
 
 Notes:
 
@@ -182,6 +188,8 @@ Notes:
 - `015_dashboard_data_quality_lane.sql` creates `latest_company_data_quality_snapshots` and recreates `dashboard_watchlist_latest` with appended data-quality fields for the expanded dashboard panel.
 - `016_positions.sql` adds the manual positions table with one active position per user/company, scoped RLS, and explicit grants.
 - `017_positions_display_metrics.sql` adds the read-only `dashboard_positions_latest` view with current price, cost basis, current value, and unrealized P&L metrics when an active position has a same-currency latest price.
+- `018_position_entry_profiles.sql` adds the `position_entry_profiles` table, a DB-side snapshot trigger, and column-scoped thesis editing grants for Phase 12C.1.
+- `019_positions_current_comparison_fields.sql` recreates `dashboard_positions_latest` additively with current signal, readiness, data-quality, quality-score, valuation-range, margin-of-safety, and uncertainty fields for display-only comparison.
 
 ## RLS and grants model
 
@@ -200,7 +208,7 @@ schema.  Without this migration the following symptoms appear:
 - Tables that have an RLS SELECT policy but no explicit `GRANT SELECT` silently
   return empty result sets or permission errors for authenticated users.
 
-Always apply all listed migrations in order (001–017) on a new or existing Supabase project.
+Always apply all listed migrations in order (001-019) on a new or existing Supabase project.
 
 ### Helper function execute hardening
 
@@ -232,6 +240,7 @@ roles.
 | **backend_only** | `pipeline_runs`, `pipeline_run_events`, `provider_requests`, `raw_provider_payloads`, `statements_raw` | none | SELECT/INSERT/UPDATE/DELETE | none |
 | **backend_rw_auth_r** | `companies`, `price_eod`, `fx_rates`, `filings_index`, `statements_norm`, `ratios_factors`, `qualitative_scores`, `valuation_runs`, `signal_runs`, `news_events`, `corporate_actions`, `company_analysis_readiness`, `company_data_quality_snapshots` | SELECT only | SELECT/INSERT/UPDATE/DELETE | none |
 | **auth_scoped_write** | `app_users`, `watchlists`, `positions`, `alert_rules`, `alert_history` | SELECT/INSERT/UPDATE/DELETE (own rows via RLS) | SELECT/INSERT/UPDATE/DELETE | none |
+| **auth_scoped_write** | `position_entry_profiles` | SELECT + column-scoped INSERT/UPDATE (own rows via RLS) | SELECT/INSERT/UPDATE/DELETE | none |
 | **auth_scoped_write** | `watchlist_companies` | SELECT + UPDATE (own rows via RLS) | SELECT/INSERT/UPDATE/DELETE | none |
 | **auth_scoped_write** | `watchlist_add_requests` | SELECT + column-scoped INSERT + UPDATE(status) | SELECT/INSERT/UPDATE/DELETE | none |
 | **views** | all `latest_*`, `dashboard_*`, `analysis_readiness_latest` | SELECT | SELECT | none |
@@ -331,6 +340,7 @@ Examples:
 - `watchlist_companies` is hardened so authenticated users do not get INSERT or DELETE privileges; only scoped UPDATE is allowed for their own watchlist memberships.
 - `watchlist_add_requests` is hardened so authenticated users can insert only `watchlist_id`, `requested_ticker`, and `requested_exchange`, and can update only `status` for cancellation.
 - `dashboard_positions_latest` is a read-only view. Authenticated users may read it, but position writes still go only to `positions` under RLS.
+- `position_entry_profiles` allows authenticated users to read their own rows and insert/update only manual thesis columns. Frozen snapshot columns are not exposed for authenticated writes.
 
 ## Positions display metrics
 
@@ -342,7 +352,8 @@ It exposes:
 
 - base position fields (`id`, `user_id`, `company_id`, `ticker`, `name`, `entry_date`, `quantity`, `average_entry_price`, `currency`, `fees`, `notes`, `status`, `closed_at`);
 - latest price fields (`price_date`, `current_price`, `price_currency`);
-- derived display fields (`cost_basis`, `current_value`, `unrealized_gain_loss`, `unrealized_return_pct`).
+- derived display fields (`cost_basis`, `current_value`, `unrealized_gain_loss`, `unrealized_return_pct`);
+- current comparison fields (`current_signal`, `current_readiness_status`, `current_data_quality_status`, `current_quality_score`, `current_valuation_low`, `current_valuation_mid`, `current_valuation_high`, `current_margin_of_safety`, `current_uncertainty_category`).
 
 Formulas:
 
@@ -364,6 +375,45 @@ This view is intentionally separate from:
 - `signal_runs.final_signal`;
 - `company_analysis_readiness.readiness_status`;
 - `company_data_quality_snapshots`.
+
+Current comparison sources:
+
+- `latest_signal_runs` for `current_signal`;
+- `analysis_readiness_latest` for `current_readiness_status`;
+- `latest_company_data_quality_snapshots` for `current_data_quality_status`;
+- `latest_qualitative_scores` for `current_quality_score`;
+- `latest_valuation_runs` for current valuation range, current margin of safety, and current uncertainty category.
+
+This comparison layer is display-only:
+
+- it uses already-persisted state only;
+- it performs no provider calls, no pipeline execution, and no analytical recalculation;
+- it does not create alerts, thesis-drift recommendations, or buy/sell/reduce guidance.
+
+## Position entry profiles
+
+Phase 12C.1 adds:
+
+- `position_entry_profiles`
+
+It stores:
+
+- manual thesis fields (`thesis_summary`, `why_bought`, `key_risks`, `target_price`, `target_price_currency`, `expected_holding_period`, `confidence_level`, `catalysts`, `invalidation_criteria`);
+- frozen entry snapshot fields (`entry_price`, `entry_price_date`, `entry_price_currency`, `entry_signal`, `entry_readiness_status`, `entry_data_quality_status`, `entry_quality_score`, `entry_current_price`, `entry_valuation_low`, `entry_valuation_mid`, `entry_valuation_high`, `entry_margin_of_safety`, `entry_uncertainty_category`, `entry_snapshot_details`);
+- standard timestamps and ownership keys.
+
+Snapshot behavior:
+
+- when a `positions` row is inserted, a linked `position_entry_profiles` row is created automatically;
+- the snapshot is filled from already-stored database state only;
+- no provider calls, no pipeline execution, and no analytical recalculation occur;
+- the current implementation reads snapshot inputs from `latest_price_eod`, `latest_signal_runs`, `latest_qualitative_scores`, `latest_valuation_runs`, `analysis_readiness_latest`, and `latest_company_data_quality_snapshots`.
+
+Editing rules:
+
+- ownership fields remain editable in `positions`;
+- thesis fields remain editable in `position_entry_profiles`;
+- frozen snapshot fields are immutable to authenticated users via column-scoped grants.
 
 ### Service-role backend access
 

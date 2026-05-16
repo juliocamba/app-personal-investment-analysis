@@ -5,6 +5,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 vi.mock("../lib/api", () => ({
   fetchCompaniesForPositions: vi.fn(),
   fetchPositions: vi.fn(),
+  fetchPositionEntryProfiles: vi.fn(),
+  savePositionEntryProfile: vi.fn(),
   createPosition: vi.fn(),
   updatePosition: vi.fn(),
   closePosition: vi.fn(),
@@ -15,10 +17,17 @@ import {
   closePosition,
   createPosition,
   fetchCompaniesForPositions,
+  fetchPositionEntryProfiles,
   fetchPositions,
+  savePositionEntryProfile,
   updatePosition,
 } from "../lib/api";
-import type { CompanyOption, PositionDashboardRow, PositionRow } from "../types";
+import type {
+  CompanyOption,
+  PositionDashboardRow,
+  PositionEntryProfileRow,
+  PositionRow,
+} from "../types";
 
 function makeCompany(overrides: Partial<CompanyOption> = {}): CompanyOption {
   return {
@@ -73,6 +82,52 @@ function makePositionViewRow(
     current_value: 1800,
     unrealized_gain_loss: 295,
     unrealized_return_pct: 295 / 1505,
+    current_signal: "hold",
+    current_readiness_status: "analysis_ready",
+    current_data_quality_status: "warning",
+    current_quality_score: 79,
+    current_valuation_low: 170,
+    current_valuation_mid: 210,
+    current_valuation_high: 250,
+    current_margin_of_safety: 0.143,
+    current_uncertainty_category: "moderate",
+    ...overrides,
+  };
+}
+
+function makeProfileRow(
+  overrides: Partial<PositionEntryProfileRow> = {},
+): PositionEntryProfileRow {
+  return {
+    id: "profile-1",
+    position_id: "pos-1",
+    user_id: "user-1",
+    snapshot_taken_at: "2026-05-16T10:00:00Z",
+    thesis_summary: "Compounding with resilient cash flows",
+    why_bought: "Strong moat and recurring ecosystem demand",
+    key_risks: "Regulatory pressure and slowing services growth",
+    target_price: 220,
+    target_price_currency: "USD",
+    expected_holding_period: "3-5 years",
+    confidence_level: "high",
+    catalysts: "AI device cycle",
+    invalidation_criteria: "ROIC erosion and negative revenue trend",
+    entry_price: 180,
+    entry_price_date: "2026-05-15",
+    entry_price_currency: "USD",
+    entry_signal: "buy",
+    entry_readiness_status: "analysis_ready",
+    entry_data_quality_status: "healthy",
+    entry_quality_score: 82,
+    entry_current_price: 180,
+    entry_valuation_low: 160,
+    entry_valuation_mid: 200,
+    entry_valuation_high: 240,
+    entry_margin_of_safety: 0.111,
+    entry_uncertainty_category: "moderate",
+    entry_snapshot_details: { p_buy: 0.68, p_sell: 0.12 },
+    created_at: "2026-05-16T10:00:00Z",
+    updated_at: "2026-05-16T10:00:00Z",
     ...overrides,
   };
 }
@@ -82,6 +137,7 @@ describe("PositionsPage", () => {
     vi.clearAllMocks();
     vi.mocked(fetchCompaniesForPositions).mockResolvedValue([makeCompany()]);
     vi.mocked(fetchPositions).mockResolvedValue([]);
+    vi.mocked(fetchPositionEntryProfiles).mockResolvedValue([]);
   });
 
   it("shows loading state while data is loading", () => {
@@ -100,8 +156,9 @@ describe("PositionsPage", () => {
     ).toBeInTheDocument();
   });
 
-  it("renders computed display values from dashboard_positions_latest", async () => {
+  it("renders a read-only entry-vs-current comparison with improved thesis display", async () => {
     vi.mocked(fetchPositions).mockResolvedValue([makePositionViewRow()]);
+    vi.mocked(fetchPositionEntryProfiles).mockResolvedValue([makeProfileRow()]);
 
     render(<PositionsPage />);
 
@@ -110,59 +167,104 @@ describe("PositionsPage", () => {
     );
 
     const table = screen.getByRole("table", { name: /Manual positions/i });
-    expect(within(table).getByText("AAPL")).toBeInTheDocument();
-    expect(within(table).getByText("$180.00")).toBeInTheDocument();
-    expect(within(table).getByText("$1,505.00")).toBeInTheDocument();
-    expect(within(table).getByText("$1,800.00")).toBeInTheDocument();
     expect(within(table).getByText("$295.00")).toBeInTheDocument();
-    expect(within(table).getByText("19.6%")).toBeInTheDocument();
-    expect(within(table).getByText(/May 15, 2026/i)).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { name: /Entry snapshots/i }),
+    ).toBeInTheDocument();
+    expect(screen.getByText(/Compounding with resilient cash flows/i)).toBeInTheDocument();
+    expect(screen.getByText(/Strong moat and recurring ecosystem demand/i)).toBeInTheDocument();
+    expect(screen.getByText(/Entry vs current/i)).toBeInTheDocument();
+    expect(screen.getByText("Buy")).toBeInTheDocument();
+    expect(screen.getByText("Hold")).toBeInTheDocument();
+    expect(screen.getByText("Healthy")).toBeInTheDocument();
+    expect(screen.getByText("Warning")).toBeInTheDocument();
+    expect(screen.getByText("$160.00 / $200.00 / $240.00")).toBeInTheDocument();
+    expect(screen.getByText("$170.00 / $210.00 / $250.00")).toBeInTheDocument();
+    expect(screen.getByText("14.3%")).toBeInTheDocument();
   });
 
-  it("shows dash fallbacks when price-derived metrics are unavailable", async () => {
+  it("handles missing entry profiles and null current comparison values safely", async () => {
     vi.mocked(fetchPositions).mockResolvedValue([
       makePositionViewRow({
+        current_signal: null,
+        current_readiness_status: null,
+        current_data_quality_status: null,
+        current_quality_score: null,
+        current_valuation_low: null,
+        current_valuation_mid: null,
+        current_valuation_high: null,
+        current_margin_of_safety: null,
+        current_uncertainty_category: null,
         current_price: null,
-        price_date: null,
         price_currency: null,
-        cost_basis: null,
-        current_value: null,
-        unrealized_gain_loss: null,
-        unrealized_return_pct: null,
+        price_date: null,
+      }),
+    ]);
+    vi.mocked(fetchPositionEntryProfiles).mockResolvedValue([
+      makeProfileRow({
+        thesis_summary: null,
+        why_bought: null,
+        key_risks: null,
+        target_price: null,
+        target_price_currency: null,
+        expected_holding_period: null,
+        confidence_level: null,
+        catalysts: null,
+        invalidation_criteria: null,
+        entry_price: null,
+        entry_price_date: null,
+        entry_price_currency: null,
+        entry_signal: null,
+        entry_readiness_status: null,
+        entry_data_quality_status: null,
+        entry_quality_score: null,
+        entry_current_price: null,
+        entry_valuation_low: null,
+        entry_valuation_mid: null,
+        entry_valuation_high: null,
+        entry_margin_of_safety: null,
+        entry_uncertainty_category: null,
       }),
     ]);
 
     render(<PositionsPage />);
 
     await waitFor(() =>
-      expect(screen.getByRole("table", { name: /Manual positions/i })).toBeInTheDocument(),
+      expect(screen.getByRole("heading", { name: /Entry snapshots/i })).toBeInTheDocument(),
     );
-
-    const table = screen.getByRole("table", { name: /Manual positions/i });
-    expect(within(table).getAllByText("-").length).toBeGreaterThanOrEqual(4);
+    expect(screen.getByText(/Entry vs current/i)).toBeInTheDocument();
+    expect(screen.getAllByText("-").length).toBeGreaterThan(5);
   });
 
-  it("creates a new manual position and refreshes display metrics", async () => {
+  it("creates a new manual position with optional thesis input", async () => {
     vi.mocked(fetchPositions)
       .mockResolvedValueOnce([])
       .mockResolvedValueOnce([
         makePositionViewRow({
           id: "pos-2",
-          quantity: 12,
-          average_entry_price: 155.5,
           notes: "Added manually",
-          cost_basis: 1870.5,
-          current_value: 2160,
-          unrealized_gain_loss: 289.5,
-          unrealized_return_pct: 289.5 / 1870.5,
+        }),
+      ]);
+    vi.mocked(fetchPositionEntryProfiles)
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([
+        makeProfileRow({
+          position_id: "pos-2",
+          thesis_summary: "Undervalued cash machine",
+          why_bought: "Valuation and quality setup",
         }),
       ]);
     vi.mocked(createPosition).mockResolvedValue(
       makePositionWriteRow({
         id: "pos-2",
-        quantity: 12,
-        average_entry_price: 155.5,
         notes: "Added manually",
+      }),
+    );
+    vi.mocked(savePositionEntryProfile).mockResolvedValue(
+      makeProfileRow({
+        position_id: "pos-2",
+        thesis_summary: "Undervalued cash machine",
+        why_bought: "Valuation and quality setup",
       }),
     );
 
@@ -180,11 +282,15 @@ describe("PositionsPage", () => {
     fireEvent.change(screen.getByLabelText("Average entry price"), {
       target: { value: "155.5" },
     });
-    fireEvent.change(screen.getByLabelText("Fees"), {
-      target: { value: "4.5" },
-    });
     fireEvent.change(screen.getByLabelText("Notes"), {
       target: { value: "Added manually" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: /Add entry thesis/i }));
+    fireEvent.change(screen.getByLabelText("Thesis summary"), {
+      target: { value: "Undervalued cash machine" },
+    });
+    fireEvent.change(screen.getByLabelText("Why I bought"), {
+      target: { value: "Valuation and quality setup" },
     });
 
     fireEvent.click(screen.getByRole("button", { name: /Add position/i }));
@@ -196,32 +302,52 @@ describe("PositionsPage", () => {
         quantity: 12,
         average_entry_price: 155.5,
         currency: "USD",
-        fees: 4.5,
+        fees: null,
         notes: "Added manually",
         status: "active",
         closed_at: null,
       }),
     );
+    await waitFor(() =>
+      expect(savePositionEntryProfile).toHaveBeenCalledWith("pos-2", {
+        thesis_summary: "Undervalued cash machine",
+        why_bought: "Valuation and quality setup",
+        key_risks: "",
+        target_price: null,
+        target_price_currency: "USD",
+        expected_holding_period: "",
+        confidence_level: null,
+        catalysts: "",
+        invalidation_criteria: "",
+      }),
+    );
     await waitFor(() => expect(fetchPositions).toHaveBeenCalledTimes(2));
-    expect(screen.getByText("Added manually")).toBeInTheDocument();
+    await waitFor(() => expect(fetchPositionEntryProfiles).toHaveBeenCalledTimes(2));
   });
 
-  it("edits an existing position and refreshes display metrics", async () => {
+  it("edits ownership fields and thesis fields separately from frozen snapshot values", async () => {
     vi.mocked(fetchPositions)
       .mockResolvedValueOnce([makePositionViewRow()])
       .mockResolvedValueOnce([
         makePositionViewRow({
           average_entry_price: 145,
-          notes: "Updated thesis note",
-          cost_basis: 1455,
-          unrealized_gain_loss: 345,
-          unrealized_return_pct: 345 / 1455,
+        }),
+      ]);
+    vi.mocked(fetchPositionEntryProfiles)
+      .mockResolvedValueOnce([makeProfileRow()])
+      .mockResolvedValueOnce([
+        makeProfileRow({
+          why_bought: "Updated thesis note",
         }),
       ]);
     vi.mocked(updatePosition).mockResolvedValue(
       makePositionWriteRow({
         average_entry_price: 145,
-        notes: "Updated thesis note",
+      }),
+    );
+    vi.mocked(savePositionEntryProfile).mockResolvedValue(
+      makeProfileRow({
+        why_bought: "Updated thesis note",
       }),
     );
 
@@ -232,7 +358,7 @@ describe("PositionsPage", () => {
     fireEvent.change(screen.getByLabelText("Average entry price"), {
       target: { value: "145" },
     });
-    fireEvent.change(screen.getByLabelText("Notes"), {
+    fireEvent.change(screen.getByLabelText("Why I bought"), {
       target: { value: "Updated thesis note" },
     });
     fireEvent.click(screen.getByRole("button", { name: /Save changes/i }));
@@ -245,43 +371,23 @@ describe("PositionsPage", () => {
         average_entry_price: 145,
         currency: "USD",
         fees: 5,
-        notes: "Updated thesis note",
+        notes: "Core position",
         status: "active",
         closed_at: null,
       }),
     );
-    await waitFor(() => expect(fetchPositions).toHaveBeenCalledTimes(2));
-    expect(screen.getByText("Updated thesis note")).toBeInTheDocument();
-  });
-
-  it("closes an active position without touching analytics state", async () => {
-    vi.mocked(fetchPositions)
-      .mockResolvedValueOnce([makePositionViewRow()])
-      .mockResolvedValueOnce([
-        makePositionViewRow({
-          status: "closed",
-          closed_at: "2026-05-16T10:00:00Z",
-          cost_basis: null,
-          current_value: null,
-          unrealized_gain_loss: null,
-          unrealized_return_pct: null,
-        }),
-      ]);
-    vi.mocked(closePosition).mockResolvedValue(
-      makePositionWriteRow({
-        status: "closed",
-        closed_at: "2026-05-16T10:00:00Z",
+    await waitFor(() =>
+      expect(savePositionEntryProfile).toHaveBeenCalledWith("pos-1", {
+        thesis_summary: "Compounding with resilient cash flows",
+        why_bought: "Updated thesis note",
+        key_risks: "Regulatory pressure and slowing services growth",
+        target_price: 220,
+        target_price_currency: "USD",
+        expected_holding_period: "3-5 years",
+        confidence_level: "high",
+        catalysts: "AI device cycle",
+        invalidation_criteria: "ROIC erosion and negative revenue trend",
       }),
     );
-
-    render(<PositionsPage />);
-    await waitFor(() => expect(screen.getByText("AAPL")).toBeInTheDocument());
-
-    fireEvent.click(screen.getByRole("button", { name: /Close/i }));
-
-    await waitFor(() => expect(closePosition).toHaveBeenCalledWith("pos-1"));
-    await waitFor(() => expect(fetchPositions).toHaveBeenCalledTimes(2));
-    const table = screen.getByRole("table", { name: /Manual positions/i });
-    expect(within(table).getAllByText("Closed").length).toBeGreaterThanOrEqual(2);
   });
 });

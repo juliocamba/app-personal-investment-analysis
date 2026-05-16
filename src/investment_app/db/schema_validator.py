@@ -20,6 +20,7 @@ REQUIRED_TABLES: tuple[str, ...] = (
     "valuation_runs",
     "signal_runs",
     "positions",
+    "position_entry_profiles",
     "alert_rules",
     "alert_history",
     "pipeline_runs",

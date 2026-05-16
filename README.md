@@ -288,6 +288,8 @@ Apply the SQL files in order in the Supabase SQL editor:
 19. `sql/019_positions_current_comparison_fields.sql`
 20. `sql/020_position_review_alerts.sql`
 21. `sql/021_position_review_alert_lifecycle_controls.sql`
+22. `sql/022_portfolio_dashboard_views.sql`
+23. `sql/023_portfolio_dashboard_fx_normalized_views.sql`
 
 Before using the optional seed file, replace any placeholder email with your own test or operator email in a local copy or directly in the SQL editor. Do not commit personal addresses.
 
@@ -333,6 +335,11 @@ Positions are a separate manual tracking surface from the watchlist.
 - Those review alerts are reassessment prompts only. They do not close positions automatically and do not recommend selling automatically.
 - Users can now manage those review alerts with simple lifecycle controls on the positions page: dismiss, snooze 7 days, snooze 30 days, or snooze 90 days.
 - Snoozing or dismissing an alert does not change position ownership, signals, readiness, valuation outputs, data-quality diagnostics, or pipeline behavior.
+- The portfolio page now provides a display-only aggregate view over persisted positions, review alerts, and current stored analytics.
+- Portfolio totals exclude positions with missing current prices or currency mismatches. No FX conversion or silent estimation is applied in this phase.
+- An optional `FX-normalized estimate (EUR)` section can show EUR totals using stored ECB daily FX rates matched by exact price date only.
+- FX-normalized rows without exact-date stored FX coverage are excluded from the EUR estimate rather than silently converted.
+- The portfolio dashboard does not provide portfolio recommendations, rebalancing suggestions, tax logic, or automated advice.
 - No FX conversion, realized P&L, tax logic, or recommendation logic is added in this phase.
 - It is recordkeeping and decision support only, not automated investment advice.
 

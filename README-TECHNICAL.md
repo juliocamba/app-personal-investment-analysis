@@ -37,6 +37,8 @@ At a high level:
 - Phase 12C.2 extends `dashboard_positions_latest` additively with current read-only signal, readiness, data-quality, quality-score, valuation-range, margin-of-safety, and uncertainty fields for entry-vs-current comparison.
 - Phase 12D.1 adds a separate persisted `position_review_alerts` lane plus a final read-only pipeline evaluation step for low-noise review prompts on open positions.
 - Phase 12D.2 adds authenticated lifecycle controls for `position_review_alerts`, allowing dismiss and preset snooze actions without changing alert trigger logic.
+- Phase 12E.1 adds read-only `dashboard_portfolio_positions` and `dashboard_portfolio_summary` views for a conservative portfolio overview from already persisted state only.
+- Phase 12E.2 adds separate read-only `dashboard_portfolio_positions_fx_eur` and `dashboard_portfolio_summary_fx_eur` views for optional EUR-normalized portfolio estimates using stored ECB rates only.
 
 ### Provider ingestion
 
@@ -90,6 +92,8 @@ At a high level:
 - The positions page now reads display metrics through `dashboard_positions_latest`, which joins `positions`, `companies`, and `latest_price_eod`.
 - Entry thesis and snapshot data are read from and written to `position_entry_profiles` under separate RLS and column-scoped grants.
 - Position review alerts are persisted separately in `position_review_alerts` and rendered on the positions page with lifecycle controls for dismiss and preset snooze actions.
+- The portfolio page reads from `dashboard_portfolio_positions` and `dashboard_portfolio_summary`, both of which exclude missing-price and currency-mismatch rows from value-based totals.
+- An optional EUR estimate mode reads from `dashboard_portfolio_positions_fx_eur` and `dashboard_portfolio_summary_fx_eur`, which use exact-date stored ECB rates only and exclude rows without FX coverage.
 
 ## Pipeline stages in execution order
 
@@ -180,6 +184,8 @@ Apply migrations in this order:
 19. `sql/019_positions_current_comparison_fields.sql`
 20. `sql/020_position_review_alerts.sql`
 21. `sql/021_position_review_alert_lifecycle_controls.sql`
+22. `sql/022_portfolio_dashboard_views.sql`
+23. `sql/023_portfolio_dashboard_fx_normalized_views.sql`
 
 Notes:
 
@@ -197,6 +203,8 @@ Notes:
 - `019_positions_current_comparison_fields.sql` recreates `dashboard_positions_latest` additively with current signal, readiness, data-quality, quality-score, valuation-range, margin-of-safety, and uncertainty fields for display-only comparison.
 - `020_position_review_alerts.sql` adds the persisted `position_review_alerts` table for deduped open-position review prompts based on already-stored state only.
 - `021_position_review_alert_lifecycle_controls.sql` adds authenticated column-scoped lifecycle updates on `position_review_alerts` for dismiss and preset snooze actions only.
+- `022_portfolio_dashboard_views.sql` adds `dashboard_portfolio_positions` and `dashboard_portfolio_summary` for display-only portfolio totals, coverage flags, and exposure breakdowns without FX normalization.
+- `023_portfolio_dashboard_fx_normalized_views.sql` adds `dashboard_portfolio_positions_fx_eur` and `dashboard_portfolio_summary_fx_eur` for optional EUR-normalized estimates using exact-date stored ECB FX only.
 
 ## RLS and grants model
 
@@ -215,7 +223,7 @@ schema.  Without this migration the following symptoms appear:
 - Tables that have an RLS SELECT policy but no explicit `GRANT SELECT` silently
   return empty result sets or permission errors for authenticated users.
 
-Always apply all listed migrations in order (001-021) on a new or existing Supabase project.
+Always apply all listed migrations in order (001-023) on a new or existing Supabase project.
 
 ### Helper function execute hardening
 
@@ -350,6 +358,8 @@ Examples:
 - `dashboard_positions_latest` is a read-only view. Authenticated users may read it, but position writes still go only to `positions` under RLS.
 - `position_entry_profiles` allows authenticated users to read their own rows and insert/update only manual thesis columns. Frozen snapshot columns are not exposed for authenticated writes.
 - `position_review_alerts` allows authenticated users to read only their own persisted review prompts and to update only lifecycle columns for dismiss and preset snooze actions. Trigger generation, resolution, and reopening remain system-driven.
+- `dashboard_portfolio_positions` and `dashboard_portfolio_summary` are read-only portfolio views. They do not write back to any ownership or analytical lane and do not perform FX normalization.
+- `dashboard_portfolio_positions_fx_eur` and `dashboard_portfolio_summary_fx_eur` are separate optional estimate views. They use stored `fx_rates` only, require exact `price_date` matches, and never silently normalize rows lacking FX coverage.
 
 ## Positions display metrics
 

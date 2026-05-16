@@ -40,7 +40,7 @@ function dataQualityLabel(status: string | null): string {
     case null:
       return "No diagnostics";
     default:
-      return status.replaceAll("_", " ");
+      return status.replace(/_/g, " ");
   }
 }
 
@@ -63,7 +63,7 @@ function dataQualityBadgeClass(status: string | null): string {
 }
 
 function formatDataQualityCode(code: string): string {
-  return code.replaceAll("_", " ");
+  return code.replace(/_/g, " ");
 }
 
 function formatSubStatus(status: string | null): string {

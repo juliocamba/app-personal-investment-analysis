@@ -4,8 +4,10 @@ import {
   createPosition,
   fetchCompaniesForPositions,
   fetchPositionEntryProfiles,
+  fetchPositionReviewAlerts,
   fetchPositions,
   savePositionEntryProfile,
+  updatePositionReviewAlertLifecycle,
   updatePosition,
 } from "../lib/api";
 import { formatDate, formatPct, formatPrice, formatNum } from "../lib/formatters";
@@ -15,6 +17,7 @@ import type {
   PositionEntryProfileInput,
   PositionEntryProfileRow,
   PositionInput,
+  PositionReviewAlertRow,
 } from "../types";
 
 interface PositionFormState {
@@ -156,25 +159,29 @@ function hasAnyThesisInput(payload: PositionEntryProfileInput): boolean {
 export function PositionsPage() {
   const [positions, setPositions] = useState<PositionDashboardRow[]>([]);
   const [profiles, setProfiles] = useState<PositionEntryProfileRow[]>([]);
+  const [reviewAlerts, setReviewAlerts] = useState<PositionReviewAlertRow[]>([]);
   const [companies, setCompanies] = useState<CompanyOption[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [closingId, setClosingId] = useState<string | null>(null);
+  const [alertActionId, setAlertActionId] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [showThesisFields, setShowThesisFields] = useState(false);
   const [form, setForm] = useState<PositionFormState>(EMPTY_FORM);
 
   async function loadPageState(): Promise<void> {
-    const [positionRows, companyRows, profileRows] = await Promise.all([
+    const [positionRows, companyRows, profileRows, reviewAlertRows] = await Promise.all([
       fetchPositions(),
       fetchCompaniesForPositions(),
       fetchPositionEntryProfiles(),
+      fetchPositionReviewAlerts(),
     ]);
     setPositions(positionRows);
     setCompanies(companyRows);
     setProfiles(profileRows);
+    setReviewAlerts(reviewAlertRows);
     if (companyRows.length > 0) {
       setForm((prev) => ({
         ...prev,
@@ -186,12 +193,14 @@ export function PositionsPage() {
   }
 
   async function refreshPositionData(): Promise<void> {
-    const [positionRows, profileRows] = await Promise.all([
+    const [positionRows, profileRows, reviewAlertRows] = await Promise.all([
       fetchPositions(),
       fetchPositionEntryProfiles(),
+      fetchPositionReviewAlerts(),
     ]);
     setPositions(positionRows);
     setProfiles(profileRows);
+    setReviewAlerts(reviewAlertRows);
   }
 
   useEffect(() => {
@@ -214,6 +223,16 @@ export function PositionsPage() {
     () => new Map(profiles.map((profile) => [profile.position_id, profile])),
     [profiles],
   );
+
+  const reviewAlertsByPosition = useMemo(() => {
+    const grouped = new Map<string, PositionReviewAlertRow[]>();
+    for (const alert of reviewAlerts) {
+      const alertsForPosition = grouped.get(alert.position_id) ?? [];
+      alertsForPosition.push(alert);
+      grouped.set(alert.position_id, alertsForPosition);
+    }
+    return grouped;
+  }, [reviewAlerts]);
 
   function resetForm(nextCompanies = companies): void {
     setEditingId(null);
@@ -316,6 +335,39 @@ export function PositionsPage() {
       setSaveError(err instanceof Error ? err.message : String(err));
     } finally {
       setClosingId(null);
+    }
+  }
+
+  async function handleDismissAlert(alertId: string): Promise<void> {
+    setAlertActionId(alertId);
+    setSaveError(null);
+    try {
+      await updatePositionReviewAlertLifecycle(alertId, {
+        status: "dismissed",
+        dismissed_reason: "dismissed_in_ui",
+      });
+      await refreshPositionData();
+    } catch (err: unknown) {
+      setSaveError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setAlertActionId(null);
+    }
+  }
+
+  async function handleSnoozeAlert(alertId: string, days: number): Promise<void> {
+    setAlertActionId(alertId);
+    setSaveError(null);
+    try {
+      const snoozedUntil = new Date(Date.now() + days * 24 * 60 * 60 * 1000).toISOString();
+      await updatePositionReviewAlertLifecycle(alertId, {
+        status: "snoozed",
+        snoozed_until: snoozedUntil,
+      });
+      await refreshPositionData();
+    } catch (err: unknown) {
+      setSaveError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setAlertActionId(null);
     }
   }
 
@@ -856,6 +908,76 @@ export function PositionsPage() {
 
                         <div className="positions-snapshot-card__divider" />
 
+                        <section className="positions-snapshot-card__section" aria-label="Position review alerts">
+                          <h4 className="positions-snapshot-card__section-title">Review alerts</h4>
+                          {(reviewAlertsByPosition.get(position.id) ?? []).length === 0 ? (
+                            <p className="page-state__hint">No active review alerts.</p>
+                          ) : (
+                            <div className="positions-review-alerts">
+                              {(reviewAlertsByPosition.get(position.id) ?? []).map((alert) => (
+                                <article key={alert.id} className="positions-review-alert">
+                                  <div className="positions-review-alert__header">
+                                    <h5 className="positions-review-alert__title">{alert.title}</h5>
+                                    <div className="positions-review-alert__badges">
+                                      <span className={`badge badge--${alert.severity}`}>
+                                        {formatStatusText(alert.severity)}
+                                      </span>
+                                      <span className="badge badge--muted">
+                                        {formatStatusText(alert.status)}
+                                      </span>
+                                    </div>
+                                  </div>
+                                  <p className="positions-review-alert__message">{alert.message}</p>
+                                  <p className="positions-review-alert__meta">
+                                    Triggered: {formatDate(alert.triggered_at)}
+                                  </p>
+                                  {alert.status === "snoozed" && (
+                                    <p className="positions-review-alert__meta">
+                                      Snoozed until: {formatDate(alert.snoozed_until)}
+                                    </p>
+                                  )}
+                                  <div className="positions-review-alert__actions">
+                                    <button
+                                      type="button"
+                                      className="positions-btn positions-btn--ghost"
+                                      onClick={() => handleDismissAlert(alert.id)}
+                                      disabled={alertActionId === alert.id}
+                                    >
+                                      {alertActionId === alert.id ? "Saving..." : "Dismiss"}
+                                    </button>
+                                    <button
+                                      type="button"
+                                      className="positions-btn positions-btn--ghost"
+                                      onClick={() => handleSnoozeAlert(alert.id, 7)}
+                                      disabled={alertActionId === alert.id}
+                                    >
+                                      Snooze 7d
+                                    </button>
+                                    <button
+                                      type="button"
+                                      className="positions-btn positions-btn--ghost"
+                                      onClick={() => handleSnoozeAlert(alert.id, 30)}
+                                      disabled={alertActionId === alert.id}
+                                    >
+                                      Snooze 30d
+                                    </button>
+                                    <button
+                                      type="button"
+                                      className="positions-btn positions-btn--ghost"
+                                      onClick={() => handleSnoozeAlert(alert.id, 90)}
+                                      disabled={alertActionId === alert.id}
+                                    >
+                                      Snooze 90d
+                                    </button>
+                                  </div>
+                                </article>
+                              ))}
+                            </div>
+                          )}
+                        </section>
+
+                        <div className="positions-snapshot-card__divider" />
+
                         <section className="positions-snapshot-card__section" aria-label="Frozen entry snapshot details">
                           <h4 className="positions-snapshot-card__section-title">Frozen entry snapshot</h4>
                           <div className="detail-grid">
@@ -890,9 +1012,9 @@ export function PositionsPage() {
       )}
 
       <p className="page__footer-note">
-        Positions are manual recordkeeping only in Phase 12C. Entry snapshots are
-        stored reference points and do not modify watchlist analytics, readiness,
-        valuation, or signal output.
+        Positions and review alerts are decision-support only in Phase 12D.
+        Entry snapshots remain stored reference points, and review prompts do not
+        recommend buying, selling, or closing a position automatically.
       </p>
     </div>
   );

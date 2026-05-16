@@ -35,6 +35,8 @@ At a high level:
 - Phase 12B.2 adds a separate read-only `dashboard_positions_latest` view for display metrics. It uses the latest stored price only and does not influence any analytical lane or pipeline stage.
 - Phase 12C.1 adds `position_entry_profiles`, a separate entry-thesis and frozen entry-snapshot lane keyed one-to-one to `positions`.
 - Phase 12C.2 extends `dashboard_positions_latest` additively with current read-only signal, readiness, data-quality, quality-score, valuation-range, margin-of-safety, and uncertainty fields for entry-vs-current comparison.
+- Phase 12D.1 adds a separate persisted `position_review_alerts` lane plus a final read-only pipeline evaluation step for low-noise review prompts on open positions.
+- Phase 12D.2 adds authenticated lifecycle controls for `position_review_alerts`, allowing dismiss and preset snooze actions without changing alert trigger logic.
 
 ### Provider ingestion
 
@@ -87,6 +89,7 @@ At a high level:
 - Manual positions are written through the `positions` table directly under authenticated RLS.
 - The positions page now reads display metrics through `dashboard_positions_latest`, which joins `positions`, `companies`, and `latest_price_eod`.
 - Entry thesis and snapshot data are read from and written to `position_entry_profiles` under separate RLS and column-scoped grants.
+- Position review alerts are persisted separately in `position_review_alerts` and rendered on the positions page with lifecycle controls for dismiss and preset snooze actions.
 
 ## Pipeline stages in execution order
 
@@ -175,6 +178,8 @@ Apply migrations in this order:
 17. `sql/017_positions_display_metrics.sql`
 18. `sql/018_position_entry_profiles.sql`
 19. `sql/019_positions_current_comparison_fields.sql`
+20. `sql/020_position_review_alerts.sql`
+21. `sql/021_position_review_alert_lifecycle_controls.sql`
 
 Notes:
 
@@ -190,6 +195,8 @@ Notes:
 - `017_positions_display_metrics.sql` adds the read-only `dashboard_positions_latest` view with current price, cost basis, current value, and unrealized P&L metrics when an active position has a same-currency latest price.
 - `018_position_entry_profiles.sql` adds the `position_entry_profiles` table, a DB-side snapshot trigger, and column-scoped thesis editing grants for Phase 12C.1.
 - `019_positions_current_comparison_fields.sql` recreates `dashboard_positions_latest` additively with current signal, readiness, data-quality, quality-score, valuation-range, margin-of-safety, and uncertainty fields for display-only comparison.
+- `020_position_review_alerts.sql` adds the persisted `position_review_alerts` table for deduped open-position review prompts based on already-stored state only.
+- `021_position_review_alert_lifecycle_controls.sql` adds authenticated column-scoped lifecycle updates on `position_review_alerts` for dismiss and preset snooze actions only.
 
 ## RLS and grants model
 
@@ -208,7 +215,7 @@ schema.  Without this migration the following symptoms appear:
 - Tables that have an RLS SELECT policy but no explicit `GRANT SELECT` silently
   return empty result sets or permission errors for authenticated users.
 
-Always apply all listed migrations in order (001-019) on a new or existing Supabase project.
+Always apply all listed migrations in order (001-021) on a new or existing Supabase project.
 
 ### Helper function execute hardening
 
@@ -241,6 +248,7 @@ roles.
 | **backend_rw_auth_r** | `companies`, `price_eod`, `fx_rates`, `filings_index`, `statements_norm`, `ratios_factors`, `qualitative_scores`, `valuation_runs`, `signal_runs`, `news_events`, `corporate_actions`, `company_analysis_readiness`, `company_data_quality_snapshots` | SELECT only | SELECT/INSERT/UPDATE/DELETE | none |
 | **auth_scoped_write** | `app_users`, `watchlists`, `positions`, `alert_rules`, `alert_history` | SELECT/INSERT/UPDATE/DELETE (own rows via RLS) | SELECT/INSERT/UPDATE/DELETE | none |
 | **auth_scoped_write** | `position_entry_profiles` | SELECT + column-scoped INSERT/UPDATE (own rows via RLS) | SELECT/INSERT/UPDATE/DELETE | none |
+| **auth_scoped_write** | `position_review_alerts` | SELECT + column-scoped UPDATE for lifecycle fields only (own rows via RLS) | SELECT/INSERT/UPDATE/DELETE | none |
 | **auth_scoped_write** | `watchlist_companies` | SELECT + UPDATE (own rows via RLS) | SELECT/INSERT/UPDATE/DELETE | none |
 | **auth_scoped_write** | `watchlist_add_requests` | SELECT + column-scoped INSERT + UPDATE(status) | SELECT/INSERT/UPDATE/DELETE | none |
 | **views** | all `latest_*`, `dashboard_*`, `analysis_readiness_latest` | SELECT | SELECT | none |
@@ -341,6 +349,7 @@ Examples:
 - `watchlist_add_requests` is hardened so authenticated users can insert only `watchlist_id`, `requested_ticker`, and `requested_exchange`, and can update only `status` for cancellation.
 - `dashboard_positions_latest` is a read-only view. Authenticated users may read it, but position writes still go only to `positions` under RLS.
 - `position_entry_profiles` allows authenticated users to read their own rows and insert/update only manual thesis columns. Frozen snapshot columns are not exposed for authenticated writes.
+- `position_review_alerts` allows authenticated users to read only their own persisted review prompts and to update only lifecycle columns for dismiss and preset snooze actions. Trigger generation, resolution, and reopening remain system-driven.
 
 ## Positions display metrics
 

@@ -6,7 +6,9 @@ vi.mock("../lib/api", () => ({
   fetchCompaniesForPositions: vi.fn(),
   fetchPositions: vi.fn(),
   fetchPositionEntryProfiles: vi.fn(),
+  fetchPositionReviewAlerts: vi.fn(),
   savePositionEntryProfile: vi.fn(),
+  updatePositionReviewAlertLifecycle: vi.fn(),
   createPosition: vi.fn(),
   updatePosition: vi.fn(),
   closePosition: vi.fn(),
@@ -18,8 +20,10 @@ import {
   createPosition,
   fetchCompaniesForPositions,
   fetchPositionEntryProfiles,
+  fetchPositionReviewAlerts,
   fetchPositions,
   savePositionEntryProfile,
+  updatePositionReviewAlertLifecycle,
   updatePosition,
 } from "../lib/api";
 import type {
@@ -27,6 +31,7 @@ import type {
   PositionDashboardRow,
   PositionEntryProfileRow,
   PositionRow,
+  PositionReviewAlertRow,
 } from "../types";
 
 function makeCompany(overrides: Partial<CompanyOption> = {}): CompanyOption {
@@ -132,12 +137,41 @@ function makeProfileRow(
   };
 }
 
+function makeReviewAlertRow(
+  overrides: Partial<PositionReviewAlertRow> = {},
+): PositionReviewAlertRow {
+  return {
+    id: "alert-1",
+    position_id: "pos-1",
+    user_id: "user-1",
+    company_id: "company-1",
+    alert_type: "target_price_reached",
+    severity: "warning",
+    status: "open",
+    title: "AAPL target price reached",
+    message: "The latest stored price has reached or exceeded the manual target price.",
+    details: {},
+    dedupe_key: "pos-1:target_price_reached:220.0000:USD",
+    triggered_at: "2026-05-16T10:00:00Z",
+    first_seen_at: "2026-05-16T10:00:00Z",
+    last_seen_at: "2026-05-16T10:00:00Z",
+    resolved_at: null,
+    dismissed_at: null,
+    dismissed_reason: null,
+    snoozed_until: null,
+    created_at: "2026-05-16T10:00:00Z",
+    updated_at: "2026-05-16T10:00:00Z",
+    ...overrides,
+  };
+}
+
 describe("PositionsPage", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(fetchCompaniesForPositions).mockResolvedValue([makeCompany()]);
     vi.mocked(fetchPositions).mockResolvedValue([]);
     vi.mocked(fetchPositionEntryProfiles).mockResolvedValue([]);
+    vi.mocked(fetchPositionReviewAlerts).mockResolvedValue([]);
   });
 
   it("shows loading state while data is loading", () => {
@@ -159,6 +193,7 @@ describe("PositionsPage", () => {
   it("renders a read-only entry-vs-current comparison with improved thesis display", async () => {
     vi.mocked(fetchPositions).mockResolvedValue([makePositionViewRow()]);
     vi.mocked(fetchPositionEntryProfiles).mockResolvedValue([makeProfileRow()]);
+    vi.mocked(fetchPositionReviewAlerts).mockResolvedValue([makeReviewAlertRow()]);
 
     render(<PositionsPage />);
 
@@ -177,10 +212,18 @@ describe("PositionsPage", () => {
     expect(screen.getByText("Buy")).toBeInTheDocument();
     expect(screen.getByText("Hold")).toBeInTheDocument();
     expect(screen.getByText("Healthy")).toBeInTheDocument();
-    expect(screen.getByText("Warning")).toBeInTheDocument();
+    expect(screen.getAllByText("Warning").length).toBeGreaterThanOrEqual(2);
     expect(screen.getByText("$160.00 / $200.00 / $240.00")).toBeInTheDocument();
     expect(screen.getByText("$170.00 / $210.00 / $250.00")).toBeInTheDocument();
     expect(screen.getByText("14.3%")).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { name: /Review alerts/i }),
+    ).toBeInTheDocument();
+    expect(screen.getByText(/AAPL target price reached/i)).toBeInTheDocument();
+    expect(screen.getByText(/Triggered:/i)).toBeInTheDocument();
+    expect(screen.getByText("Open")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Dismiss/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Snooze 30d/i })).toBeInTheDocument();
   });
 
   it("handles missing entry profiles and null current comparison values safely", async () => {
@@ -234,6 +277,7 @@ describe("PositionsPage", () => {
     );
     expect(screen.getByText(/Entry vs current/i)).toBeInTheDocument();
     expect(screen.getAllByText("-").length).toBeGreaterThan(5);
+    expect(screen.getByText(/No active review alerts\./i)).toBeInTheDocument();
   });
 
   it("creates a new manual position with optional thesis input", async () => {
@@ -389,5 +433,80 @@ describe("PositionsPage", () => {
         invalidation_criteria: "ROIC erosion and negative revenue trend",
       }),
     );
+  });
+
+  it("dismisses an open review alert and refreshes the active review section", async () => {
+    vi.mocked(fetchPositions)
+      .mockResolvedValueOnce([makePositionViewRow()])
+      .mockResolvedValueOnce([makePositionViewRow()]);
+    vi.mocked(fetchPositionEntryProfiles)
+      .mockResolvedValueOnce([makeProfileRow()])
+      .mockResolvedValueOnce([makeProfileRow()]);
+    vi.mocked(fetchPositionReviewAlerts)
+      .mockResolvedValueOnce([makeReviewAlertRow()])
+      .mockResolvedValueOnce([]);
+    vi.mocked(updatePositionReviewAlertLifecycle).mockResolvedValue(
+      makeReviewAlertRow({
+        status: "dismissed",
+        dismissed_reason: "dismissed_in_ui",
+      }),
+    );
+
+    render(<PositionsPage />);
+    await waitFor(() => expect(screen.getByText(/AAPL target price reached/i)).toBeInTheDocument());
+
+    fireEvent.click(screen.getByRole("button", { name: /Dismiss/i }));
+
+    await waitFor(() =>
+      expect(updatePositionReviewAlertLifecycle).toHaveBeenCalledWith("alert-1", {
+        status: "dismissed",
+        dismissed_reason: "dismissed_in_ui",
+      }),
+    );
+    await waitFor(() =>
+      expect(screen.getByText(/No active review alerts\./i)).toBeInTheDocument(),
+    );
+  });
+
+  it("snoozes a review alert and shows the snoozed status clearly", async () => {
+    const nowSpy = vi.spyOn(Date, "now").mockReturnValue(
+      new Date("2026-05-16T10:00:00.000Z").valueOf(),
+    );
+    vi.mocked(fetchPositions)
+      .mockResolvedValueOnce([makePositionViewRow()])
+      .mockResolvedValueOnce([makePositionViewRow()]);
+    vi.mocked(fetchPositionEntryProfiles)
+      .mockResolvedValueOnce([makeProfileRow()])
+      .mockResolvedValueOnce([makeProfileRow()]);
+    vi.mocked(fetchPositionReviewAlerts)
+      .mockResolvedValueOnce([makeReviewAlertRow()])
+      .mockResolvedValueOnce([
+        makeReviewAlertRow({
+          status: "snoozed",
+          snoozed_until: "2026-06-15T10:00:00.000Z",
+        }),
+      ]);
+    vi.mocked(updatePositionReviewAlertLifecycle).mockResolvedValue(
+      makeReviewAlertRow({
+        status: "snoozed",
+        snoozed_until: "2026-06-15T10:00:00.000Z",
+      }),
+    );
+
+    render(<PositionsPage />);
+    await waitFor(() => expect(screen.getByText(/AAPL target price reached/i)).toBeInTheDocument());
+
+    fireEvent.click(screen.getByRole("button", { name: /Snooze 30d/i }));
+
+    await waitFor(() =>
+      expect(updatePositionReviewAlertLifecycle).toHaveBeenCalledWith("alert-1", {
+        status: "snoozed",
+        snoozed_until: "2026-06-15T10:00:00.000Z",
+      }),
+    );
+    await waitFor(() => expect(screen.getByText("Snoozed")).toBeInTheDocument());
+    expect(screen.getByText(/Snoozed until:/i)).toBeInTheDocument();
+
+    nowSpy.mockRestore();
   });
 });

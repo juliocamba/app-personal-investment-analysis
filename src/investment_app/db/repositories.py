@@ -937,3 +937,65 @@ def upsert_company_data_quality_snapshots(
     )
     return len(response.data)
 
+
+def list_dashboard_positions(*, client: Any = None) -> list[dict[str, Any]]:
+    """Return rows from the read-only dashboard_positions_latest view."""
+    response = _db(client).table("dashboard_positions_latest").select("*").execute()
+    return response.data
+
+
+def list_position_entry_profiles(*, client: Any = None) -> list[dict[str, Any]]:
+    """Return all position entry profiles visible to the caller."""
+    response = _db(client).table("position_entry_profiles").select("*").execute()
+    return response.data
+
+
+def list_position_review_alerts(*, client: Any = None) -> list[dict[str, Any]]:
+    """Return all position review alerts visible to the caller."""
+    response = _db(client).table("position_review_alerts").select("*").execute()
+    return response.data
+
+
+def get_position_review_alert_by_dedupe(
+    dedupe_key: str,
+    *,
+    client: Any = None,
+) -> dict[str, Any] | None:
+    """Return the first position_review_alert row matching *dedupe_key*."""
+    response = (
+        _db(client)
+        .table("position_review_alerts")
+        .select("*")
+        .eq("dedupe_key", dedupe_key)
+        .limit(1)
+        .execute()
+    )
+    return response.data[0] if response.data else None
+
+
+def insert_position_review_alert(
+    row: dict[str, Any],
+    *,
+    client: Any = None,
+) -> dict[str, Any] | None:
+    """Insert one position_review_alert row and return it."""
+    response = _db(client).table("position_review_alerts").insert(row).execute()
+    return response.data[0] if response.data else None
+
+
+def update_position_review_alert(
+    alert_id: str,
+    fields: dict[str, Any],
+    *,
+    client: Any = None,
+) -> dict[str, Any] | None:
+    """Update one position_review_alert row and return it."""
+    response = (
+        _db(client)
+        .table("position_review_alerts")
+        .update(fields)
+        .eq("id", alert_id)
+        .execute()
+    )
+    return response.data[0] if response.data else None
+

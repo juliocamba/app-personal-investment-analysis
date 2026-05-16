@@ -1717,6 +1717,43 @@ def test_10b_raw_store_failure_classified_as_raw_payload_read():
     assert failed_events, "Expected a raw_payload_read failure event for Twelve Data"
 
 
+def test_12d1_position_review_alert_stage_runs_after_company_alerts():
+    call_order: list[str] = []
+
+    def _company_alerts(company_id, repo_module, alert_date, **kwargs):
+        call_order.append("company_alerts")
+        return {"alerts_sent": 0, "alert_history_written": 0, "alerts_deduplicated": 0}
+
+    def _position_review_alerts(repo_module, alert_date):
+        call_order.append("position_review_alerts")
+        return {
+            "position_review_positions_checked": 2,
+            "position_review_alerts_opened": 1,
+            "position_review_alerts_refreshed": 1,
+            "position_review_alerts_resolved": 1,
+        }
+
+    metrics, repo = _run_pipeline_10b(
+        _FakeFMPPriceSuccess(),
+        _FakeTwelve(),
+        extra_kwargs={
+            "process_alerts_fn": _company_alerts,
+            "process_position_review_alerts_fn": _position_review_alerts,
+        },
+    )
+
+    assert call_order == ["company_alerts", "position_review_alerts"]
+    assert metrics["position_review_positions_checked"] == 2
+    assert metrics["position_review_alerts_opened"] == 1
+    assert metrics["position_review_alerts_refreshed"] == 1
+    assert metrics["position_review_alerts_resolved"] == 1
+    assert any(
+        event.get("stage") == "position_review_alerts"
+        and event.get("message") == "Position review alerts evaluated."
+        for event in repo.events
+    )
+
+
 # ── Test 7: normalizer failure classified as price_normalize ─────────────────
 
 

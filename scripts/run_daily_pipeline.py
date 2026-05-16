@@ -1153,6 +1153,7 @@ def _run_live_pipeline(
     compute_qualitative_fn: Any | None = None,
     compute_signal_fn: Any | None = None,
     process_alerts_fn: Any | None = None,
+    process_position_review_alerts_fn: Any | None = None,
     settings: Any | None = None,
 ) -> dict[str, int]:
     """Run the live ingestion and Phases 3-7 pipeline flow."""
@@ -1173,6 +1174,10 @@ def _run_live_pipeline(
         "alerts_sent": 0,
         "alert_history_written": 0,
         "alerts_deduplicated": 0,
+        "position_review_positions_checked": 0,
+        "position_review_alerts_opened": 0,
+        "position_review_alerts_refreshed": 0,
+        "position_review_alerts_resolved": 0,
         # Phase 9B
         "add_requests_processed": 0,
         "add_requests_approved": 0,
@@ -1209,6 +1214,50 @@ def _run_live_pipeline(
         )
 
         if not companies:
+            if process_position_review_alerts_fn is not None:
+                from datetime import date as _date
+
+                factor_date = _date.today().isoformat()
+                repo_module.log_pipeline_event(
+                    run_id,
+                    stage="position_review_alerts",
+                    message="Starting position review alert evaluation.",
+                )
+                try:
+                    review_metrics = process_position_review_alerts_fn(
+                        repo_module,
+                        factor_date,
+                    )
+                    metrics["position_review_positions_checked"] += int(
+                        review_metrics.get("position_review_positions_checked", 0)
+                    )
+                    metrics["position_review_alerts_opened"] += int(
+                        review_metrics.get("position_review_alerts_opened", 0)
+                    )
+                    metrics["position_review_alerts_refreshed"] += int(
+                        review_metrics.get("position_review_alerts_refreshed", 0)
+                    )
+                    metrics["position_review_alerts_resolved"] += int(
+                        review_metrics.get("position_review_alerts_resolved", 0)
+                    )
+                    repo_module.log_pipeline_event(
+                        run_id,
+                        stage="position_review_alerts",
+                        message="Position review alerts evaluated.",
+                        details=review_metrics,
+                    )
+                except Exception as exc:  # noqa: BLE001
+                    logger.error(
+                        "Position review alert evaluation failed (%s)",
+                        type(exc).__name__,
+                    )
+                    repo_module.log_pipeline_event(
+                        run_id,
+                        stage="position_review_alerts",
+                        level="error",
+                        message="Position review alert evaluation failed.",
+                        details={"error_type": type(exc).__name__},
+                    )
             repo_module.finish_pipeline_run(
                 run_id,
                 status="success",
@@ -1766,6 +1815,48 @@ def _run_live_pipeline(
                         details={"error_type": type(exc).__name__},
                     )
 
+        if process_position_review_alerts_fn is not None:
+            repo_module.log_pipeline_event(
+                run_id,
+                stage="position_review_alerts",
+                message="Starting position review alert evaluation.",
+            )
+            try:
+                review_metrics = process_position_review_alerts_fn(
+                    repo_module,
+                    factor_date,
+                )
+                metrics["position_review_positions_checked"] += int(
+                    review_metrics.get("position_review_positions_checked", 0)
+                )
+                metrics["position_review_alerts_opened"] += int(
+                    review_metrics.get("position_review_alerts_opened", 0)
+                )
+                metrics["position_review_alerts_refreshed"] += int(
+                    review_metrics.get("position_review_alerts_refreshed", 0)
+                )
+                metrics["position_review_alerts_resolved"] += int(
+                    review_metrics.get("position_review_alerts_resolved", 0)
+                )
+                repo_module.log_pipeline_event(
+                    run_id,
+                    stage="position_review_alerts",
+                    message="Position review alerts evaluated.",
+                    details=review_metrics,
+                )
+            except Exception as exc:  # noqa: BLE001
+                logger.error(
+                    "Position review alert evaluation failed (%s)",
+                    type(exc).__name__,
+                )
+                repo_module.log_pipeline_event(
+                    run_id,
+                    stage="position_review_alerts",
+                    level="error",
+                    message="Position review alert evaluation failed.",
+                    details={"error_type": type(exc).__name__},
+                )
+
         repo_module.finish_pipeline_run(
             run_id,
             status="success",
@@ -1842,7 +1933,10 @@ def main(
     from investment_app.connectors.gdelt import GDELTConnector
     from investment_app.connectors.sec_edgar import SECEdgarConnector
     from investment_app.connectors.twelve_data import TwelveDataConnector
-    from investment_app.alerts import process_company_alerts
+    from investment_app.alerts import (
+        process_company_alerts,
+        process_position_review_alerts,
+    )
     from investment_app.db import repositories as repo
     from investment_app.etl.normalize_news import normalize_gdelt_news
     from investment_app.etl.normalize_prices import normalize_fmp_prices
@@ -1912,6 +2006,7 @@ def main(
         compute_qualitative_fn=compute_qualitative_score,
         compute_signal_fn=compute_signal_run,
         process_alerts_fn=process_company_alerts,
+        process_position_review_alerts_fn=process_position_review_alerts,
         settings=settings,
     )
 

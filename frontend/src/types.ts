@@ -225,6 +225,35 @@ export interface PositionEntryProfileRow {
   updated_at: string;
 }
 
+export interface PositionReviewAlertRow {
+  id: string;
+  position_id: string;
+  user_id: string;
+  company_id: string;
+  alert_type:
+    | "target_price_reached"
+    | "signal_deterioration"
+    | "readiness_deterioration"
+    | "data_quality_deterioration";
+  severity: "info" | "warning" | "critical";
+  status: "open" | "snoozed" | "dismissed" | "resolved";
+  title: string;
+  message: string;
+  details: Record<string, unknown>;
+  dedupe_key: string;
+  triggered_at: string;
+  first_seen_at: string;
+  last_seen_at: string;
+  resolved_at: string | null;
+  dismissed_at: string | null;
+  dismissed_reason: string | null;
+  snoozed_until: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export type PositionReviewAlertLifecycleStatus = "open" | "snoozed" | "dismissed";
+
 export interface PositionInput {
   company_id: string;
   entry_date: string;

@@ -286,6 +286,8 @@ Apply the SQL files in order in the Supabase SQL editor:
 17. `sql/017_positions_display_metrics.sql`
 18. `sql/018_position_entry_profiles.sql`
 19. `sql/019_positions_current_comparison_fields.sql`
+20. `sql/020_position_review_alerts.sql`
+21. `sql/021_position_review_alert_lifecycle_controls.sql`
 
 Before using the optional seed file, replace any placeholder email with your own test or operator email in a local copy or directly in the SQL editor. Do not commit personal addresses.
 
@@ -318,7 +320,7 @@ Positions are a separate manual tracking surface from the watchlist.
 - A position records what you currently own or previously owned.
 - It includes company, entry date, quantity, average entry price, currency, optional fees, optional notes, and active/closed status.
 - Positions are created manually from companies that already exist in the app catalog.
-- It does not alter watchlist analytics, readiness, valuation, signal generation, alerts, or data-quality warnings in this phase.
+- It does not alter watchlist analytics, readiness, valuation, signal generation, delivery-alert logic, or data-quality warnings in this phase.
 - Creating a position does not trigger provider validation, pipeline analysis, or automatic signal behavior.
 - The positions page can now show display-only current price, cost basis, current value, unrealized gain/loss, and unrealized return using the latest stored price.
 - Those display metrics remain blank when no latest price exists, when the latest price currency does not match the position currency, or when the position is already closed.
@@ -326,7 +328,11 @@ Positions are a separate manual tracking surface from the watchlist.
 - A separate entry snapshot is captured from already-stored database state only. It can include the latest stored market price, signal, readiness, data-quality status, quality score, valuation range, and margin of safety that were available at capture time.
 - The positions page can compare that frozen entry snapshot against the latest stored current state for price, signal, readiness, data quality, quality score, valuation range, and margin of safety.
 - Entry snapshot fields are historical reference points. They do not recalculate automatically and do not change pipeline behavior, signals, readiness, valuation, or alerts.
-- The comparison is descriptive only. It does not create alerts, review prompts, or buy/sell/reduce recommendations in this phase.
+- The comparison remains descriptive only. It does not create buy/sell/reduce recommendations or automate any position action.
+- Open positions can now surface persisted review alerts for a small set of low-noise conditions using already stored app state only: target price reached, severe signal deterioration, major readiness deterioration, and critical data-quality deterioration.
+- Those review alerts are reassessment prompts only. They do not close positions automatically and do not recommend selling automatically.
+- Users can now manage those review alerts with simple lifecycle controls on the positions page: dismiss, snooze 7 days, snooze 30 days, or snooze 90 days.
+- Snoozing or dismissing an alert does not change position ownership, signals, readiness, valuation outputs, data-quality diagnostics, or pipeline behavior.
 - No FX conversion, realized P&L, tax logic, or recommendation logic is added in this phase.
 - It is recordkeeping and decision support only, not automated investment advice.
 
@@ -341,6 +347,8 @@ Alerts are present in the MVP but remain disabled by default.
 | `TELEGRAM_ENABLED` | `false` | Enables Telegram delivery when alerts are enabled |
 
 When alerts are disabled, no alert evaluation runs and no new `alert_history` rows are written by the alert stage.
+
+Phase 12D.1 also adds separate persisted position review alerts for open positions. Those alerts are generated only from already stored DB state after the analytical pipeline finishes. They are review prompts only, not automated trade instructions.
 
 ## GitHub Actions daily pipeline
 

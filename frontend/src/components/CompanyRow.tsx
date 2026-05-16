@@ -17,7 +17,7 @@ interface Props {
   row: WatchlistRow;
   /**
    * Phase 9A: callback invoked when the user confirms removal of this company
-   * from the active watchlist.  Receives the `watchlist_membership_id` and the
+   * from the active watchlist. Receives the `watchlist_membership_id` and the
    * company ticker (for the confirmation prompt).
    * If omitted, no remove button is rendered.
    */
@@ -86,12 +86,12 @@ function formatSubStatus(status: string | null): string {
 export function CompanyRow({ row, onRemove, isRemoving = false }: Props) {
   const [expanded, setExpanded] = useState(false);
 
-  // can_run_signal === false â†’ price-only tracking; suppress investment signal display.
+  // can_run_signal === false -> price-only tracking; suppress investment signal display.
   const isTracking = row.can_run_signal === false;
 
   const ivRange =
     row.iv_p25 != null && row.iv_p75 != null
-      ? `${formatPrice(row.iv_p25, row.currency)} â€“ ${formatPrice(row.iv_p75, row.currency)}`
+      ? `${formatPrice(row.iv_p25, row.currency)} - ${formatPrice(row.iv_p75, row.currency)}`
       : "-";
 
   const ivMid = row.iv_p50 != null ? formatPrice(row.iv_p50, row.currency) : null;
@@ -112,18 +112,15 @@ export function CompanyRow({ row, onRemove, isRemoving = false }: Props) {
         }}
         title={expanded ? "Click to collapse" : "Click to expand details"}
       >
-        {/* Ticker */}
         <td className="company-row__ticker">
           <span className="ticker-symbol">{row.ticker}</span>
         </td>
 
-        {/* Company name */}
         <td className="company-row__name">
           <span className="company-name">{row.name}</span>
           {row.sector && <span className="company-sector">{row.sector}</span>}
         </td>
 
-        {/* Signal / Readiness */}
         <td className="company-row__signal">
           {isTracking ? (
             <ReadinessBadge status={row.readiness_status} />
@@ -132,7 +129,6 @@ export function CompanyRow({ row, onRemove, isRemoving = false }: Props) {
           )}
         </td>
 
-        {/* Price */}
         <td className="company-row__price">
           <span>{formatPrice(row.current_price, row.currency)}</span>
           {row.price_date && (
@@ -140,7 +136,6 @@ export function CompanyRow({ row, onRemove, isRemoving = false }: Props) {
           )}
         </td>
 
-        {/* p_buy_adjusted - hidden for tracking-only rows */}
         <td className="company-row__num">
           {isTracking ? (
             <span className="text-muted">-</span>
@@ -153,7 +148,6 @@ export function CompanyRow({ row, onRemove, isRemoving = false }: Props) {
           )}
         </td>
 
-        {/* p_sell - hidden for tracking-only rows */}
         <td className="company-row__num">
           {isTracking ? (
             <span className="text-muted">-</span>
@@ -166,7 +160,6 @@ export function CompanyRow({ row, onRemove, isRemoving = false }: Props) {
           )}
         </td>
 
-        {/* Quality score */}
         <td className="company-row__num">
           {row.final_quality_score != null ? (
             <span>{formatNum(row.final_quality_score, 0)}</span>
@@ -175,10 +168,8 @@ export function CompanyRow({ row, onRemove, isRemoving = false }: Props) {
           )}
         </td>
 
-        {/* IV Range */}
         <td className="company-row__iv">{ivRange}</td>
 
-        {/* Margin of safety */}
         <td className="company-row__mos">
           {row.margin_of_safety_conservative != null ? (
             <span
@@ -197,12 +188,10 @@ export function CompanyRow({ row, onRemove, isRemoving = false }: Props) {
           )}
         </td>
 
-        {/* Freshness */}
         <td className="company-row__freshness">
           <FreshnessTag flag={row.freshness_flag} />
         </td>
 
-        {/* Actions: remove button + expand chevron */}
         <td
           className="company-row__actions"
           onClick={(e) => e.stopPropagation()}
@@ -218,7 +207,7 @@ export function CompanyRow({ row, onRemove, isRemoving = false }: Props) {
               aria-label={`Remove ${row.ticker} from watchlist`}
               title="Remove from watchlist"
             >
-              âœ•
+              Remove
             </button>
           )}
           <span
@@ -229,7 +218,7 @@ export function CompanyRow({ row, onRemove, isRemoving = false }: Props) {
               setExpanded((v) => !v);
             }}
           >
-            {expanded ? "â–²" : "â–¼"}
+            {expanded ? "^" : "v"}
           </span>
         </td>
       </tr>
@@ -238,7 +227,6 @@ export function CompanyRow({ row, onRemove, isRemoving = false }: Props) {
         <tr className="company-detail-row">
           <td colSpan={11} className="company-detail-cell">
             <div className="company-detail">
-              {/* Readiness notice (tracking/partial) or signal explanation (analysis-ready) */}
               {isTracking || row.can_run_valuation === false ? (
                 <div className="detail-section detail-section--readiness">
                   <h4 className="detail-section__title">Readiness notice</h4>
@@ -280,7 +268,6 @@ export function CompanyRow({ row, onRemove, isRemoving = false }: Props) {
                 </div>
               ) : null}
 
-              {/* Data quality diagnostics lane */}
               <div className="detail-section" data-testid="data-quality-section">
                 <div className="detail-section__header">
                   <h4 className="detail-section__title">Data quality</h4>
@@ -337,13 +324,11 @@ export function CompanyRow({ row, onRemove, isRemoving = false }: Props) {
                 </div>
               </div>
 
-              {/* Red flags */}
               <div className="detail-section">
                 <h4 className="detail-section__title">Red flags</h4>
                 <RedFlagList flags={row.red_flags} />
               </div>
 
-              {/* Valuation range */}
               <div className="detail-section">
                 <h4 className="detail-section__title">Intrinsic value range</h4>
                 <div className="detail-grid">
@@ -386,7 +371,6 @@ export function CompanyRow({ row, onRemove, isRemoving = false }: Props) {
                 </div>
               </div>
 
-              {/* Valuation diagnostics - hidden for tracking_only (isTracking) and can_run_valuation=false */}
               {!isTracking && row.can_run_valuation !== false && (
                 <div className="detail-section" data-testid="valuation-diagnostics">
                   <h4 className="detail-section__title">Valuation diagnostics</h4>
@@ -424,7 +408,6 @@ export function CompanyRow({ row, onRemove, isRemoving = false }: Props) {
                 </div>
               )}
 
-              {/* Key ratios */}
               <div className="detail-section">
                 <h4 className="detail-section__title">Key ratios</h4>
                 <div className="detail-grid">

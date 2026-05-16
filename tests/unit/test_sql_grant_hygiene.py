@@ -57,7 +57,7 @@ def test_migration_011_exists() -> None:
 
 
 def test_all_expected_migrations_exist() -> None:
-    expected = [f"0{n:02d}" for n in range(1, 20)]
+    expected = [f"0{n:02d}" for n in range(1, 22)]
     present = {p.name[:3] for p in SQL_DIR.glob("0*.sql")}
     for prefix in expected:
         assert prefix in present, f"Missing migration with prefix {prefix}"
@@ -98,6 +98,7 @@ def test_service_role_insert_all_write_tables() -> None:
         "watchlist_add_requests",
         "positions",
         "position_entry_profiles",
+        "position_review_alerts",
         "alert_rules",
         "alert_history",
     ]
@@ -240,6 +241,48 @@ def test_authenticated_update_on_position_entry_profiles_exists() -> None:
     sql = _combined_sql()
     assert _has_grant(sql, "position_entry_profiles", "authenticated", "update"), (
         "No GRANT UPDATE on position_entry_profiles TO authenticated found."
+    )
+
+
+def test_authenticated_select_on_position_review_alerts_exists() -> None:
+    sql = _combined_sql()
+    assert _has_grant(sql, "position_review_alerts", "authenticated", "select"), (
+        "No GRANT SELECT on position_review_alerts TO authenticated found."
+    )
+
+
+def test_no_authenticated_insert_on_position_review_alerts() -> None:
+    sql = _combined_sql()
+    assert not _has_grant(sql, "position_review_alerts", "authenticated", "insert"), (
+        "Found GRANT INSERT on position_review_alerts TO authenticated."
+    )
+
+
+def test_authenticated_update_on_position_review_alerts_is_column_scoped_only() -> None:
+    sql = _combined_sql()
+    pattern = (
+        r"grant\s+update\s*\(\s*status\s*,\s*dismissed_at\s*,\s*dismissed_reason\s*,\s*snoozed_until\s*\)"
+        r"\s+on\s+position_review_alerts\b[^;]*\bauthenticated\b"
+    )
+    assert re.search(pattern, sql, re.IGNORECASE | re.DOTALL), (
+        "Expected column-scoped authenticated UPDATE grant on position_review_alerts."
+    )
+
+
+def test_no_full_table_update_authenticated_on_position_review_alerts() -> None:
+    sql = _combined_sql()
+    pattern = (
+        r"grant\s+(?:select\s*,\s*)?update\s+on\s+position_review_alerts\b[^;]*\bauthenticated\b"
+    )
+    assert not re.search(pattern, sql, re.IGNORECASE | re.DOTALL), (
+        "Found unscoped GRANT UPDATE ON position_review_alerts TO authenticated."
+    )
+
+
+def test_no_anon_grants_on_position_review_alerts() -> None:
+    sql = _combined_sql()
+    assert not _has_any_grant_to_role(sql, "position_review_alerts", "anon"), (
+        "Found grant on position_review_alerts to anon."
     )
 
 

@@ -4,6 +4,7 @@ const {
   maybeSingle,
   select,
   eq,
+  inFilter,
   single,
   insert,
   update,
@@ -13,6 +14,7 @@ const {
   const maybeSingle = vi.fn();
   let select: ReturnType<typeof vi.fn>;
   const eq = vi.fn(() => ({ maybeSingle, select }));
+  const inFilter = vi.fn(() => ({ order }));
   const single = vi.fn();
   select = vi.fn((columns?: string) => {
     if (columns === "id") {
@@ -31,6 +33,15 @@ const {
         update,
       };
     }
+    if (table === "position_review_alerts") {
+      return {
+        select: vi.fn(() => ({
+          in: inFilter,
+          order,
+        })),
+        update,
+      };
+    }
     return {
       select: vi.fn(() => ({
         order,
@@ -42,6 +53,7 @@ const {
     maybeSingle,
     select,
     eq,
+    inFilter,
     single,
     insert,
     update,
@@ -57,6 +69,7 @@ vi.mock("../lib/supabase", () => ({
 }));
 
 import { savePositionEntryProfile } from "../lib/api";
+import { fetchPositionReviewAlerts, updatePositionReviewAlertLifecycle } from "../lib/api";
 
 describe("savePositionEntryProfile", () => {
   beforeEach(() => {
@@ -66,6 +79,15 @@ describe("savePositionEntryProfile", () => {
         return {
           select,
           insert,
+          update,
+        };
+      }
+      if (table === "position_review_alerts") {
+        return {
+          select: vi.fn(() => ({
+            in: inFilter,
+            order,
+          })),
           update,
         };
       }
@@ -148,5 +170,60 @@ describe("savePositionEntryProfile", () => {
         position_id: "pos-1",
       }),
     );
+  });
+
+  it("fetches open and snoozed review alerts for lifecycle management", async () => {
+    order.mockResolvedValueOnce({ data: [], error: null });
+
+    await fetchPositionReviewAlerts();
+
+    expect(inFilter).toHaveBeenCalledWith("status", ["open", "snoozed"]);
+  });
+
+  it("sends only lifecycle fields when dismissing a review alert", async () => {
+    single.mockResolvedValueOnce({
+      data: { id: "alert-1", status: "dismissed" },
+      error: null,
+    });
+
+    await updatePositionReviewAlertLifecycle("alert-1", {
+      status: "dismissed",
+      dismissed_reason: "manual review complete",
+    });
+
+    expect(update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        status: "dismissed",
+        dismissed_reason: "manual review complete",
+        snoozed_until: null,
+      }),
+    );
+    expect(update).not.toHaveBeenCalledWith(
+      expect.objectContaining({
+        position_id: expect.anything(),
+        title: expect.anything(),
+        message: expect.anything(),
+        details: expect.anything(),
+      }),
+    );
+  });
+
+  it("sends only lifecycle fields when snoozing a review alert", async () => {
+    single.mockResolvedValueOnce({
+      data: { id: "alert-1", status: "snoozed" },
+      error: null,
+    });
+
+    await updatePositionReviewAlertLifecycle("alert-1", {
+      status: "snoozed",
+      snoozed_until: "2026-06-15T10:00:00.000Z",
+    });
+
+    expect(update).toHaveBeenCalledWith({
+      status: "snoozed",
+      dismissed_at: null,
+      dismissed_reason: null,
+      snoozed_until: "2026-06-15T10:00:00.000Z",
+    });
   });
 });

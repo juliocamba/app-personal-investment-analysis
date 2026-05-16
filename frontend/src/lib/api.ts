@@ -13,7 +13,9 @@ import type {
   PositionEntryProfileInput,
   PositionEntryProfileRow,
   PositionInput,
+  PositionReviewAlertLifecycleStatus,
   PositionRow,
+  PositionReviewAlertRow,
   WatchlistAddRequest,
   WatchlistRow,
 } from "../types";
@@ -196,6 +198,49 @@ export async function fetchPositionEntryProfiles(): Promise<PositionEntryProfile
     .order("created_at", { ascending: false });
   if (error) throw new Error(error.message);
   return (data ?? []) as PositionEntryProfileRow[];
+}
+
+export async function fetchPositionReviewAlerts(): Promise<PositionReviewAlertRow[]> {
+  const { data, error } = await supabase
+    .from("position_review_alerts")
+    .select("*")
+    .in("status", ["open", "snoozed"])
+    .order("triggered_at", { ascending: false });
+  if (error) throw new Error(error.message);
+  return (data ?? []) as PositionReviewAlertRow[];
+}
+
+export async function updatePositionReviewAlertLifecycle(
+  alertId: string,
+  input: {
+    status: Exclude<PositionReviewAlertLifecycleStatus, "open">;
+    dismissed_reason?: string | null;
+    snoozed_until?: string | null;
+  },
+): Promise<PositionReviewAlertRow> {
+  const payload =
+    input.status === "dismissed"
+      ? {
+        status: "dismissed" as const,
+        dismissed_at: new Date().toISOString(),
+        dismissed_reason: input.dismissed_reason?.trim() || "dismissed_in_ui",
+        snoozed_until: null,
+      }
+      : {
+        status: "snoozed" as const,
+        dismissed_at: null,
+        dismissed_reason: null,
+        snoozed_until: input.snoozed_until ?? null,
+      };
+
+  const { data, error } = await supabase
+    .from("position_review_alerts")
+    .update(payload)
+    .eq("id", alertId)
+    .select("*")
+    .single();
+  if (error) throw new Error(error.message);
+  return data as PositionReviewAlertRow;
 }
 
 export async function savePositionEntryProfile(

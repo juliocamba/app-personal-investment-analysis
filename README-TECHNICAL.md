@@ -10,6 +10,7 @@ The system has five main runtime surfaces:
 - a Supabase/Postgres database that stores raw data, normalized data, analytical tables, views, and pipeline logs;
 - a React + Vite frontend that reads from Supabase using the anon key and Supabase Auth;
 - a GitHub Actions workflow for scheduled and manual pipeline runs;
+- a separate manual GitHub Actions workflow for research-only signal-validation refreshes;
 - planned static hosting on Cloudflare Pages.
 
 At a high level:
@@ -681,6 +682,13 @@ This infrastructure does not:
 - recalculate valuation, readiness, or data-quality logic
 - make future-performance claims
 
+Operational note:
+
+- `.github/workflows/signal_validation.yml` runs this refresh manually via `workflow_dispatch` only;
+- it uses only `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY`;
+- it validates a focused backtest test subset and the Supabase schema before executing `scripts/run_backtest.py`;
+- it is intentionally separate from the daily scheduled pipeline and does not call providers.
+
 ## Model interpretation and limitations
 
 - Outputs are rule-based analytical signals, not statistically calibrated probabilities.
@@ -731,6 +739,15 @@ The repository includes [.github/workflows/daily_pipeline.yml](.github/workflows
 GitHub only executes workflow files placed under `.github/workflows/`. That path is the authoritative, executable workflow.
 
 This is best treated as a configurable deployment artifact until production secrets are supplied.
+
+The repository also includes [.github/workflows/signal_validation.yml](.github/workflows/signal_validation.yml), which:
+
+- runs on `workflow_dispatch` only;
+- checks that `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` are present;
+- installs backend dependencies and runs the signal-validation test subset only;
+- validates the Supabase schema before the refresh step;
+- executes `scripts/run_backtest.py` against already stored Supabase data only;
+- does not alter the live daily pipeline execution order or provider-ingestion behavior.
 
 ### Cloudflare Pages
 

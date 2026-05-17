@@ -35,6 +35,7 @@ Phase 12B.1 adds a separate manual positions foundation. Positions are user-ente
 - Twelve Data as fallback for price data.
 - ECB FX rates for non-USD currency conversion.
 - Daily pipeline via GitHub Actions (scheduled weekday runs + manual dispatch).
+- Manual signal-validation refresh via a separate GitHub Actions workflow that runs the research backtest only on demand.
 - Watchlist management: add, remove, and reactivate companies.
 - Manual positions tracking: add, edit, list, and close user-owned positions.
 - Display-only position metrics: current price, cost basis, current value, unrealized gain/loss, and unrealized return when the latest stored price is usable.
@@ -258,6 +259,8 @@ Use the separate research refresh job in [scripts/run_backtest.py](scripts/run_b
 
 This refreshes persisted historical validation observations from already stored `signal_runs` and `price_eod` only. It does not call providers, does not modify live signal generation, and does not simulate a strategy.
 
+You can also run the same refresh manually in GitHub Actions through [.github/workflows/signal_validation.yml](.github/workflows/signal_validation.yml). That workflow is `workflow_dispatch` only, checks the required Supabase secrets, runs the signal-validation test subset, validates schema access, and then executes `scripts/run_backtest.py`. It is intentionally separate from the daily scheduled pipeline.
+
 ## Running tests
 
 ### Backend
@@ -406,6 +409,20 @@ Required GitHub Actions secrets:
 | `SMTP_PORT` | No | SMTP server port |
 | `SMTP_USER` | No | SMTP username |
 | `SMTP_PASSWORD` | No | SMTP password |
+
+## GitHub Actions signal validation refresh
+
+The repository also includes [.github/workflows/signal_validation.yml](.github/workflows/signal_validation.yml).
+
+Current workflow characteristics:
+
+- runs on `workflow_dispatch` only;
+- does not run on the weekday schedule;
+- uses only already stored Supabase data;
+- fails early with a clear error when `SUPABASE_URL` or `SUPABASE_SERVICE_ROLE_KEY` is missing;
+- runs the signal-validation test subset before the refresh;
+- validates Supabase schema before executing `scripts/run_backtest.py`;
+- does not call live providers and does not change the daily pipeline behavior.
 | `ALERT_EMAIL_FROM` | No | Sender address for email alerts |
 | `ALERT_EMAIL_TO` | No | Recipient address for email alerts |
 | `TELEGRAM_ENABLED` | No | Enable Telegram delivery (`true`/`false`) |

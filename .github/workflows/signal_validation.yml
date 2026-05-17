@@ -1,0 +1,57 @@
+name: Manual Signal Validation Refresh
+
+on:
+  workflow_dispatch:
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  signal-validation-refresh:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    env:
+      APP_ENV: production
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+
+      - name: Check required secrets
+        run: |
+          missing=()
+          [ -z "$SUPABASE_URL" ] && missing+=("SUPABASE_URL")
+          [ -z "$SUPABASE_SERVICE_ROLE_KEY" ] && missing+=("SUPABASE_SERVICE_ROLE_KEY")
+          if [ "${#missing[@]}" -gt 0 ]; then
+            echo "::error::Missing required secrets: ${missing[*]}"
+            echo "Configure these in: Settings -> Secrets and variables -> Actions"
+            exit 1
+          fi
+          echo "All required secrets are present."
+
+      - name: Run signal validation tests
+        run: |
+          pytest \
+            tests/unit/test_signal_backtest.py \
+            tests/unit/test_signal_backtest_sql.py \
+            tests/unit/test_signal_backtest_segmentations_sql.py \
+            tests/unit/test_sql_grant_hygiene.py -q
+
+      - name: Validate Supabase schema
+        run: python scripts/validate_supabase_schema.py
+
+      - name: Refresh signal validation observations
+        run: python scripts/run_backtest.py

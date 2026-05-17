@@ -91,6 +91,7 @@ def test_required_tables_contains_all_mandatory_names() -> None:
         "qualitative_scores",
         "valuation_runs",
         "signal_runs",
+        "signal_backtest_observations",
         "positions",
         "position_entry_profiles",
         "position_review_alerts",

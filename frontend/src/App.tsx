@@ -7,8 +7,9 @@ import { WatchlistPage } from "./pages/WatchlistPage";
 import { AlertsPage } from "./pages/AlertsPage";
 import { PositionsPage } from "./pages/PositionsPage";
 import { PortfolioPage } from "./pages/PortfolioPage";
+import { SignalValidationPage } from "./pages/SignalValidationPage";
 
-type Page = "watchlist" | "portfolio" | "positions" | "alerts";
+type Page = "watchlist" | "portfolio" | "positions" | "alerts" | "validation";
 
 /**
  * Root application component.
@@ -90,6 +91,13 @@ export default function App() {
           >
             Alerts
           </button>
+          <button
+            className={`nav__link ${page === "validation" ? "nav__link--active" : ""}`}
+            onClick={() => setPage("validation")}
+            aria-current={page === "validation" ? "page" : undefined}
+          >
+            Validation
+          </button>
         </div>
         <div className="nav__user">
           <span title={session.user.email}>{session.user.email}</span>
@@ -111,6 +119,8 @@ export default function App() {
           <PortfolioPage />
         ) : page === "positions" ? (
           <PositionsPage />
+        ) : page === "validation" ? (
+          <SignalValidationPage />
         ) : (
           <AlertsPage />
         )}

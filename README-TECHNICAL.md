@@ -39,6 +39,9 @@ At a high level:
 - Phase 12D.2 adds authenticated lifecycle controls for `position_review_alerts`, allowing dismiss and preset snooze actions without changing alert trigger logic.
 - Phase 12E.1 adds read-only `dashboard_portfolio_positions` and `dashboard_portfolio_summary` views for a conservative portfolio overview from already persisted state only.
 - Phase 12E.2 adds separate read-only `dashboard_portfolio_positions_fx_eur` and `dashboard_portfolio_summary_fx_eur` views for optional EUR-normalized portfolio estimates using stored ECB rates only.
+- Phase 12F.1 adds a separate `signal_backtest_observations` research table plus read-only signal-validation summary views. This layer validates historical persisted signals against later persisted prices without changing live model behavior.
+- Phase 12F.2 adds read-only segmentation and stability views for descriptive signal validation by readiness, data quality, sector, and historical signal transitions only.
+- Phase 12F.3 keeps the research layer unchanged and improves frontend transparency around sparse historical context and forward-price coverage gaps.
 
 ### Provider ingestion
 
@@ -94,6 +97,9 @@ At a high level:
 - Position review alerts are persisted separately in `position_review_alerts` and rendered on the positions page with lifecycle controls for dismiss and preset snooze actions.
 - The portfolio page reads from `dashboard_portfolio_positions` and `dashboard_portfolio_summary`, both of which exclude missing-price and currency-mismatch rows from value-based totals.
 - An optional EUR estimate mode reads from `dashboard_portfolio_positions_fx_eur` and `dashboard_portfolio_summary_fx_eur`, which use exact-date stored ECB rates only and exclude rows without FX coverage.
+- A separate signal validation page reads from `signal_backtest_summary_by_bucket` and `signal_backtest_summary_by_horizon`, both of which summarize persisted historical observations only.
+- The same page can also read `backtest_signal_by_readiness`, `backtest_signal_by_data_quality`, `backtest_signal_by_sector`, and `backtest_signal_stability` for descriptive subgroup and transition analysis only.
+- The same page may also read a light subset of `signal_backtest_observations` directly to surface coverage-gap counts and unknown historical-context counts without changing the persisted backtest methodology.
 
 ## Pipeline stages in execution order
 
@@ -149,6 +155,7 @@ Dry-run mode validates configuration and prints the planned pipeline flow withou
 | `qualitative_scores` | Daily qualitative scoring outputs and overrides |
 | `signal_runs` | Daily probabilistic signal outputs |
 | `company_data_quality_snapshots` | Daily persisted diagnostic snapshot for Phase 12A data-quality checks |
+| `signal_backtest_observations` | Persisted historical signal-validation observations for research-only forward-return analysis |
 
 ### Alerts and operations tables
 
@@ -186,6 +193,8 @@ Apply migrations in this order:
 21. `sql/021_position_review_alert_lifecycle_controls.sql`
 22. `sql/022_portfolio_dashboard_views.sql`
 23. `sql/023_portfolio_dashboard_fx_normalized_views.sql`
+24. `sql/024_signal_backtest_observations.sql`
+25. `sql/025_signal_backtest_segmentations.sql`
 
 Notes:
 
@@ -205,6 +214,8 @@ Notes:
 - `021_position_review_alert_lifecycle_controls.sql` adds authenticated column-scoped lifecycle updates on `position_review_alerts` for dismiss and preset snooze actions only.
 - `022_portfolio_dashboard_views.sql` adds `dashboard_portfolio_positions` and `dashboard_portfolio_summary` for display-only portfolio totals, coverage flags, and exposure breakdowns without FX normalization.
 - `023_portfolio_dashboard_fx_normalized_views.sql` adds `dashboard_portfolio_positions_fx_eur` and `dashboard_portfolio_summary_fx_eur` for optional EUR-normalized estimates using exact-date stored ECB FX only.
+- `024_signal_backtest_observations.sql` adds the separate historical signal-validation observation table and two read-only summary views for research-only forward-return analysis by signal bucket and horizon.
+- `025_signal_backtest_segmentations.sql` adds read-only segmentation views by readiness, data quality, and sector, plus a read-only signal-stability transition view.
 
 ## RLS and grants model
 
@@ -223,7 +234,7 @@ schema.  Without this migration the following symptoms appear:
 - Tables that have an RLS SELECT policy but no explicit `GRANT SELECT` silently
   return empty result sets or permission errors for authenticated users.
 
-Always apply all listed migrations in order (001-023) on a new or existing Supabase project.
+Always apply all listed migrations in order (001-025) on a new or existing Supabase project.
 
 ### Helper function execute hardening
 
@@ -253,7 +264,7 @@ roles.
 | Tier | Tables | authenticated | service_role | anon / public |
 |---|---|---|---|---|
 | **backend_only** | `pipeline_runs`, `pipeline_run_events`, `provider_requests`, `raw_provider_payloads`, `statements_raw` | none | SELECT/INSERT/UPDATE/DELETE | none |
-| **backend_rw_auth_r** | `companies`, `price_eod`, `fx_rates`, `filings_index`, `statements_norm`, `ratios_factors`, `qualitative_scores`, `valuation_runs`, `signal_runs`, `news_events`, `corporate_actions`, `company_analysis_readiness`, `company_data_quality_snapshots` | SELECT only | SELECT/INSERT/UPDATE/DELETE | none |
+| **backend_rw_auth_r** | `companies`, `price_eod`, `fx_rates`, `filings_index`, `statements_norm`, `ratios_factors`, `qualitative_scores`, `valuation_runs`, `signal_runs`, `signal_backtest_observations`, `news_events`, `corporate_actions`, `company_analysis_readiness`, `company_data_quality_snapshots` | SELECT only | SELECT/INSERT/UPDATE/DELETE | none |
 | **auth_scoped_write** | `app_users`, `watchlists`, `positions`, `alert_rules`, `alert_history` | SELECT/INSERT/UPDATE/DELETE (own rows via RLS) | SELECT/INSERT/UPDATE/DELETE | none |
 | **auth_scoped_write** | `position_entry_profiles` | SELECT + column-scoped INSERT/UPDATE (own rows via RLS) | SELECT/INSERT/UPDATE/DELETE | none |
 | **auth_scoped_write** | `position_review_alerts` | SELECT + column-scoped UPDATE for lifecycle fields only (own rows via RLS) | SELECT/INSERT/UPDATE/DELETE | none |
@@ -360,6 +371,8 @@ Examples:
 - `position_review_alerts` allows authenticated users to read only their own persisted review prompts and to update only lifecycle columns for dismiss and preset snooze actions. Trigger generation, resolution, and reopening remain system-driven.
 - `dashboard_portfolio_positions` and `dashboard_portfolio_summary` are read-only portfolio views. They do not write back to any ownership or analytical lane and do not perform FX normalization.
 - `dashboard_portfolio_positions_fx_eur` and `dashboard_portfolio_summary_fx_eur` are separate optional estimate views. They use stored `fx_rates` only, require exact `price_date` matches, and never silently normalize rows lacking FX coverage.
+- `signal_backtest_observations` is backend-owned research infrastructure. Authenticated users may read it, but only the service role may refresh it.
+- `signal_backtest_summary_by_bucket` and `signal_backtest_summary_by_horizon` are read-only research views for the frontend validation page.
 
 ## Positions display metrics
 
@@ -619,6 +632,55 @@ Allowed `final_signal` values are constrained in SQL (`signal_runs.check_final_s
 
 The signal output also stores red flags, explanation text, top feature contributors, and freshness indicators.
 
+## Historical signal validation
+
+Phase 12F.1 adds a separate research-only validation lane built from:
+
+- `signal_runs`
+- `price_eod`
+- `valuation_runs` (linked by `signal_runs.valuation_run_id` when present)
+- `company_data_quality_snapshots` on the exact `signal_date`
+- `companies` for static catalog context such as sector
+
+It persists one row per `signal_run_id` in `signal_backtest_observations`.
+
+Methodology:
+
+- observations are anchored on persisted `signal_runs.signal_date`;
+- the signal anchor price uses the exact `signal_date` price when available, otherwise the most recent stored price before `signal_date`;
+- forward horizons use the first stored trading day on or after `signal_date + 30/90/180/365 days`;
+- no price imputation is performed;
+- missing forward prices stay `null` and set explicit coverage-gap flags;
+- historical readiness is left `null` when no defensible time-series snapshot exists;
+- sparse historical readiness/data-quality/sector context is surfaced explicitly in the frontend as `unknown` / coverage-limit summaries rather than inferred;
+- this layer is price-return only and does not simulate a strategy.
+
+Read-only summary views:
+
+- `signal_backtest_summary_by_bucket`
+- `signal_backtest_summary_by_horizon`
+- `backtest_signal_by_readiness`
+- `backtest_signal_by_data_quality`
+- `backtest_signal_by_sector`
+- `backtest_signal_stability`
+
+They expose only descriptive metrics:
+
+- observation count
+- covered observation count
+- average return
+- median return
+- hit rate
+- coverage percentage
+- historical signal-transition counts and flip/stability rates
+
+This infrastructure does not:
+
+- alter live signal generation
+- rewrite historical signals
+- recalculate valuation, readiness, or data-quality logic
+- make future-performance claims
+
 ## Model interpretation and limitations
 
 - Outputs are rule-based analytical signals, not statistically calibrated probabilities.
@@ -640,6 +702,8 @@ Key characteristics:
 - the Watchlist page supports Phase 9A remove/reactivate behavior;
 - the Watchlist page includes the Phase 9B add-request UI and recent-request list;
 - the Alerts page reads alert history surfaces;
+- the Signal Validation page reads research-only summary views and shows explicit historical/coverage caveats;
+- the same page now also shows compact counts for unknown historical context and missing forward-price coverage using already persisted observation rows only;
 - no provider APIs are called directly from frontend code.
 
 ## Testing strategy

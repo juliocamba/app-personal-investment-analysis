@@ -57,7 +57,7 @@ def test_migration_011_exists() -> None:
 
 
 def test_all_expected_migrations_exist() -> None:
-    expected = [f"0{n:02d}" for n in range(1, 24)]
+    expected = [f"0{n:02d}" for n in range(1, 26)]
     present = {p.name[:3] for p in SQL_DIR.glob("0*.sql")}
     for prefix in expected:
         assert prefix in present, f"Missing migration with prefix {prefix}"
@@ -87,6 +87,7 @@ def test_service_role_insert_all_write_tables() -> None:
         "qualitative_scores",
         "valuation_runs",
         "signal_runs",
+        "signal_backtest_observations",
         "news_events",
         "corporate_actions",
         "company_analysis_readiness",
@@ -370,6 +371,43 @@ def test_dashboard_portfolio_summary_fx_eur_auth_select_exists() -> None:
     assert _has_any_grant_to_role(sql, "dashboard_portfolio_summary_fx_eur", "authenticated"), (
         "No grant on dashboard_portfolio_summary_fx_eur to authenticated found."
     )
+
+
+def test_signal_backtest_observations_auth_select_exists() -> None:
+    sql = _combined_sql()
+    assert _has_grant(sql, "signal_backtest_observations", "authenticated", "select"), (
+        "No GRANT SELECT on signal_backtest_observations TO authenticated found."
+    )
+
+
+def test_no_authenticated_insert_on_signal_backtest_observations() -> None:
+    sql = _combined_sql()
+    assert not _has_grant(sql, "signal_backtest_observations", "authenticated", "insert"), (
+        "Found GRANT INSERT on signal_backtest_observations TO authenticated."
+    )
+
+
+def test_signal_backtest_summary_views_auth_select_exist() -> None:
+    sql = _combined_sql()
+    assert _has_any_grant_to_role(sql, "signal_backtest_summary_by_bucket", "authenticated"), (
+        "No grant on signal_backtest_summary_by_bucket to authenticated found."
+    )
+    assert _has_any_grant_to_role(sql, "signal_backtest_summary_by_horizon", "authenticated"), (
+        "No grant on signal_backtest_summary_by_horizon to authenticated found."
+    )
+
+
+def test_signal_backtest_segmentation_views_auth_select_exist() -> None:
+    sql = _combined_sql()
+    for view_name in (
+        "backtest_signal_by_readiness",
+        "backtest_signal_by_data_quality",
+        "backtest_signal_by_sector",
+        "backtest_signal_stability",
+    ):
+        assert _has_any_grant_to_role(sql, view_name, "authenticated"), (
+            f"No grant on {view_name} to authenticated found."
+        )
 
 
 def test_analysis_readiness_latest_auth_select_exists() -> None:

@@ -999,3 +999,85 @@ def update_position_review_alert(
     )
     return response.data[0] if response.data else None
 
+
+def list_signal_runs_for_backtest(*, client: Any = None) -> list[dict[str, Any]]:
+    """Return persisted signal rows for historical validation, oldest first."""
+    response = (
+        _db(client)
+        .table("signal_runs")
+        .select(
+            "id, company_id, signal_date, model_version, valuation_run_id, "
+            "p_buy, p_buy_adjusted, p_sell, final_signal"
+        )
+        .order("signal_date", desc=False)
+        .execute()
+    )
+    return response.data
+
+
+def list_price_history_for_backtest(*, client: Any = None) -> list[dict[str, Any]]:
+    """Return persisted price history for historical validation, oldest first."""
+    response = (
+        _db(client)
+        .table("price_eod")
+        .select("company_id, price_date, close, currency, market_cap")
+        .order("company_id", desc=False)
+        .order("price_date", desc=False)
+        .execute()
+    )
+    return response.data
+
+
+def list_companies_for_backtest(*, client: Any = None) -> list[dict[str, Any]]:
+    """Return minimal company catalog fields used in historical validation."""
+    response = (
+        _db(client)
+        .table("companies")
+        .select("id, sector")
+        .execute()
+    )
+    return response.data
+
+
+def list_valuation_runs_for_backtest(*, client: Any = None) -> list[dict[str, Any]]:
+    """Return persisted valuation rows needed for at-signal context only."""
+    response = (
+        _db(client)
+        .table("valuation_runs")
+        .select("id, company_id, margin_of_safety_conservative, assumptions")
+        .execute()
+    )
+    return response.data
+
+
+def list_company_data_quality_snapshots_for_backtest(
+    *,
+    client: Any = None,
+) -> list[dict[str, Any]]:
+    """Return persisted per-date data-quality snapshots for historical joins."""
+    response = (
+        _db(client)
+        .table("company_data_quality_snapshots")
+        .select("company_id, snapshot_date, price_validation_status, warning_codes, details")
+        .order("snapshot_date", desc=False)
+        .execute()
+    )
+    return response.data
+
+
+def upsert_signal_backtest_observations(
+    rows: list[dict[str, Any]],
+    *,
+    client: Any = None,
+) -> int:
+    """Upsert historical signal-validation observations keyed by signal_run_id."""
+    if not rows:
+        return 0
+    response = (
+        _db(client)
+        .table("signal_backtest_observations")
+        .upsert(rows, on_conflict="signal_run_id")
+        .execute()
+    )
+    return len(response.data)
+

@@ -368,3 +368,60 @@ export interface PortfolioSummaryFxEurRow {
   positions_missing_fx_rate: number;
   positions_fx_normalized_count: number;
 }
+
+export interface SignalBacktestBucketSummaryRow {
+  final_signal: string;
+  horizon_days: number;
+  observation_count: number;
+  covered_observation_count: number;
+  average_return: number | null;
+  median_return: number | null;
+  hit_rate: number | null;
+  coverage_pct: number | null;
+}
+
+export interface SignalBacktestHorizonSummaryRow {
+  horizon_days: number;
+  observation_count: number;
+  covered_observation_count: number;
+  average_return: number | null;
+  median_return: number | null;
+  hit_rate: number | null;
+  coverage_pct: number | null;
+}
+
+export interface SignalBacktestSegmentSummaryRow {
+  final_signal: string;
+  horizon_days: number;
+  observation_count: number;
+  covered_observation_count: number;
+  average_return: number | null;
+  median_return: number | null;
+  hit_rate: number | null;
+  coverage_pct: number | null;
+  readiness_status_at_signal?: string;
+  data_quality_status_at_signal?: string;
+  sector_at_signal?: string;
+}
+
+export interface SignalBacktestStabilityRow {
+  signal_bucket: string;
+  observation_count: number;
+  transition_count: number;
+  flip_count: number;
+  stable_transition_count: number;
+  flip_rate: number | null;
+  stability_pct: number | null;
+  average_days_to_next_signal: number | null;
+}
+
+export interface SignalBacktestCoverageRow {
+  signal_run_id: string;
+  readiness_status_at_signal: string | null;
+  data_quality_status_at_signal: string | null;
+  sector_at_signal: string | null;
+  has_price_30d: boolean;
+  has_price_90d: boolean;
+  has_price_180d: boolean;
+  has_price_365d: boolean;
+}

@@ -15,6 +15,11 @@ import type {
   PositionInput,
   PortfolioPositionFxEurRow,
   PortfolioPositionRow,
+  SignalBacktestBucketSummaryRow,
+  SignalBacktestCoverageRow,
+  SignalBacktestHorizonSummaryRow,
+  SignalBacktestSegmentSummaryRow,
+  SignalBacktestStabilityRow,
   PortfolioSummaryFxEurRow,
   PortfolioSummaryRow,
   PositionReviewAlertLifecycleStatus,
@@ -233,6 +238,78 @@ export async function fetchPortfolioSummaryFxEur(): Promise<PortfolioSummaryFxEu
     .single();
   if (error) throw new Error(error.message);
   return data as PortfolioSummaryFxEurRow;
+}
+
+export async function fetchSignalBacktestSummaryByBucket(): Promise<SignalBacktestBucketSummaryRow[]> {
+  const { data, error } = await supabase
+    .from("signal_backtest_summary_by_bucket")
+    .select("*")
+    .order("horizon_days", { ascending: true })
+    .order("final_signal", { ascending: true });
+  if (error) throw new Error(error.message);
+  return (data ?? []) as SignalBacktestBucketSummaryRow[];
+}
+
+export async function fetchSignalBacktestSummaryByHorizon(): Promise<SignalBacktestHorizonSummaryRow[]> {
+  const { data, error } = await supabase
+    .from("signal_backtest_summary_by_horizon")
+    .select("*")
+    .order("horizon_days", { ascending: true });
+  if (error) throw new Error(error.message);
+  return (data ?? []) as SignalBacktestHorizonSummaryRow[];
+}
+
+export async function fetchSignalBacktestByReadiness(): Promise<SignalBacktestSegmentSummaryRow[]> {
+  const { data, error } = await supabase
+    .from("backtest_signal_by_readiness")
+    .select("*")
+    .order("readiness_status_at_signal", { ascending: true })
+    .order("horizon_days", { ascending: true })
+    .order("final_signal", { ascending: true });
+  if (error) throw new Error(error.message);
+  return (data ?? []) as SignalBacktestSegmentSummaryRow[];
+}
+
+export async function fetchSignalBacktestByDataQuality(): Promise<SignalBacktestSegmentSummaryRow[]> {
+  const { data, error } = await supabase
+    .from("backtest_signal_by_data_quality")
+    .select("*")
+    .order("data_quality_status_at_signal", { ascending: true })
+    .order("horizon_days", { ascending: true })
+    .order("final_signal", { ascending: true });
+  if (error) throw new Error(error.message);
+  return (data ?? []) as SignalBacktestSegmentSummaryRow[];
+}
+
+export async function fetchSignalBacktestBySector(): Promise<SignalBacktestSegmentSummaryRow[]> {
+  const { data, error } = await supabase
+    .from("backtest_signal_by_sector")
+    .select("*")
+    .order("sector_at_signal", { ascending: true })
+    .order("horizon_days", { ascending: true })
+    .order("final_signal", { ascending: true });
+  if (error) throw new Error(error.message);
+  return (data ?? []) as SignalBacktestSegmentSummaryRow[];
+}
+
+export async function fetchSignalBacktestStability(): Promise<SignalBacktestStabilityRow[]> {
+  const { data, error } = await supabase
+    .from("backtest_signal_stability")
+    .select("*")
+    .order("signal_bucket", { ascending: true });
+  if (error) throw new Error(error.message);
+  return (data ?? []) as SignalBacktestStabilityRow[];
+}
+
+export async function fetchSignalBacktestCoverageRows(): Promise<SignalBacktestCoverageRow[]> {
+  const { data, error } = await supabase
+    .from("signal_backtest_observations")
+    .select(
+      "signal_run_id, readiness_status_at_signal, data_quality_status_at_signal, sector_at_signal, has_price_30d, has_price_90d, has_price_180d, has_price_365d",
+    )
+    .order("signal_date", { ascending: true });
+  if (error) throw new Error(error.message);
+  return (data ?? []) as SignalBacktestCoverageRow[];
 }
 
 export async function fetchPositionEntryProfiles(): Promise<PositionEntryProfileRow[]> {

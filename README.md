@@ -25,7 +25,7 @@ Results appear in the dashboard within minutes of the pipeline completing.
 
 Phase 12A has started with non-blocking data-quality diagnostics. These checks currently compare overlapping FMP and Twelve Data prices when both exist for the same company/date, summarize normalized statement completeness, and compare overlapping annual FMP vs SEC fundamentals when both normalized sources exist. They emit pipeline events/metrics, persist evidence, and surface a separate dashboard data-quality lane only; they do not change readiness, valuation, signal generation, or alerts.
 
-Phase 12B.1 adds a separate manual positions foundation. Positions are user-entered ownership records with entry date, quantity, average entry price, currency, fees, notes, and active/closed status. They are tracked separately from watchlist analytics and do not change signals, readiness, valuation, alerts, or data-quality diagnostics. Phase 12B.2 adds display-only current value and unrealized P&L using the latest stored price when an active position has a matching price currency; it does not add realized P&L, FX conversion, or investment advice. Phase 12C.1 adds an entry thesis + entry snapshot foundation so each position can keep optional thesis notes plus a frozen snapshot of already-stored app state at the time the profile is captured. Phase 12C.2 improves thesis readability and adds a neutral entry-vs-current comparison using already-persisted current signal, readiness, data-quality, quality score, valuation, and margin-of-safety state only.
+Phase 12B.1 adds a separate manual positions foundation. Positions are user-entered ownership records with entry date, quantity, average entry price, currency, fees, notes, and active/closed status. They are tracked separately from watchlist analytics and do not change signals, readiness, valuation, alerts, or data-quality diagnostics. Phase 12B.2 adds display-only current value and unrealized P&L using the latest stored price when an active position has a matching price currency; it does not add realized P&L, FX conversion, or investment advice. Phase 12C.1 adds an entry thesis + entry snapshot foundation so each position can keep optional thesis notes plus a frozen snapshot of already-stored app state at the time the profile is captured. Phase 12C.2 improves thesis readability and adds a neutral entry-vs-current comparison using already-persisted current signal, readiness, data-quality, quality score, valuation, and margin-of-safety state only. Phase 12F.1 adds a separate historical signal-validation foundation that persists point-in-time observations from already stored `signal_runs` and `price_eod`, then exposes read-only research summaries without changing live signal generation.
 
 ## Current capabilities
 
@@ -40,6 +40,9 @@ Phase 12B.1 adds a separate manual positions foundation. Positions are user-ente
 - Display-only position metrics: current price, cost basis, current value, unrealized gain/loss, and unrealized return when the latest stored price is usable.
 - Entry thesis + snapshot tracking: optional thesis notes plus a frozen reference snapshot of signal/readiness/valuation/data-quality state for positions.
 - Entry-vs-current comparison for positions: a display-only comparison of the frozen entry snapshot against the latest stored signal, readiness, data-quality, quality-score, valuation-range, and margin-of-safety state.
+- Historical signal validation: a separate research page summarizing forward price returns by signal bucket and horizon from persisted historical state only.
+- Extended historical signal validation: descriptive breakdowns by readiness, data quality, sector, and signal-stability transitions from persisted history only.
+- Coverage transparency for historical signal validation: explicit counts for unknown historical readiness/data-quality context, unknown sector context, and forward-price coverage gaps.
 - Full analytical stack: ratios, valuation, qualitative score, probabilistic signal.
 - Readiness classification: signals are only generated when data meets quality thresholds.
 - Valuation diagnostics in the dashboard: MoS basis, DCF scenario count, uncertainty category, distribution-collapsed warning.
@@ -245,6 +248,16 @@ Dry-run validates configuration and prints the planned stages without writing pr
 
 The live run processes pending add-company requests, loads the active watchlist, ingests provider data, computes analytics, and optionally evaluates alerts.
 
+## Running historical signal validation
+
+Use the separate research refresh job in [scripts/run_backtest.py](scripts/run_backtest.py).
+
+```powershell
+.\.venv\Scripts\python scripts\run_backtest.py
+```
+
+This refreshes persisted historical validation observations from already stored `signal_runs` and `price_eod` only. It does not call providers, does not modify live signal generation, and does not simulate a strategy.
+
 ## Running tests
 
 ### Backend
@@ -290,6 +303,8 @@ Apply the SQL files in order in the Supabase SQL editor:
 21. `sql/021_position_review_alert_lifecycle_controls.sql`
 22. `sql/022_portfolio_dashboard_views.sql`
 23. `sql/023_portfolio_dashboard_fx_normalized_views.sql`
+24. `sql/024_signal_backtest_observations.sql`
+25. `sql/025_signal_backtest_segmentations.sql`
 
 Before using the optional seed file, replace any placeholder email with your own test or operator email in a local copy or directly in the SQL editor. Do not commit personal addresses.
 
@@ -340,6 +355,10 @@ Positions are a separate manual tracking surface from the watchlist.
 - An optional `FX-normalized estimate (EUR)` section can show EUR totals using stored ECB daily FX rates matched by exact price date only.
 - FX-normalized rows without exact-date stored FX coverage are excluded from the EUR estimate rather than silently converted.
 - The portfolio dashboard does not provide portfolio recommendations, rebalancing suggestions, tax logic, or automated advice.
+- A separate signal validation page now summarizes historical forward price returns by signal bucket and horizon using persisted history only.
+- The signal validation page also adds descriptive subgroup breakdowns for readiness, data quality, sector, and signal-stability transitions.
+- The signal validation page also surfaces compact coverage-limit summaries for unknown historical context and missing forward-price horizons.
+- Signal validation is price-return only, historical only, and explicit about coverage gaps or not-available fields. It is not a future guarantee and does not alter live signals.
 - No FX conversion, realized P&L, tax logic, or recommendation logic is added in this phase.
 - It is recordkeeping and decision support only, not automated investment advice.
 

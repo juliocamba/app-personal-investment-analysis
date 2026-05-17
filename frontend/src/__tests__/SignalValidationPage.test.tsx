@@ -7,6 +7,7 @@ vi.mock("../lib/api", () => ({
   fetchSignalBacktestByReadiness: vi.fn(),
   fetchSignalBacktestBySector: vi.fn(),
   fetchSignalBacktestCoverageRows: vi.fn(),
+  fetchSignalBacktestInterpretationSummary: vi.fn(),
   fetchSignalBacktestSummaryByBucket: vi.fn(),
   fetchSignalBacktestSummaryByHorizon: vi.fn(),
   fetchSignalBacktestStability: vi.fn(),
@@ -18,6 +19,7 @@ import {
   fetchSignalBacktestByReadiness,
   fetchSignalBacktestBySector,
   fetchSignalBacktestCoverageRows,
+  fetchSignalBacktestInterpretationSummary,
   fetchSignalBacktestSummaryByBucket,
   fetchSignalBacktestSummaryByHorizon,
   fetchSignalBacktestStability,
@@ -26,6 +28,7 @@ import type {
   SignalBacktestBucketSummaryRow,
   SignalBacktestCoverageRow,
   SignalBacktestHorizonSummaryRow,
+  SignalBacktestInterpretationSummaryRow,
   SignalBacktestSegmentSummaryRow,
   SignalBacktestStabilityRow,
 } from "../types";
@@ -112,6 +115,21 @@ function makeCoverageRow(
   };
 }
 
+function makeInterpretationSummary(
+  overrides: Partial<SignalBacktestInterpretationSummaryRow> = {},
+): SignalBacktestInterpretationSummaryRow {
+  return {
+    total_observations: 180,
+    evaluatable_observations: 150,
+    historical_coverage_pct: 0.62,
+    earliest_signal_date: "2025-01-01",
+    latest_signal_date: "2025-10-01",
+    signal_history_days: 273,
+    dataset_maturity: "MEDIUM",
+    ...overrides,
+  };
+}
+
 describe("SignalValidationPage", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -150,16 +168,29 @@ describe("SignalValidationPage", () => {
         has_price_365d: false,
       }),
     ]);
+    vi.mocked(fetchSignalBacktestInterpretationSummary).mockResolvedValue(
+      makeInterpretationSummary(),
+    );
   });
 
-  it("renders coverage summary, caveats, segmentation tables, and coverage limitations", async () => {
+  it("renders the interpretation panel, coverage summary, and research caveats", async () => {
     render(<SignalValidationPage />);
 
     await waitFor(() =>
       expect(screen.getByRole("heading", { name: /Signal Validation/i })).toBeInTheDocument(),
     );
+    expect(screen.getByText(/Can I trust this model yet\?/i)).toBeInTheDocument();
+    expect(screen.getByText(/Dataset maturity reflects the quality and coverage of the historical evidence so far/i)).toBeInTheDocument();
+    expect(screen.getByText(/MEDIUM/i)).toBeInTheDocument();
+    expect(screen.getByText(/Partially\. There is enough history to start learning from the signal behavior/i)).toBeInTheDocument();
+    expect(screen.getByText(/This is price-return-only historical validation, not a strategy simulation and not a future guarantee\./i)).toBeInTheDocument();
+    expect(screen.getByText(/Historical coverage/i)).toBeInTheDocument();
+    expect(screen.getByText(/Evaluatable observations/i)).toBeInTheDocument();
+    expect(screen.getAllByText(/Total observations/i).length).toBeGreaterThan(0);
+    expect(screen.getByText(/Earliest signal date/i)).toBeInTheDocument();
+    expect(screen.getByText(/Latest signal date/i)).toBeInTheDocument();
     expect(screen.getByText(/Price return only\. Historical validation only\./i)).toBeInTheDocument();
-    expect(screen.getByText(/not a strategy simulation/i)).toBeInTheDocument();
+    expect(screen.getAllByText(/not a strategy simulation/i).length).toBeGreaterThan(0);
     expect(screen.getByText(/Readiness at signal may be sparse/i)).toBeInTheDocument();
     expect(screen.getByText(/Missing forward prices remain not available rather than estimated/i)).toBeInTheDocument();
     expect(screen.getAllByText(/30d coverage/i).length).toBeGreaterThan(0);
@@ -180,6 +211,9 @@ describe("SignalValidationPage", () => {
     expect(screen.getByText(/Critical/i)).toBeInTheDocument();
     expect(screen.getByText(/Financials/i)).toBeInTheDocument();
     expect(screen.queryByText(/buy\/sell recommendation/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/proven/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/reliable/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/outperform/i)).not.toBeInTheDocument();
   });
 
   it("shows a safe empty state when no observations exist", async () => {
@@ -190,11 +224,62 @@ describe("SignalValidationPage", () => {
     vi.mocked(fetchSignalBacktestBySector).mockResolvedValue([]);
     vi.mocked(fetchSignalBacktestStability).mockResolvedValue([]);
     vi.mocked(fetchSignalBacktestCoverageRows).mockResolvedValue([]);
+    vi.mocked(fetchSignalBacktestInterpretationSummary).mockResolvedValue(
+      makeInterpretationSummary({
+        total_observations: 0,
+        evaluatable_observations: 0,
+        historical_coverage_pct: 0,
+        earliest_signal_date: null,
+        latest_signal_date: null,
+        signal_history_days: null,
+        dataset_maturity: "LOW",
+      }),
+    );
 
     render(<SignalValidationPage />);
 
     await waitFor(() =>
       expect(screen.getByText(/No historical validation observations yet/i)).toBeInTheDocument(),
+    );
+  });
+
+  it("renders low-maturity interpretation conservatively", async () => {
+    vi.mocked(fetchSignalBacktestInterpretationSummary).mockResolvedValue(
+      makeInterpretationSummary({
+        total_observations: 40,
+        evaluatable_observations: 22,
+        historical_coverage_pct: 0.35,
+        earliest_signal_date: "2025-01-01",
+        latest_signal_date: "2025-03-01",
+        signal_history_days: 59,
+        dataset_maturity: "LOW",
+      }),
+    );
+
+    render(<SignalValidationPage />);
+
+    await waitFor(() =>
+      expect(screen.getByText(/Not yet\. The historical sample is still small or coverage is incomplete/i)).toBeInTheDocument(),
+    );
+  });
+
+  it("renders high-maturity interpretation conservatively", async () => {
+    vi.mocked(fetchSignalBacktestInterpretationSummary).mockResolvedValue(
+      makeInterpretationSummary({
+        total_observations: 420,
+        evaluatable_observations: 390,
+        historical_coverage_pct: 0.82,
+        earliest_signal_date: "2024-01-01",
+        latest_signal_date: "2025-06-01",
+        signal_history_days: 517,
+        dataset_maturity: "HIGH",
+      }),
+    );
+
+    render(<SignalValidationPage />);
+
+    await waitFor(() =>
+      expect(screen.getByText(/More than before, but still cautiously\./i)).toBeInTheDocument(),
     );
   });
 });

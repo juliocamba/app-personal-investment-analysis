@@ -43,6 +43,7 @@ At a high level:
 - Phase 12F.1 adds a separate `signal_backtest_observations` research table plus read-only signal-validation summary views. This layer validates historical persisted signals against later persisted prices without changing live model behavior.
 - Phase 12F.2 adds read-only segmentation and stability views for descriptive signal validation by readiness, data quality, sector, and historical signal transitions only.
 - Phase 12F.3 keeps the research layer unchanged and improves frontend transparency around sparse historical context and forward-price coverage gaps.
+- Phase 12F.4 adds a read-only interpretation-summary view plus a conservative top-level frontend panel for dataset maturity and historical evidence coverage.
 
 ### Provider ingestion
 
@@ -101,6 +102,7 @@ At a high level:
 - A separate signal validation page reads from `signal_backtest_summary_by_bucket` and `signal_backtest_summary_by_horizon`, both of which summarize persisted historical observations only.
 - The same page can also read `backtest_signal_by_readiness`, `backtest_signal_by_data_quality`, `backtest_signal_by_sector`, and `backtest_signal_stability` for descriptive subgroup and transition analysis only.
 - The same page may also read a light subset of `signal_backtest_observations` directly to surface coverage-gap counts and unknown historical-context counts without changing the persisted backtest methodology.
+- The same page can also read `signal_backtest_interpretation_summary` for a top-level dataset-maturity panel based on evidence coverage and history span only.
 
 ## Pipeline stages in execution order
 
@@ -196,6 +198,7 @@ Apply migrations in this order:
 23. `sql/023_portfolio_dashboard_fx_normalized_views.sql`
 24. `sql/024_signal_backtest_observations.sql`
 25. `sql/025_signal_backtest_segmentations.sql`
+26. `sql/026_signal_backtest_interpretation_summary.sql`
 
 Notes:
 
@@ -217,6 +220,7 @@ Notes:
 - `023_portfolio_dashboard_fx_normalized_views.sql` adds `dashboard_portfolio_positions_fx_eur` and `dashboard_portfolio_summary_fx_eur` for optional EUR-normalized estimates using exact-date stored ECB FX only.
 - `024_signal_backtest_observations.sql` adds the separate historical signal-validation observation table and two read-only summary views for research-only forward-return analysis by signal bucket and horizon.
 - `025_signal_backtest_segmentations.sql` adds read-only segmentation views by readiness, data quality, and sector, plus a read-only signal-stability transition view.
+- `026_signal_backtest_interpretation_summary.sql` adds a read-only interpretation summary view for dataset maturity, overall historical coverage, evaluatable observations, and signal-history span.
 
 ## RLS and grants model
 
@@ -235,7 +239,7 @@ schema.  Without this migration the following symptoms appear:
 - Tables that have an RLS SELECT policy but no explicit `GRANT SELECT` silently
   return empty result sets or permission errors for authenticated users.
 
-Always apply all listed migrations in order (001-025) on a new or existing Supabase project.
+Always apply all listed migrations in order (001-026) on a new or existing Supabase project.
 
 ### Helper function execute hardening
 
@@ -664,6 +668,7 @@ Read-only summary views:
 - `backtest_signal_by_data_quality`
 - `backtest_signal_by_sector`
 - `backtest_signal_stability`
+- `signal_backtest_interpretation_summary`
 
 They expose only descriptive metrics:
 
@@ -674,6 +679,24 @@ They expose only descriptive metrics:
 - hit rate
 - coverage percentage
 - historical signal-transition counts and flip/stability rates
+
+The interpretation summary adds:
+
+- `total_observations`
+- `evaluatable_observations`
+- `historical_coverage_pct`
+- `earliest_signal_date`
+- `latest_signal_date`
+- `signal_history_days`
+- `dataset_maturity`
+
+`dataset_maturity` is intentionally conservative:
+
+- `LOW` when the sample is still small, coverage is weak, or signal history is short;
+- `MEDIUM` when the evidence is more usable but still incomplete;
+- `HIGH` only when observation count, coverage, and history span are all materially stronger.
+
+This label describes evidence quality and coverage only. It does not claim the model is correct, proven, or safe to trust blindly.
 
 This infrastructure does not:
 
@@ -710,7 +733,7 @@ Key characteristics:
 - the Watchlist page supports Phase 9A remove/reactivate behavior;
 - the Watchlist page includes the Phase 9B add-request UI and recent-request list;
 - the Alerts page reads alert history surfaces;
-- the Signal Validation page reads research-only summary views and shows explicit historical/coverage caveats;
+- the Signal Validation page reads research-only summary views, an interpretation summary view, and shows explicit historical/coverage caveats;
 - the same page now also shows compact counts for unknown historical context and missing forward-price coverage using already persisted observation rows only;
 - no provider APIs are called directly from frontend code.
 

@@ -44,6 +44,7 @@ Phase 12B.1 adds a separate manual positions foundation. Positions are user-ente
 - Historical signal validation: a separate research page summarizing forward price returns by signal bucket and horizon from persisted historical state only.
 - Extended historical signal validation: descriptive breakdowns by readiness, data quality, sector, and signal-stability transitions from persisted history only.
 - Coverage transparency for historical signal validation: explicit counts for unknown historical readiness/data-quality context, unknown sector context, and forward-price coverage gaps.
+- Signal Validation interpretation panel: a conservative top-level read on dataset maturity, coverage, observation count, and signal-history span for non-quant interpretation.
 - Full analytical stack: ratios, valuation, qualitative score, probabilistic signal.
 - Readiness classification: signals are only generated when data meets quality thresholds.
 - Valuation diagnostics in the dashboard: MoS basis, DCF scenario count, uncertainty category, distribution-collapsed warning.
@@ -308,6 +309,7 @@ Apply the SQL files in order in the Supabase SQL editor:
 23. `sql/023_portfolio_dashboard_fx_normalized_views.sql`
 24. `sql/024_signal_backtest_observations.sql`
 25. `sql/025_signal_backtest_segmentations.sql`
+26. `sql/026_signal_backtest_interpretation_summary.sql`
 
 Before using the optional seed file, replace any placeholder email with your own test or operator email in a local copy or directly in the SQL editor. Do not commit personal addresses.
 
@@ -361,6 +363,8 @@ Positions are a separate manual tracking surface from the watchlist.
 - A separate signal validation page now summarizes historical forward price returns by signal bucket and horizon using persisted history only.
 - The signal validation page also adds descriptive subgroup breakdowns for readiness, data quality, sector, and signal-stability transitions.
 - The signal validation page also surfaces compact coverage-limit summaries for unknown historical context and missing forward-price horizons.
+- The signal validation page now adds a top-level `Can I trust this model yet?` interpretation panel with conservative dataset-maturity labels (`LOW`, `MEDIUM`, `HIGH`) based on evidence coverage and history span only.
+- Dataset maturity describes the quality and coverage of the historical evidence so far. It does not mean the model is proven correct or safe to trust blindly.
 - Signal validation is price-return only, historical only, and explicit about coverage gaps or not-available fields. It is not a future guarantee and does not alter live signals.
 - No FX conversion, realized P&L, tax logic, or recommendation logic is added in this phase.
 - It is recordkeeping and decision support only, not automated investment advice.

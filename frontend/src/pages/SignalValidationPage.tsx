@@ -4,15 +4,17 @@ import {
   fetchSignalBacktestByReadiness,
   fetchSignalBacktestBySector,
   fetchSignalBacktestCoverageRows,
+  fetchSignalBacktestInterpretationSummary,
   fetchSignalBacktestSummaryByBucket,
   fetchSignalBacktestSummaryByHorizon,
   fetchSignalBacktestStability,
 } from "../lib/api";
-import { formatPct } from "../lib/formatters";
+import { formatDate, formatPct } from "../lib/formatters";
 import type {
   SignalBacktestBucketSummaryRow,
   SignalBacktestCoverageRow,
   SignalBacktestHorizonSummaryRow,
+  SignalBacktestInterpretationSummaryRow,
   SignalBacktestSegmentSummaryRow,
   SignalBacktestStabilityRow,
 } from "../types";
@@ -39,6 +41,30 @@ function formatStatusLabel(value: string | undefined): string {
 
 function formatHorizonLabel(horizonDays: number): string {
   return `${horizonDays}d`;
+}
+
+function getDatasetMaturityCopy(maturity: SignalBacktestInterpretationSummaryRow["dataset_maturity"]): string {
+  switch (maturity) {
+    case "HIGH":
+      return "More than before, but still cautiously. The dataset is broader and coverage is stronger, so the historical read is more informative, but it is still descriptive validation rather than proof of future reliability.";
+    case "MEDIUM":
+      return "Partially. There is enough history to start learning from the signal behavior, but coverage and sample size are still not strong enough for high confidence.";
+    case "LOW":
+    default:
+      return "Not yet. The historical sample is still small or coverage is incomplete, so this page should be treated as early descriptive evidence only.";
+  }
+}
+
+function getDatasetMaturityBadgeClass(maturity: SignalBacktestInterpretationSummaryRow["dataset_maturity"]): string {
+  switch (maturity) {
+    case "HIGH":
+      return "badge badge--healthy";
+    case "MEDIUM":
+      return "badge badge--info";
+    case "LOW":
+    default:
+      return "badge badge--warning";
+  }
 }
 
 interface SegmentTableProps {
@@ -94,6 +120,7 @@ export function SignalValidationPage() {
   const [sectorRows, setSectorRows] = useState<SignalBacktestSegmentSummaryRow[]>([]);
   const [stabilityRows, setStabilityRows] = useState<SignalBacktestStabilityRow[]>([]);
   const [coverageRows, setCoverageRows] = useState<SignalBacktestCoverageRow[]>([]);
+  const [interpretationSummary, setInterpretationSummary] = useState<SignalBacktestInterpretationSummaryRow | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -106,6 +133,7 @@ export function SignalValidationPage() {
       fetchSignalBacktestBySector(),
       fetchSignalBacktestStability(),
       fetchSignalBacktestCoverageRows(),
+      fetchSignalBacktestInterpretationSummary(),
     ])
       .then(([
         bucketSummary,
@@ -115,6 +143,7 @@ export function SignalValidationPage() {
         sectorSummary,
         stabilitySummary,
         coverageSummaryRows,
+        interpretationSummaryRow,
       ]) => {
         setBucketRows(bucketSummary);
         setHorizonRows(horizonSummary);
@@ -123,6 +152,7 @@ export function SignalValidationPage() {
         setSectorRows(sectorSummary);
         setStabilityRows(stabilitySummary);
         setCoverageRows(coverageSummaryRows);
+        setInterpretationSummary(interpretationSummaryRow);
         setLoading(false);
       })
       .catch((err: unknown) => {
@@ -195,6 +225,52 @@ export function SignalValidationPage() {
         <h1 className="page__title">Signal Validation</h1>
         <span className="page__subtitle">Historical validation only from persisted signal and price history</span>
       </div>
+
+      {interpretationSummary && (
+        <section className="portfolio-panel" aria-label="Model interpretation">
+          <div className="portfolio-panel__header">
+            <div>
+              <h2 className="signal-validation-panel__title">Can I trust this model yet?</h2>
+              <p className="portfolio-panel__text">
+                Dataset maturity reflects the quality and coverage of the historical evidence so far. It does not mean the model is correct or safe to trust blindly.
+              </p>
+            </div>
+            <span className={getDatasetMaturityBadgeClass(interpretationSummary.dataset_maturity)}>
+              {interpretationSummary.dataset_maturity}
+            </span>
+          </div>
+
+          <section className="portfolio-summary" aria-label="Interpretation summary">
+            <article className="portfolio-card">
+              <span className="portfolio-card__label">Historical coverage</span>
+              <span className="portfolio-card__value">{formatPercentOrDash(interpretationSummary.historical_coverage_pct)}</span>
+            </article>
+            <article className="portfolio-card">
+              <span className="portfolio-card__label">Evaluatable observations</span>
+              <span className="portfolio-card__value">{interpretationSummary.evaluatable_observations}</span>
+            </article>
+            <article className="portfolio-card">
+              <span className="portfolio-card__label">Total observations</span>
+              <span className="portfolio-card__value">{interpretationSummary.total_observations}</span>
+            </article>
+            <article className="portfolio-card">
+              <span className="portfolio-card__label">Earliest signal date</span>
+              <span className="portfolio-card__value">{formatDate(interpretationSummary.earliest_signal_date)}</span>
+            </article>
+            <article className="portfolio-card">
+              <span className="portfolio-card__label">Latest signal date</span>
+              <span className="portfolio-card__value">{formatDate(interpretationSummary.latest_signal_date)}</span>
+            </article>
+          </section>
+
+          <p className="portfolio-panel__text">
+            {getDatasetMaturityCopy(interpretationSummary.dataset_maturity)}
+          </p>
+          <p className="portfolio-panel__text">
+            This is price-return-only historical validation, not a strategy simulation and not a future guarantee.
+          </p>
+        </section>
+      )}
 
       <section className="portfolio-banner" role="status" aria-live="polite">
         <p className="portfolio-banner__title">Research caveats</p>

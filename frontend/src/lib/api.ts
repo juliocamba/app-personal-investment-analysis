@@ -18,6 +18,7 @@ import type {
   SignalBacktestBucketSummaryRow,
   SignalBacktestCoverageRow,
   SignalBacktestHorizonSummaryRow,
+  SignalBacktestInterpretationSummaryRow,
   SignalBacktestSegmentSummaryRow,
   SignalBacktestStabilityRow,
   PortfolioSummaryFxEurRow,
@@ -299,6 +300,15 @@ export async function fetchSignalBacktestStability(): Promise<SignalBacktestStab
     .order("signal_bucket", { ascending: true });
   if (error) throw new Error(error.message);
   return (data ?? []) as SignalBacktestStabilityRow[];
+}
+
+export async function fetchSignalBacktestInterpretationSummary(): Promise<SignalBacktestInterpretationSummaryRow> {
+  const { data, error } = await supabase
+    .from("signal_backtest_interpretation_summary")
+    .select("*")
+    .single();
+  if (error) throw new Error(error.message);
+  return data as SignalBacktestInterpretationSummaryRow;
 }
 
 export async function fetchSignalBacktestCoverageRows(): Promise<SignalBacktestCoverageRow[]> {

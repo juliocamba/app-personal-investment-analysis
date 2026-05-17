@@ -57,7 +57,7 @@ def test_migration_011_exists() -> None:
 
 
 def test_all_expected_migrations_exist() -> None:
-    expected = [f"0{n:02d}" for n in range(1, 26)]
+    expected = [f"0{n:02d}" for n in range(1, 27)]
     present = {p.name[:3] for p in SQL_DIR.glob("0*.sql")}
     for prefix in expected:
         assert prefix in present, f"Missing migration with prefix {prefix}"
@@ -394,6 +394,9 @@ def test_signal_backtest_summary_views_auth_select_exist() -> None:
     )
     assert _has_any_grant_to_role(sql, "signal_backtest_summary_by_horizon", "authenticated"), (
         "No grant on signal_backtest_summary_by_horizon to authenticated found."
+    )
+    assert _has_any_grant_to_role(sql, "signal_backtest_interpretation_summary", "authenticated"), (
+        "No grant on signal_backtest_interpretation_summary to authenticated found."
     )
 
 

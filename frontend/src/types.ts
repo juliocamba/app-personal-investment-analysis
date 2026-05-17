@@ -425,3 +425,13 @@ export interface SignalBacktestCoverageRow {
   has_price_180d: boolean;
   has_price_365d: boolean;
 }
+
+export interface SignalBacktestInterpretationSummaryRow {
+  total_observations: number;
+  evaluatable_observations: number;
+  historical_coverage_pct: number | null;
+  earliest_signal_date: string | null;
+  latest_signal_date: string | null;
+  signal_history_days: number | null;
+  dataset_maturity: "LOW" | "MEDIUM" | "HIGH";
+}

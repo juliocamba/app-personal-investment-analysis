@@ -199,6 +199,7 @@ Apply migrations in this order:
 24. `sql/024_signal_backtest_observations.sql`
 25. `sql/025_signal_backtest_segmentations.sql`
 26. `sql/026_signal_backtest_interpretation_summary.sql`
+27. `sql/027_latest_views_security_invoker.sql`
 
 Notes:
 
@@ -221,6 +222,7 @@ Notes:
 - `024_signal_backtest_observations.sql` adds the separate historical signal-validation observation table and two read-only summary views for research-only forward-return analysis by signal bucket and horizon.
 - `025_signal_backtest_segmentations.sql` adds read-only segmentation views by readiness, data quality, and sector, plus a read-only signal-stability transition view.
 - `026_signal_backtest_interpretation_summary.sql` adds a read-only interpretation summary view for dataset maturity, overall historical coverage, evaluatable observations, and signal-history span.
+- `027_latest_views_security_invoker.sql` hardens the four legacy `latest_*` analytical views flagged by Supabase Security Advisor by recreating them with `security_invoker = true`, with no output-column or behavior change.
 
 ## RLS and grants model
 
@@ -239,7 +241,7 @@ schema.  Without this migration the following symptoms appear:
 - Tables that have an RLS SELECT policy but no explicit `GRANT SELECT` silently
   return empty result sets or permission errors for authenticated users.
 
-Always apply all listed migrations in order (001-026) on a new or existing Supabase project.
+Always apply all listed migrations in order (001-027) on a new or existing Supabase project.
 
 ### Helper function execute hardening
 
@@ -276,6 +278,11 @@ roles.
 | **auth_scoped_write** | `watchlist_companies` | SELECT + UPDATE (own rows via RLS) | SELECT/INSERT/UPDATE/DELETE | none |
 | **auth_scoped_write** | `watchlist_add_requests` | SELECT + column-scoped INSERT + UPDATE(status) | SELECT/INSERT/UPDATE/DELETE | none |
 | **views** | all `latest_*`, `dashboard_*`, `analysis_readiness_latest` | SELECT | SELECT | none |
+
+Security hardening note:
+
+- Migration `027_latest_views_security_invoker.sql` recreates `latest_ratios_factors`, `latest_valuation_runs`, `latest_qualitative_scores`, and `latest_signal_runs` with `security_invoker = true`.
+- This is a Security Advisor hardening change only. It preserves the exact output columns, ordering semantics, and downstream behavior while ensuring access is evaluated as the calling role.
 
 ### Validating permissions
 

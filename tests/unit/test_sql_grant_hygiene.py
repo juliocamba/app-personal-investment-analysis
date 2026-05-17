@@ -57,7 +57,7 @@ def test_migration_011_exists() -> None:
 
 
 def test_all_expected_migrations_exist() -> None:
-    expected = [f"0{n:02d}" for n in range(1, 27)]
+    expected = [f"0{n:02d}" for n in range(1, 28)]
     present = {p.name[:3] for p in SQL_DIR.glob("0*.sql")}
     for prefix in expected:
         assert prefix in present, f"Missing migration with prefix {prefix}"
@@ -410,6 +410,23 @@ def test_signal_backtest_segmentation_views_auth_select_exist() -> None:
     ):
         assert _has_any_grant_to_role(sql, view_name, "authenticated"), (
             f"No grant on {view_name} to authenticated found."
+        )
+
+
+def test_migration_027_hardens_latest_views_with_security_invoker() -> None:
+    sql = _combined_sql()
+    for view_name in (
+        "latest_ratios_factors",
+        "latest_valuation_runs",
+        "latest_qualitative_scores",
+        "latest_signal_runs",
+    ):
+        pattern = (
+            rf"create\s+or\s+replace\s+view\s+{re.escape(view_name)}\s+"
+            rf"with\s*\(\s*security_invoker\s*=\s*true\s*\)"
+        )
+        assert re.search(pattern, sql, re.IGNORECASE | re.DOTALL), (
+            f"Expected {view_name} to be recreated with security_invoker = true."
         )
 
 

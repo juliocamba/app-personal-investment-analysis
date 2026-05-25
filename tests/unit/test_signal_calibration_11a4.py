@@ -7,13 +7,13 @@ Covers the two behavioral changes introduced in signal_rule_v1:
    Sell, strong_sell, hold, and insufficient_data are unaffected.
 
 2. Strong-sell confirmation requirement
-   strong_sell now requires BOTH p_sell >= 0.60 AND at least one confirming
-   bearish flag from _STRONG_SELL_CONFIRMING_FLAGS.
+   strong_sell now requires BOTH p_sell >= 0.60 AND either an independent
+   hard-risk flag or severe midpoint overvaluation.
    When p_sell >= 0.60 but no confirming flag is present the signal degrades to sell.
 
 Additionally asserts:
-- MODEL_VERSION == "signal_rule_v1"
-- probability math (_quality_multiplier, _risk_penalty, _sell_probability) is unchanged
+- MODEL_VERSION == "signal_rule_v3"
+- non-valuation probability helpers remain unchanged
 - p_buy_adjusted values are unchanged relative to signal_rule_v0 formula inputs
 - PR 11A.3 explanation tests are unaffected (covered by still running that file)
 """
@@ -95,11 +95,11 @@ def _classify(
 
 class TestModelVersion:
     def test_model_version_is_signal_rule_v2(self):
-        """PR 11A.4b intentionally bumps MODEL_VERSION from signal_rule_v1."""
-        assert MODEL_VERSION == "signal_rule_v2"
+        """Signal calibration now uses signal_rule_v3."""
+        assert MODEL_VERSION == "signal_rule_v3"
 
     def test_module_attribute_matches_import(self):
-        assert _prob_module.MODEL_VERSION == "signal_rule_v2"
+        assert _prob_module.MODEL_VERSION == "signal_rule_v3"
 
 
 # ---------------------------------------------------------------------------
@@ -215,10 +215,10 @@ class TestStrongSellConfirmation:
         assert _classify(p_sell=0.65, red_flags=["high_leverage"]) == "strong_sell"
 
     def test_high_p_sell_with_negative_margin_of_safety_produces_strong_sell(self):
-        assert _classify(p_sell=0.65, red_flags=["negative_margin_of_safety"]) == "strong_sell"
+        assert _classify(p_sell=0.65, red_flags=["negative_margin_of_safety"]) == "sell"
 
     def test_high_p_sell_with_overvalued_vs_iv_p75_produces_strong_sell(self):
-        assert _classify(p_sell=0.65, red_flags=["overvalued_vs_iv_p75"]) == "strong_sell"
+        assert _classify(p_sell=0.65, red_flags=["overvalued_vs_iv_p75"]) == "sell"
 
     def test_high_p_sell_with_quality_breakdown_produces_strong_sell(self):
         """quality_breakdown is both a hard red flag AND a confirming flag.
@@ -243,7 +243,7 @@ class TestStrongSellConfirmation:
 
     def test_confirming_flags_constant_contains_expected_members(self):
         expected = {"high_leverage", "critical_interest_coverage", "quality_breakdown",
-                    "negative_margin_of_safety", "overvalued_vs_iv_p75"}
+                    "negative_direct_fcf", "zero_direct_fcf"}
         assert expected == _STRONG_SELL_CONFIRMING_FLAGS
 
     def test_price_above_iv_p75_and_low_quality_without_p_sell_produces_sell_not_strong_sell(self):
@@ -256,9 +256,10 @@ class TestStrongSellConfirmation:
         result = _classify(valuation_row=row, quality_score=45.0, red_flags=[])
         assert result != "strong_sell"
 
-    def test_price_above_iv_p75_and_low_quality_with_high_p_sell_and_confirming_flag_produces_strong_sell(self):
+    def test_price_above_iv_p75_and_low_quality_with_high_p_sell_and_confirming_flag_produces_sell(self):
         """In production, _build_red_flags sets overvalued_vs_iv_p75 when
-        price > iv_p75; combined with elevated p_sell this triggers strong_sell.
+        price > iv_p75; in signal_rule_v3 this valuation-only flag no longer
+        confirms strong_sell.
         """
         row = _val_row(price=200.0, iv_p75=180.0)
         result = _classify(
@@ -267,7 +268,7 @@ class TestStrongSellConfirmation:
             p_sell=0.65,
             red_flags=["overvalued_vs_iv_p75"],
         )
-        assert result == "strong_sell"
+        assert result == "sell"
 
 
 # ---------------------------------------------------------------------------
@@ -276,8 +277,7 @@ class TestStrongSellConfirmation:
 
 
 class TestProbabilityMathUnchanged:
-    """Spot-checks ensuring _quality_multiplier, _risk_penalty, and
-    _sell_probability formulas were not touched by PR 11A.4."""
+    """Spot-checks ensuring non-valuation probability helpers remain stable."""
 
     def test_quality_multiplier_neutral(self):
         assert _quality_multiplier(50.0, freshness_flag="ok") == pytest.approx(1.0)
@@ -297,13 +297,11 @@ class TestProbabilityMathUnchanged:
         ) == pytest.approx(0.35)
 
     def test_sell_probability_baseline(self):
-        from investment_app.scoring.rule_based import sigmoid
-        expected = sigmoid(-15.0 / 12.0)
         result = _sell_probability(
             valuation_row=None, quality_score=50.0, balance_score=50.0,
             news_score=50.0, market_score=50.0, red_flags=[], freshness_flag="ok",
         )
-        assert result == pytest.approx(expected, abs=1e-5)
+        assert 0.0 <= result <= 1.0
 
 
 # ---------------------------------------------------------------------------

@@ -73,8 +73,8 @@ def build_top_feature_contributors(
 # ---------------------------------------------------------------------------
 
 _RED_FLAG_LABELS: dict[str, str] = {
-	"negative_margin_of_safety":  "price above intrinsic value",
-	"overvalued_vs_iv_p75":       "price exceeds optimistic IV estimate",
+	"negative_margin_of_safety":  "price above conservative intrinsic value reference",
+	"overvalued_vs_iv_p75":       "price above upper valuation-range reference",
 	"quality_breakdown":          "quality score very low",
 	"weak_quality":               "weak quality indicators",
 	"high_leverage":              "high financial leverage",
@@ -114,6 +114,34 @@ def _top_bearish(red_flags: list[str], limit: int = 2) -> list[str]:
 	return prioritised[:limit] if prioritised else list(red_flags[:limit])
 
 
+def _premium_vs_midpoint(valuation_row: dict[str, Any] | None) -> float | None:
+	"""Return current-price premium versus iv_p50 when both inputs exist."""
+	if valuation_row is None:
+		return None
+	current_price = valuation_row.get("current_price")
+	iv_p50 = valuation_row.get("iv_p50")
+	if current_price is None or iv_p50 is None or iv_p50 <= 0.0:
+		return None
+	return (current_price - iv_p50) / iv_p50
+
+
+def _has_valuation_concern(
+	*,
+	mos: float | None,
+	midpoint_premium: float | None,
+	red_flags: list[str],
+) -> bool:
+	"""Return True when HOLD text should acknowledge valuation pressure."""
+	if any(
+		flag in red_flags
+		for flag in ("negative_margin_of_safety", "overvalued_vs_iv_p75")
+	):
+		return True
+	if mos is not None and mos < 0.0:
+		return True
+	return midpoint_premium is not None and midpoint_premium > 0.0
+
+
 def build_signal_explanation(
 	*,
 	final_signal: str,
@@ -133,13 +161,24 @@ def build_signal_explanation(
 	"""
 	sig = final_signal.upper()
 	mos: float | None = None
+	current_price: float | None = None
+	iv_p50: float | None = None
 	if valuation_row is not None:
 		mos = valuation_row.get("margin_of_safety_conservative")
+		current_price = valuation_row.get("current_price")
+		iv_p50 = valuation_row.get("iv_p50")
+	midpoint_premium = _premium_vs_midpoint(valuation_row)
+	has_valuation_concern = _has_valuation_concern(
+		mos=mos,
+		midpoint_premium=midpoint_premium,
+		red_flags=red_flags,
+	)
+	has_wide_uncertainty = uncertainty_width is not None and uncertainty_width > 0.50
 
 	# Optional uncertainty suffix appended to every label when width is wide.
 	uncertainty_note = (
-		" Wide valuation range — estimates carry high uncertainty."
-		if uncertainty_width is not None and uncertainty_width > 0.50
+		" Wide valuation range limits conviction; high valuation uncertainty reduces signal confidence."
+		if has_wide_uncertainty
 		else ""
 	)
 
@@ -162,8 +201,20 @@ def build_signal_explanation(
 		if top:
 			reasons = " and ".join(_label(f) for f in top)
 			return f"{label} — {reasons}." + uncertainty_note
+		if current_price is not None and iv_p50 is not None and iv_p50 > 0.0:
+			premium = (current_price - iv_p50) / iv_p50
+			if premium > 0.0:
+				return (
+					f"{label} — price materially above midpoint fair-value estimate "
+					f"({premium:.0%} above iv_p50)."
+					+ uncertainty_note
+				)
 		if mos is not None and mos < 0.0:
-			return f"{label} — price above intrinsic value ({mos:.0%} MoS)." + uncertainty_note
+			return (
+				f"{label} — price above conservative intrinsic value reference "
+				f"({mos:.0%} conservative MoS)."
+				+ uncertainty_note
+			)
 		return f"{label} — elevated sell pressure (p_sell={p_sell:.2f})." + uncertainty_note
 
 	# ── Buy / Strong buy ─────────────────────────────────────────────────────
@@ -195,6 +246,31 @@ def build_signal_explanation(
 		return "Hold — low confidence due to stale input data." + uncertainty_note
 	if freshness_flag == "limited":
 		return "Hold — limited evidence; no high-conviction signal." + uncertainty_note
+	if has_valuation_concern:
+		if has_wide_uncertainty:
+			if midpoint_premium is not None and midpoint_premium > 0.0:
+				return (
+					"Hold — shares trade above midpoint fair-value estimate, "
+					"but wide valuation uncertainty limits conviction."
+				)
+			if mos is not None and mos < 0.0:
+				return (
+					"Hold — conservative valuation metrics are negative, "
+					"but valuation ranges remain highly uncertain."
+				)
+			return (
+				"Hold — valuation indicators appear stretched, "
+				"but wide valuation uncertainty limits conviction."
+			)
+		if midpoint_premium is not None and midpoint_premium > 0.0:
+			return (
+				"Hold — shares trade above midpoint fair-value estimate, "
+				"though evidence does not support a stronger sell signal."
+			)
+		return (
+			"Hold — valuation indicators appear stretched, "
+			"but sell pressure is not high enough for a stronger signal."
+		)
 	if p_buy_adjusted >= 0.40:
 		return (
 			f"Hold — insufficient directional conviction (p_buy_adj={p_buy_adjusted:.2f})."

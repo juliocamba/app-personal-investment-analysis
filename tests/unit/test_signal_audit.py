@@ -87,10 +87,10 @@ def _ratio_row(
 class TestModelVersion:
     def test_model_version_literal_string(self):
         """Intentionally updated from signal_rule_v1 → signal_rule_v2 in PR 11A.4b."""
-        assert MODEL_VERSION == "signal_rule_v2"
+        assert MODEL_VERSION == "signal_rule_v3"
 
     def test_module_attribute_matches_import(self):
-        assert _prob_module.MODEL_VERSION == "signal_rule_v2"
+        assert _prob_module.MODEL_VERSION == "signal_rule_v3"
 
 
 # ---------------------------------------------------------------------------
@@ -311,20 +311,26 @@ class TestSellProbability:
         expected = sigmoid(-15.0 / 12.0)
         assert self._compute() == pytest.approx(expected, abs=1e-5)
 
-    def test_mos_below_minus_twenty_pct_adds_eighteen_to_pressure(self):
-        # pressure = 35 + 18 = 53
-        expected = sigmoid(3.0 / 12.0)
-        assert self._compute(valuation_row=_val_row(mos=-0.25)) == pytest.approx(expected, abs=1e-5)
+    def test_mos_below_minus_twenty_pct_adds_fallback_pressure_without_midpoint(self):
+        # pressure = 35 + 12 = 47
+        expected = sigmoid(-3.0 / 12.0)
+        assert self._compute(
+            valuation_row={"margin_of_safety_conservative": -0.25}
+        ) == pytest.approx(expected, abs=1e-5)
 
-    def test_mos_between_minus_twenty_and_minus_ten_adds_ten_to_pressure(self):
-        # pressure = 35 + 10 = 45
-        expected = sigmoid(-5.0 / 12.0)
-        assert self._compute(valuation_row=_val_row(mos=-0.15)) == pytest.approx(expected, abs=1e-5)
+    def test_mos_between_minus_twenty_and_minus_ten_adds_fallback_pressure_without_midpoint(self):
+        # pressure = 35 + 7 = 42
+        expected = sigmoid(-8.0 / 12.0)
+        assert self._compute(
+            valuation_row={"margin_of_safety_conservative": -0.15}
+        ) == pytest.approx(expected, abs=1e-5)
 
-    def test_mos_between_minus_ten_and_zero_adds_five_to_pressure(self):
-        # pressure = 35 + 5 = 40
-        expected = sigmoid(-10.0 / 12.0)
-        assert self._compute(valuation_row=_val_row(mos=-0.05)) == pytest.approx(expected, abs=1e-5)
+    def test_mos_between_minus_ten_and_zero_adds_fallback_pressure_without_midpoint(self):
+        # pressure = 35 + 3 = 38
+        expected = sigmoid(-12.0 / 12.0)
+        assert self._compute(
+            valuation_row={"margin_of_safety_conservative": -0.05}
+        ) == pytest.approx(expected, abs=1e-5)
 
     def test_quality_at_or_below_30_adds_eighteen_to_pressure(self):
         # pressure = 35 + 18 = 53
@@ -461,8 +467,8 @@ class TestClassifySignal:
         """p_sell=0.60 + confirming flag → strong_sell."""
         assert self._classify(p_sell=0.60, red_flags=["high_leverage"]) == "strong_sell"
 
-    def test_p_sell_above_sixty_pct_with_negative_mos_produces_strong_sell(self):
-        assert self._classify(p_sell=0.75, red_flags=["negative_margin_of_safety"]) == "strong_sell"
+    def test_p_sell_above_sixty_pct_with_negative_mos_produces_sell(self):
+        assert self._classify(p_sell=0.75, red_flags=["negative_margin_of_safety"]) == "sell"
 
     def test_p_sell_at_sixty_pct_without_confirming_flag_produces_sell_not_strong_sell(self):
         """PR 11A.4: p_sell >= 0.60 alone is no longer sufficient for strong_sell."""

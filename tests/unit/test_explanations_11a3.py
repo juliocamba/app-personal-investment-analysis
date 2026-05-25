@@ -15,7 +15,7 @@ Coverage:
   9.  BUY without quality ≥ 60 omits "supported by strong quality score"
   10. STRONG_SELL with quality_breakdown and high_leverage includes both labels
   11. Backward-compatible — call without uncertainty_width works
-  12. MODEL_VERSION = "signal_rule_v2" (bumped in PR 11A.4b)
+  12. MODEL_VERSION = "signal_rule_v3"
   13. Explanation length ≤ 300 characters for all covered cases
   14. Uncertainty note is NOT appended when uncertainty_width = 0.50 (boundary)
 
@@ -72,7 +72,7 @@ def _call(
 
 class TestModelVersionUnchanged:
     def test_signal_model_version_is_signal_rule_v2(self):
-        assert MODEL_VERSION == "signal_rule_v2"
+        assert MODEL_VERSION == "signal_rule_v3"
 
 
 # ---------------------------------------------------------------------------
@@ -172,6 +172,86 @@ class TestHoldExplanations:
         assert "just below threshold" in result.lower()
         assert "limited evidence" not in result.lower()
 
+    def test_hold_valuation_warning_high_uncertainty_is_not_neutral(self):
+        """HOLD with valuation warnings should acknowledge uncertainty-constrained valuation concern."""
+        result = _call(
+            final_signal="hold",
+            valuation_row={
+                "margin_of_safety_conservative": -0.65,
+                "current_price": 140.0,
+                "iv_p50": 100.0,
+            },
+            red_flags=["negative_margin_of_safety", "overvalued_vs_iv_p75"],
+            p_buy_adjusted=0.20,
+            p_sell=0.44,
+            uncertainty_width=2.0,
+        )
+        assert result.startswith("Hold")
+        assert "above midpoint fair-value estimate" in result.lower()
+        assert "wide valuation uncertainty limits conviction" in result.lower()
+        assert "no strong buy or sell case" not in result.lower()
+
+    def test_hold_midpoint_premium_with_uncertainty_cap(self):
+        """A midpoint premium without hard sell conviction should explain the cap."""
+        result = _call(
+            final_signal="hold",
+            valuation_row={
+                "margin_of_safety_conservative": 0.02,
+                "current_price": 125.0,
+                "iv_p50": 100.0,
+            },
+            red_flags=[],
+            p_buy_adjusted=0.30,
+            p_sell=0.45,
+            uncertainty_width=1.1,
+        )
+        assert "above midpoint fair-value estimate" in result.lower()
+        assert "wide valuation uncertainty limits conviction" in result.lower()
+
+    def test_neutral_hold_without_valuation_concerns_stays_neutral(self):
+        """Neutral HOLD wording remains available when there are no valuation concerns."""
+        result = _call(
+            final_signal="hold",
+            valuation_row={
+                "margin_of_safety_conservative": 0.08,
+                "current_price": 95.0,
+                "iv_p50": 100.0,
+            },
+            red_flags=[],
+            p_buy_adjusted=0.25,
+            p_sell=0.20,
+            uncertainty_width=0.20,
+        )
+        assert "no strong buy or sell case" in result.lower()
+
+    def test_sell_and_hold_valuation_warning_wording_are_distinct(self):
+        """SELL keeps direct bearish wording while HOLD explains reduced conviction."""
+        valuation_row = {
+            "margin_of_safety_conservative": -0.35,
+            "current_price": 135.0,
+            "iv_p50": 100.0,
+        }
+        hold = _call(
+            final_signal="hold",
+            valuation_row=valuation_row,
+            red_flags=["negative_margin_of_safety", "overvalued_vs_iv_p75"],
+            p_buy_adjusted=0.20,
+            p_sell=0.45,
+            uncertainty_width=1.0,
+        )
+        sell = _call(
+            final_signal="sell",
+            valuation_row=valuation_row,
+            red_flags=["negative_margin_of_safety", "overvalued_vs_iv_p75"],
+            p_buy_adjusted=0.20,
+            p_sell=0.70,
+            uncertainty_width=0.20,
+        )
+        assert hold.startswith("Hold")
+        assert "wide valuation uncertainty limits conviction" in hold.lower()
+        assert sell.startswith("Sell")
+        assert "price above conservative intrinsic value reference" in sell.lower()
+
 
 # ---------------------------------------------------------------------------
 # 3. SELL / STRONG_SELL sub-cases
@@ -180,14 +260,14 @@ class TestHoldExplanations:
 
 class TestSellExplanations:
     def test_sell_negative_margin_of_safety_plain_english(self):
-        """SELL with negative_margin_of_safety → 'price above intrinsic value'."""
+        """SELL with negative_margin_of_safety uses conservative reference wording."""
         result = _call(
             final_signal="sell",
             red_flags=["negative_margin_of_safety", "quality_breakdown"],
             p_buy_adjusted=0.20,
             p_sell=0.70,
         )
-        assert "price above intrinsic value" in result.lower()
+        assert "price above conservative intrinsic value reference" in result.lower()
         assert result.upper().startswith("SELL")
 
     def test_sell_high_leverage_plain_english(self):
@@ -222,8 +302,8 @@ class TestSellExplanations:
             p_sell=0.62,
             valuation_row={"margin_of_safety_conservative": -0.05},
         )
-        # mos < 0 → "price above intrinsic value"
-        assert "price above intrinsic value" in result.lower()
+        # mos < 0 -> conservative intrinsic value reference wording
+        assert "price above conservative intrinsic value reference" in result.lower()
 
     def test_sell_no_flags_no_negative_mos_shows_probability(self):
         result = _call(
@@ -333,7 +413,7 @@ class TestUncertaintyWording:
             uncertainty_width=0.80,
         )
         assert "wide valuation range" in result.lower()
-        assert "high uncertainty" in result.lower()
+        assert "high valuation uncertainty reduces signal confidence" in result.lower()
 
     def test_low_uncertainty_no_wide_range_note(self):
         """uncertainty_width = 0.20 → no uncertainty note."""

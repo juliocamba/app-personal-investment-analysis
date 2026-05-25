@@ -22,7 +22,7 @@ from investment_app.scoring.rule_based import (
 	sigmoid,
 )
 
-MODEL_VERSION = "signal_rule_v2"
+MODEL_VERSION = "signal_rule_v3"
 
 _FAIR_VALUE_MOS_EPSILON: float = 0.005
 """Absolute MoS within this band (±0.5%) is treated as near fair value.
@@ -44,6 +44,79 @@ def _normalized_mos_for_signal(mos: float | None) -> float | None:
 	if mos is None:
 		return None
 	return 0.0 if abs(mos) <= _FAIR_VALUE_MOS_EPSILON else mos
+
+
+_UNCERTAINTY_BANDS: dict[str, float] = {
+	"low_or_missing": 0.05,
+	"moderate": 0.10,
+	"high": 0.15,
+	"extreme": 0.25,
+}
+
+_SEVERE_MIDPOINT_PREMIUM_THRESHOLDS: dict[str, float | None] = {
+	"low_or_missing": 0.30,
+	"moderate": 0.40,
+	"high": 0.55,
+	"extreme": None,
+}
+
+
+def _uncertainty_category_for_signal(uncertainty_width: float | None) -> str:
+	"""Return the signal-layer uncertainty bucket from valuation range width."""
+	if uncertainty_width is None:
+		return "low_or_missing"
+	if uncertainty_width <= 0.35:
+		return "low_or_missing"
+	if uncertainty_width <= 0.75:
+		return "moderate"
+	if uncertainty_width <= 1.25:
+		return "high"
+	return "extreme"
+
+
+def _uncertainty_band_for_signal(valuation_row: dict[str, Any] | None) -> float:
+	"""Return the neutral fair-value band used by signal calibration."""
+	uncertainty_width = _safe((valuation_row or {}).get("uncertainty_width"))
+	return _UNCERTAINTY_BANDS[_uncertainty_category_for_signal(uncertainty_width)]
+
+
+def _midpoint_premium(valuation_row: dict[str, Any] | None) -> float | None:
+	"""Return price premium/discount versus iv_p50, or None when unavailable."""
+	current_price = _safe((valuation_row or {}).get("current_price"))
+	iv_p50 = _safe((valuation_row or {}).get("iv_p50"))
+	if current_price is None or iv_p50 is None or iv_p50 <= 0.0:
+		return None
+	return (current_price - iv_p50) / iv_p50
+
+
+def _valuation_position_bucket(valuation_row: dict[str, Any] | None) -> str:
+	"""Classify price position against midpoint fair value with uncertainty bands."""
+	premium = _midpoint_premium(valuation_row)
+	if premium is None:
+		return "unknown"
+
+	uncertainty_width = _safe((valuation_row or {}).get("uncertainty_width"))
+	category = _uncertainty_category_for_signal(uncertainty_width)
+	band = _uncertainty_band_for_signal(valuation_row)
+	severe_threshold = _SEVERE_MIDPOINT_PREMIUM_THRESHOLDS[category]
+
+	if premium < -band:
+		return "below_fair_value"
+	if abs(premium) <= band:
+		return "near_fair_value"
+	if severe_threshold is not None and premium >= severe_threshold:
+		return "severely_overvalued"
+	return "modestly_overvalued"
+
+
+def _has_valuation_only_strong_sell_confirmation(
+	valuation_row: dict[str, Any] | None,
+) -> bool:
+	"""Return True only for severe midpoint overvaluation outside extreme uncertainty."""
+	uncertainty_width = _safe((valuation_row or {}).get("uncertainty_width"))
+	if _uncertainty_category_for_signal(uncertainty_width) == "extreme":
+		return False
+	return _valuation_position_bucket(valuation_row) == "severely_overvalued"
 
 
 def _days_between(newer: str | None, older: str | None) -> int | None:
@@ -195,21 +268,21 @@ def _sell_probability(
 	"""Compute a conservative sell probability."""
 	pressure = 35.0
 	mos = _normalized_mos_for_signal(_safe((valuation_row or {}).get("margin_of_safety_conservative")))
-	current_price = _safe((valuation_row or {}).get("current_price"))
-	iv_p50 = _safe((valuation_row or {}).get("iv_p50"))
-	iv_p75 = _safe((valuation_row or {}).get("iv_p75"))
+	position_bucket = _valuation_position_bucket(valuation_row)
 
-	if mos is not None:
+	if position_bucket == "severely_overvalued":
+		pressure += 22.0
+	elif position_bucket == "modestly_overvalued":
+		pressure += 12.0
+	elif position_bucket == "unknown" and mos is not None:
+		# Fallback only when midpoint fair value is unavailable. This keeps the
+		# conservative MoS useful without stacking it on top of midpoint evidence.
 		if mos < -0.20:
-			pressure += 18.0
+			pressure += 12.0
 		elif mos < -0.10:
-			pressure += 10.0
+			pressure += 7.0
 		elif mos < 0.0:
-			pressure += 5.0
-	if current_price is not None and iv_p75 is not None and current_price > iv_p75:
-		pressure += 15.0
-	elif current_price is not None and iv_p50 is not None and current_price > iv_p50:
-		pressure += 8.0
+			pressure += 3.0
 
 	if quality_score <= 30.0:
 		pressure += 18.0
@@ -245,13 +318,13 @@ def _sell_probability(
 	return _clamp01(sigmoid((pressure - 50.0) / 12.0))
 
 
-# Flags that can confirm a strong_sell verdict (in addition to elevated p_sell).
+# Independent hard-risk flags that can confirm a strong_sell verdict.
 _STRONG_SELL_CONFIRMING_FLAGS: frozenset[str] = frozenset({
 	"high_leverage",
 	"critical_interest_coverage",
 	"quality_breakdown",
-	"negative_margin_of_safety",
-	"overvalued_vs_iv_p75",
+	"negative_direct_fcf",
+	"zero_direct_fcf",
 })
 
 
@@ -270,35 +343,28 @@ def _classify_signal(
 	*readiness_status* — when ``"partial_analysis"``, buy and strong_buy are
 	demoted to hold.  All other statuses are treated as ``"analysis_ready"``.
 
-	Strong-sell requires BOTH ``p_sell >= 0.60`` AND at least one confirming
-	bearish flag from ``_STRONG_SELL_CONFIRMING_FLAGS``; without confirmation
-	the signal degrades to sell.
+	Strong-sell requires elevated sell pressure plus either severe midpoint
+	overvaluation or an independent hard-risk flag. Valuation-only warnings such
+	as negative MoS or price above iv_p75 do not confirm strong_sell by
+	themselves.
 	"""
 	mos = _safe((valuation_row or {}).get("margin_of_safety_conservative"))
-	current_price = _safe((valuation_row or {}).get("current_price"))
-	iv_p75 = _safe((valuation_row or {}).get("iv_p75"))
 	has_insufficient_core_inputs = all(
 		flag in red_flags
 		for flag in ("missing_valuation", "missing_qualitative_score", "missing_ratio_factors")
 	)
-	has_hard_red_flag = any(
-		flag in red_flags
-		for flag in (
-			"quality_breakdown",
-			"high_leverage",
-			"critical_interest_coverage",
-			"negative_direct_fcf",
-			"zero_direct_fcf",
-		)
-	)
+	has_hard_red_flag = any(flag in red_flags for flag in _STRONG_SELL_CONFIRMING_FLAGS)
 	has_confirming_bearish = any(f in red_flags for f in _STRONG_SELL_CONFIRMING_FLAGS)
+	has_severe_valuation_confirmation = _has_valuation_only_strong_sell_confirmation(
+		valuation_row
+	)
 
 	if has_insufficient_core_inputs:
 		return "insufficient_data"
 
-	# Strong sell: elevated p_sell AND at least one confirming bearish flag.
-	# Without BOTH conditions, any bearish scenario degrades to sell.
-	if p_sell >= 0.60 and has_confirming_bearish:
+	# Strong sell: elevated p_sell plus independent hard risk, or severe
+	# midpoint overvaluation outside extreme uncertainty.
+	if p_sell >= 0.60 and (has_confirming_bearish or has_severe_valuation_confirmation):
 		return "strong_sell"
 
 	# Sell: hard red flag present, or elevated p_sell without strong_sell confirmation.

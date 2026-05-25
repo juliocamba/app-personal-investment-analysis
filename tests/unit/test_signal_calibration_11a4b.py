@@ -7,7 +7,7 @@ Verifies the fair-value MoS epsilon introduced in signal_rule_v2:
 3.  _sell_probability with near-zero negative MoS (e.g. -1e-10) behaves
     identically to mos=0.0 — no spurious bearish pressure.
 4.  _sell_probability with mos=-0.02 (outside band) still adds +5 pressure.
-5.  MODEL_VERSION == "signal_rule_v2".
+5.  MODEL_VERSION == "signal_rule_v3".
 
 Background: ORCL and TMDX manual-validation runs produced MoS values like
 -1.5e-16 (machine-epsilon noise from floating-point subtraction when price ≈
@@ -84,11 +84,11 @@ def _p_sell(
 
 class TestModelVersionV2:
     def test_model_version_is_signal_rule_v2(self):
-        """PR 11A.4b intentionally bumps MODEL_VERSION from signal_rule_v1."""
-        assert MODEL_VERSION == "signal_rule_v2"
+        """Signal calibration now uses signal_rule_v3."""
+        assert MODEL_VERSION == "signal_rule_v3"
 
     def test_module_attribute_matches_import(self):
-        assert _prob_module.MODEL_VERSION == "signal_rule_v2"
+        assert _prob_module.MODEL_VERSION == "signal_rule_v3"
 
 
 # ---------------------------------------------------------------------------
@@ -166,19 +166,18 @@ class TestSellPressureNearFairValue:
                 f"mos={sample} should not add pressure over zero-MoS baseline"
             )
 
-    def test_mos_minus_0_02_still_adds_bearish_pressure(self):
-        """mos=-0.02 is outside the band → not clamped → falls in <0.0 bracket (+5 pressure)."""
-        result = _p_sell(mos=-0.02)
+    def test_mos_minus_0_02_still_adds_fallback_bearish_pressure_without_midpoint(self):
+        """When iv_p50 is missing, mos=-0.02 still adds fallback bearish pressure."""
+        result = _p_sell(val_row_override={"margin_of_safety_conservative": -0.02})
         baseline = _p_sell(mos=0.0)
-        # pressure = 35 + 5 = 40 → sigmoid(-10/12)
-        expected = sigmoid(-10.0 / 12.0)
+        expected = sigmoid(-12.0 / 12.0)
         assert result == pytest.approx(expected, abs=1e-5)
         assert result > baseline
 
-    def test_mos_minus_0_25_retains_full_bearish_pressure(self):
-        """Deep negative MoS is well outside the band and retains full pressure (+18)."""
-        result = _p_sell(mos=-0.25)
-        expected = sigmoid(3.0 / 12.0)  # pressure = 35 + 18 = 53
+    def test_mos_minus_0_25_retains_fallback_bearish_pressure_without_midpoint(self):
+        """Deep negative MoS still adds fallback pressure when iv_p50 is missing."""
+        result = _p_sell(val_row_override={"margin_of_safety_conservative": -0.25})
+        expected = sigmoid(-3.0 / 12.0)  # pressure = 35 + 12 = 47
         assert result == pytest.approx(expected, abs=1e-5)
 
     def test_p_sell_none_valuation_equals_p_sell_within_band(self):

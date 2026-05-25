@@ -48,7 +48,7 @@ Phase 12B.1 adds a separate manual positions foundation. Positions are user-ente
 - Full analytical stack: ratios, valuation, qualitative score, probabilistic signal.
 - Readiness classification: signals are only generated when data meets quality thresholds.
 - Valuation diagnostics in the dashboard: MoS basis, DCF scenario count, uncertainty category, distribution-collapsed warning.
-- Signal rule v2 with near-fair-value epsilon band calibration.
+- Signal rule v3 with midpoint fair-value anchoring, uncertainty-adjusted hold/sell bands, and stricter STRONG_SELL confirmation.
 - Phase 12A.5 dashboard data-quality lane: persisted price-validation, statement-completeness, and FMP-vs-SEC annual diagnostics now surface as a separate dashboard lane, with no model gating impact.
 - Alerts present but disabled by default.
 - Cloudflare Pages deployment is planned but not yet live.
@@ -85,7 +85,7 @@ Each row in the dashboard represents one company. The columns mean:
 | **Signal** | The overall analysis verdict: STRONG_BUY, BUY, HOLD, SELL, STRONG_SELL, or INSUFFICIENT_DATA. |
 | **Price** | The latest end-of-day closing price. |
 | **p_buy_adj** | Adjusted probability of a buy signal (0–1). Reduced when data quality is partial. |
-| **p_sell** | Probability of a sell signal (0–1). Elevated when price is significantly above estimated fair value, or when bearish flags are present. |
+| **p_sell** | Probability of a sell signal (0–1). Elevated when price is materially above midpoint fair value, or when bearish risk flags are present. |
 | **Quality** | A qualitative score (0–100) based on profitability, leverage, competitive position, and management signals. |
 | **IV Range** | Intrinsic value range: low / mid / high estimate from DCF and multiples scenarios. |
 | **MoS** | Margin of safety: how far the current price is below (positive) or above (negative) the estimated intrinsic value. A large positive MoS means the price looks cheap relative to the model. |
@@ -105,16 +105,18 @@ Each row in the dashboard represents one company. The columns mean:
 | **BUY** | Elevated buy probability with acceptable quality and limited sell pressure. |
 | **HOLD** | Neutral or mixed evidence. Can mean the price is near fair value, the quality is mixed, or there is not enough conviction in either direction. A HOLD does not mean "safe to hold" — it means the model found no strong signal. |
 | **SELL** | Elevated sell pressure, typically from price significantly above fair value or bearish quality signals. |
-| **STRONG_SELL** | Strong sell requires both elevated sell pressure **and** at least one confirming bearish red flag. A high price alone is not sufficient for STRONG_SELL. |
+| **STRONG_SELL** | Strong sell requires elevated sell pressure plus either severe overvaluation versus midpoint fair value or an independent hard-risk flag. A price above the conservative range alone is not sufficient for STRONG_SELL. |
 | **INSUFFICIENT_DATA** | Not enough reliable data to generate any signal. The company is visible but not actionable. |
 
 > **Note on tracking-only companies:** A company with readiness status `tracking_only` or `unsupported_for_analysis` appears in the dashboard with its latest price but without a valuation or signal. The signal column shows a readiness badge rather than a signal value. Non-US companies without SEC EDGAR coverage (for example, ASML) may remain in this state. `TRACKING_ONLY` is a readiness/display state, not a stored signal value.
 
 > **Note on data-quality warnings:** The dashboard now shows a separate data-quality lane inside the expanded company panel. These warnings are diagnostic evidence only. They are not signal labels, not readiness states, and not investment advice.
 
+HOLD can include uncertainty-constrained valuation concern, not only a plain neutral read. If valuation warnings are visible but the valuation range is wide, the explanation text should describe the stretched valuation evidence and the reduced conviction without changing the signal label or probabilities.
+
 ### Signal calibration note
 
-A margin of safety within ±0.5% of zero is treated as near fair value and does not contribute sell pressure. This avoids spurious signals from floating-point rounding near zero.
+The valuation engine remains conservative: margin of safety is still calculated from `iv_p10` and remains visible as a downside/reference diagnostic. Signal rule v3 uses `iv_p50` as the main fair-value anchor for sell calibration, with wider neutral bands when valuation uncertainty is high. A margin of safety within ±0.5% of zero is also treated as near fair value to avoid spurious signals from floating-point rounding near zero.
 
 ## How to read a company row
 
@@ -129,7 +131,7 @@ This means:
 - No strong buy or sell conviction — HOLD means "no strong edge either way."
 - All three DCF scenarios ran successfully; moderate uncertainty is normal.
 
-If the same row showed `p_sell: 0.72` and a red flag of `high_debt`, the signal might be **SELL** or **STRONG_SELL** — the sell pressure is confirmed by a bearish flag.
+If the same row showed `p_sell: 0.72` and an independent hard-risk flag such as high leverage, the signal might be **SELL** or **STRONG_SELL**. If the only issue is valuation and the valuation range is wide, the model may cap the output at **SELL** rather than **STRONG_SELL**.
 
 ## What to do before acting on a signal
 
@@ -474,6 +476,7 @@ Do not put `SUPABASE_SERVICE_ROLE_KEY` into Cloudflare Pages.
 - **Valuation models are based on assumptions, not predictions.** DCF outputs are scenario estimates. Small changes in growth or discount rate assumptions can materially change the intrinsic value range.
 - **Probabilities are rule-based, not statistically calibrated.** `p_buy_adj` and `p_sell` reflect formula outputs, not historical win rates.
 - **Near-zero margin of safety is treated as near fair value.** Values within ±0.5% of zero are clamped to zero in signal calibration.
+- **Signal calibration uses midpoint fair value.** `iv_p10` remains the conservative margin-of-safety diagnostic, while `iv_p50` anchors sell-pressure calibration and uncertainty-adjusted hold/sell boundaries.
 - **Cloudflare Pages deployment is planned but not yet live.** The frontend currently runs locally.
 - **Alerts are disabled by default.** No alert evaluation or delivery occurs unless `ALERTS_ENABLED=true`.
 - The app is designed for a private deployment, not a public multi-tenant product.

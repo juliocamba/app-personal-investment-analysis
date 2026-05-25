@@ -600,7 +600,7 @@ Current implementation:
 - `uncertainty_category` (`low` / `moderate` / `high` / `extreme`) derived from the spread of the scenario range;
 - `distribution_collapsed` flag set when scenarios collapsed to a single point;
 - method and assumption diagnostics stored in `valuation_runs.assumptions["diagnostics"]` JSON;
-- margin-of-safety outputs consumed by the signal engine and surfaced in the dashboard.
+- conservative margin-of-safety outputs surfaced in the dashboard and retained as downside/reference diagnostics.
 
 ### Valuation diagnostics in dashboard
 
@@ -615,7 +615,7 @@ Migration `013_valuation_diagnostics_in_dashboard_view.sql` adds four diagnostic
 
 ## Signal model summary
 
-The signal layer uses model version `signal_rule_v2`.
+The signal layer uses model version `signal_rule_v3`.
 
 Persisted outputs:
 
@@ -635,14 +635,19 @@ Allowed `final_signal` values are constrained in SQL (`signal_runs.check_final_s
 
 > **`tracking_only` is not a stored signal value.** It is a readiness/display state. When `can_run_signal = false` the frontend shows a readiness badge instead of a signal, and the `TRACKING_ONLY` filter in the dashboard selects rows by `can_run_signal = false`, not by `final_signal`.
 
-### Signal rule v2 behaviour
+### Signal rule v3 behaviour
 
-- **Near-fair-value epsilon band**: MoS values within `±0.5%` (i.e. `abs(mos) ≤ 0.005`) are clamped to zero before sell-pressure calculation. This prevents floating-point noise near zero from generating spurious sell signals (observed with values such as `-1.5e-16` for near-fair-value companies).
-- **STRONG_SELL confirmation requirement**: A `strong_sell` classification requires both elevated sell pressure (`p_sell` above threshold) **and** at least one confirming bearish red flag. Elevated price alone is not sufficient.
+- **Midpoint fair-value anchor**: `iv_p50` is the main anchor for sell-pressure calibration. `iv_p10` remains the conservative MoS basis and dashboard diagnostic; it is not removed, hidden, or used to raise IV values artificially.
+- **Uncertainty-adjusted bands**: the neutral fair-value band widens as valuation uncertainty increases: low/missing `5%`, moderate `10%`, high `15%`, and extreme `25%` around `iv_p50`. Wider ranges reduce extreme-signal conviction rather than increasing it.
+- **Severe valuation thresholds**: valuation-only `strong_sell` confirmation requires price materially above `iv_p50`: low/missing uncertainty `30%`, moderate `40%`, high `55%`. Extreme uncertainty does not allow valuation-only `strong_sell`; it caps valuation-only evidence at `sell`.
+- **Near-fair-value epsilon band**: MoS values within `±0.5%` (i.e. `abs(mos) ≤ 0.005`) are clamped to zero before fallback sell-pressure calculation. This prevents floating-point noise near zero from generating spurious sell signals.
+- **STRONG_SELL confirmation requirement**: A `strong_sell` classification requires elevated sell pressure plus either severe overvaluation versus `iv_p50` after uncertainty adjustment, or an independent hard-risk flag (`high_leverage`, `critical_interest_coverage`, `quality_breakdown`, `negative_direct_fcf`, or `zero_direct_fcf`). Valuation-only warnings such as `negative_margin_of_safety` and `overvalued_vs_iv_p75` remain visible red flags but do not independently confirm `strong_sell`.
 - **Partial-analysis buy demotion**: When `readiness_status = partial_analysis`, `p_buy_adjusted` is reduced from `p_buy` to reflect reduced data confidence.
 - **Tracking-only passthrough**: Companies with `tracking_only` or `unsupported_for_analysis` readiness have `can_run_signal = false`. The signal engine is not invoked and no `signal_runs` row is written for those companies.
 
-The signal output also stores red flags, explanation text, top feature contributors, and freshness indicators.
+The signal output shape is unchanged and still stores red flags, explanation text, top feature contributors, and freshness indicators. Signal rule v3 does not change `valuation_v1`, DCF assumptions, readiness, data-quality diagnostics, providers, backtest methodology, positions, portfolio, alerts, or pipeline stage ordering.
+
+Explanation text is interpretation-only. HOLD explanations may distinguish plain neutral evidence from uncertainty-constrained valuation concerns when valuation warnings exist but wide ranges reduce conviction; this wording refinement does not change probabilities, thresholds, stored labels, or output columns.
 
 ## Historical signal validation
 

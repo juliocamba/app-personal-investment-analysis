@@ -18,14 +18,26 @@ Each day, the pipeline:
 4. **Estimates an intrinsic value range** — using multiple DCF scenarios and multiples-based methods, producing low/mid/high estimates.
 5. **Calculates margin of safety** — how far the current price is from the estimated intrinsic value.
 6. **Assesses quality and risks** — a qualitative score combining profitability, leverage, competitive position, and red flag detection.
-7. **Generates a probabilistic buy/sell signal** — combining valuation, quality, and risk factors into a single signal with buy and sell probabilities.
+7. **Generates a rule-based buy/sell signal** — combining valuation, quality, and risk factors into a single signal with internal buy and sell scores plus auditable reasoning metadata.
 8. **Classifies readiness** — marks companies as signal-ready, provider-limited, or tracking-only based on data availability.
 
 Results appear in the dashboard within minutes of the pipeline completing.
 
-Phase 12A has started with non-blocking data-quality diagnostics. These checks currently compare overlapping FMP and Twelve Data prices when both exist for the same company/date, summarize normalized statement completeness, and compare overlapping annual FMP vs SEC fundamentals when both normalized sources exist. They emit pipeline events/metrics, persist evidence, and surface a separate dashboard data-quality lane only; they do not change readiness, valuation, signal generation, or alerts.
+Phase 12A has started with data-quality diagnostics and limited gating. These checks currently compare overlapping FMP and Twelve Data prices when both exist for the same company/date, summarize normalized statement completeness, and compare overlapping annual FMP vs SEC fundamentals when both normalized sources exist. They emit pipeline events/metrics, persist evidence, and surface a separate dashboard data-quality lane. As of the current Phase 12A hardening pass, stale underlying fundamentals older than 540 days also block valuation and signal generation through the existing readiness gate; this does not change valuation math or signal thresholds. Stale-age anchoring is deterministic: annual normalized statement `period_end_date`, anchored by latest signal date, then valuation date, then price date, then pipeline as-of date.
 
 Phase 12B.1 adds a separate manual positions foundation. Positions are user-entered ownership records with entry date, quantity, average entry price, currency, fees, notes, and active/closed status. They are tracked separately from watchlist analytics and do not change signals, readiness, valuation, alerts, or data-quality diagnostics. Phase 12B.2 adds display-only current value and unrealized P&L using the latest stored price when an active position has a matching price currency; it does not add realized P&L, FX conversion, or investment advice. Phase 12C.1 adds an entry thesis + entry snapshot foundation so each position can keep optional thesis notes plus a frozen snapshot of already-stored app state at the time the profile is captured. Phase 12C.2 improves thesis readability and adds a neutral entry-vs-current comparison using already-persisted current signal, readiness, data-quality, quality score, valuation, and margin-of-safety state only. Phase 12F.1 adds a separate historical signal-validation foundation that persists point-in-time observations from already stored `signal_runs` and `price_eod`, then exposes read-only research summaries without changing live signal generation.
+
+## Phase 12G checkpoint
+
+Phase 12G hardens research credibility without changing signal labels, signal thresholds, valuation thresholds, or adding recommendation behavior.
+
+- Stale fundamentals older than 540 days now suppress valuation and signal execution through readiness gating.
+- Valuation outputs now carry a separate economic credibility layer via `valuation_sanity_status` and related suppression fields.
+- `signal_display_state` separates analytical signals from readiness-suppressed or missing current-state signal rows.
+- `p_buy`, `p_buy_adjusted`, and `p_sell` are internal rule-based scores, not calibrated probabilities.
+- HOLD explanations now vary by hold reason so they say why conviction was withheld instead of repeating generic wording.
+
+Before relying on outputs, verify data freshness, readiness status, provider mix, red flags, and valuation uncertainty. If a row is `tracking_only`, or if valuation sanity says the output is unreliable, treat the dashboard as a research surface rather than a current analytical signal.
 
 ## Current capabilities
 
@@ -47,9 +59,11 @@ Phase 12B.1 adds a separate manual positions foundation. Positions are user-ente
 - Signal Validation interpretation panel: a conservative top-level read on dataset maturity, coverage, observation count, and signal-history span for non-quant interpretation.
 - Full analytical stack: ratios, valuation, qualitative score, probabilistic signal.
 - Readiness classification: signals are only generated when data meets quality thresholds.
-- Valuation diagnostics in the dashboard: MoS basis, DCF scenario count, uncertainty category, distribution-collapsed warning.
+- Valuation diagnostics in the dashboard: MoS basis, DCF scenario count, uncertainty category, distribution-collapsed warning, and valuation sanity credibility classification (`usable`, `high_uncertainty`, `unreliable`, `model_failure`).
 - Signal rule v3 with midpoint fair-value anchoring, uncertainty-adjusted hold/sell bands, and stricter STRONG_SELL confirmation.
-- Phase 12A.5 dashboard data-quality lane: persisted price-validation, statement-completeness, and FMP-vs-SEC annual diagnostics now surface as a separate dashboard lane, with no model gating impact.
+- Phase 12A.5 dashboard data-quality lane: persisted price-validation, statement-completeness, and FMP-vs-SEC annual diagnostics now surface as a separate dashboard lane. Most diagnostics remain explanatory only, but stale annual fundamentals older than 540 days now gate valuation and signal generation through the existing `tracking_only` path with the `stale_fundamentals` readiness reason code.
+- Dashboard stale-output suppression: when readiness blocks valuation or signal (including stale fundamentals), `dashboard_watchlist_latest` returns those analytical fields as null so old analytical rows are not displayed as current state.
+- Dashboard valuation-sanity suppression: when valuation diagnostics mark valuation output as not display-credible (`unreliable` or `model_failure`), `dashboard_watchlist_latest` suppresses valuation display fields to avoid presenting non-credible valuation precision.
 - Alerts present but disabled by default.
 - Cloudflare Pages deployment is planned but not yet live.
 
@@ -82,10 +96,10 @@ Each row in the dashboard represents one company. The columns mean:
 
 | Field | What it shows |
 |---|---|
-| **Signal** | The overall analysis verdict: STRONG_BUY, BUY, HOLD, SELL, STRONG_SELL, or INSUFFICIENT_DATA. |
+| **Signal** | The overall model outcome: STRONG_BUY, BUY, HOLD, SELL, STRONG_SELL, or INSUFFICIENT_DATA. It is not investment advice. |
 | **Price** | The latest end-of-day closing price. |
-| **p_buy_adj** | Adjusted probability of a buy signal (0–1). Reduced when data quality is partial. |
-| **p_sell** | Probability of a sell signal (0–1). Elevated when price is materially above midpoint fair value, or when bearish risk flags are present. |
+| **p_buy_adj** | Adjusted internal buy score (0–1). It is a rule-based model score, not a calibrated probability. Reduced when evidence quality or confidence is limited. |
+| **p_sell** | Internal sell score (0–1). It is a rule-based model score, not a calibrated probability. It rises when valuation downside or bearish risk evidence becomes stronger. |
 | **Quality** | A qualitative score (0–100) based on profitability, leverage, competitive position, and management signals. |
 | **IV Range** | Intrinsic value range: low / mid / high estimate from DCF and multiples scenarios. |
 | **MoS** | Margin of safety: how far the current price is below (positive) or above (negative) the estimated intrinsic value. A large positive MoS means the price looks cheap relative to the model. |
@@ -97,26 +111,39 @@ Each row in the dashboard represents one company. The columns mean:
 | **Valuation uncertainty** | Low / moderate / high / extreme — reflects how spread the DCF scenario range is. |
 | **DCF scenarios** | How many DCF method variants contributed to the intrinsic value estimate (out of 3 possible). |
 
+### Signal reasoning metadata
+
+Each persisted signal also carries deterministic reasoning metadata inside its auditable contributor payload. The metadata explains why the model outcome is credible, limited, or caveated without using the final label as evidence for itself.
+
+- `dominant_signal_driver` identifies the main evidence category behind the outcome.
+- `hold_reason` distinguishes HOLD variants such as near-fair-value, uncertainty-constrained, valuation-unreliable, risk-offset, data-constrained, or neutral mixed.
+- `valuation_used_in_signal` shows whether valuation evidence was allowed to influence the model outcome.
+- `confidence_limiter_codes` lists deterministic reasons that reduce conviction.
+- `strong_sell_basis` distinguishes whether a STRONG_SELL is driven by risk, valuation, or both.
+- `buy_conviction_limited` marks BUY and STRONG_BUY outcomes where confidence limiters still apply.
+
 ### Signal labels
 
 | Signal | Meaning |
 |---|---|
-| **STRONG_BUY** | High buy probability, low sell pressure, strong quality. |
-| **BUY** | Elevated buy probability with acceptable quality and limited sell pressure. |
+| **STRONG_BUY** | High internal buy score, low sell pressure, strong quality. |
+| **BUY** | Elevated internal buy score with acceptable quality and limited sell pressure. |
 | **HOLD** | Neutral or mixed evidence. Can mean the price is near fair value, the quality is mixed, or there is not enough conviction in either direction. A HOLD does not mean "safe to hold" — it means the model found no strong signal. |
-| **SELL** | Elevated sell pressure, typically from price significantly above fair value or bearish quality signals. |
-| **STRONG_SELL** | Strong sell requires elevated sell pressure plus either severe overvaluation versus midpoint fair value or an independent hard-risk flag. A price above the conservative range alone is not sufficient for STRONG_SELL. |
+| **SELL** | Meaningful downside evidence, typically from price significantly above fair value or bearish quality signals. |
+| **STRONG_SELL** | Strong sell requires stronger evidence: either severe overvaluation versus midpoint fair value, an independent hard-risk flag, or both together. A price above the conservative range alone is not sufficient for STRONG_SELL. |
 | **INSUFFICIENT_DATA** | Not enough reliable data to generate any signal. The company is visible but not actionable. |
 
-> **Note on tracking-only companies:** A company with readiness status `tracking_only` or `unsupported_for_analysis` appears in the dashboard with its latest price but without a valuation or signal. The signal column shows a readiness badge rather than a signal value. Non-US companies without SEC EDGAR coverage (for example, ASML) may remain in this state. `TRACKING_ONLY` is a readiness/display state, not a stored signal value.
+> **Note on tracking-only companies:** A company with readiness status `tracking_only` or `unsupported_for_analysis` appears in the dashboard with its latest price but without a valuation or signal. The signal column shows a readiness badge rather than a signal value, and current-state audit exports distinguish the raw stored signal from the suppressed display state. Non-US companies without SEC EDGAR coverage (for example, ASML) may remain in this state. `TRACKING_ONLY` is a readiness/display state, not a stored signal value.
 
 > **Note on data-quality warnings:** The dashboard now shows a separate data-quality lane inside the expanded company panel. These warnings are diagnostic evidence only. They are not signal labels, not readiness states, and not investment advice.
 
-HOLD can include uncertainty-constrained valuation concern, not only a plain neutral read. If valuation warnings are visible but the valuation range is wide, the explanation text should describe the stretched valuation evidence and the reduced conviction without changing the signal label or probabilities.
+HOLD can include uncertainty-constrained valuation concern, valuation-unreliable constraint, risk-offset behavior, or data-constrained neutrality, not only a plain neutral read. If valuation warnings are visible but the valuation range is wide, the explanation text should describe the stretched valuation evidence and the reduced conviction without changing the model outcome.
 
 ### Signal calibration note
 
 The valuation engine remains conservative: margin of safety is still calculated from `iv_p10` and remains visible as a downside/reference diagnostic. Signal rule v3 uses `iv_p50` as the main fair-value anchor for sell calibration, with wider neutral bands when valuation uncertainty is high. A margin of safety within ±0.5% of zero is also treated as near fair value to avoid spurious signals from floating-point rounding near zero.
+
+The `p_buy_adj` and `p_sell` fields are internal rule-based model scores. They are useful for ranking and calibration inside this app, but they are not calibrated probabilities and should not be read as direct chances of market outcomes.
 
 ## How to read a company row
 
@@ -139,6 +166,7 @@ Before making any real decision based on a signal:
 
 1. **Check data freshness.** Stale data can produce misleading signals. If the freshness indicator is old, wait for the next pipeline run.
 2. **Check readiness status.** A `provider_limited` or `tracking_only` company has incomplete data. Treat its signal with extra caution or ignore it entirely.
+	Companies with underlying annual fundamentals older than 540 days are forced into a non-analytical readiness state and will not receive new valuation or signal outputs until fresher fundamentals are available.
 3. **Check provider mix.** If the company is on SEC fallback or Twelve Data fallback, the data source is less complete than FMP primary. The dashboard shows which providers contributed.
 4. **Check red flags.** Even a BUY signal can carry red flags. Review them before acting.
 5. **Check valuation uncertainty.** An `extreme` uncertainty category means the DCF scenarios are very spread. The intrinsic value range is wide and less reliable.
@@ -473,8 +501,9 @@ Do not put `SUPABASE_SERVICE_ROLE_KEY` into Cloudflare Pages.
 - **Not investment advice.** This is a personal research tool. Signals are rule-based heuristics, not statistically calibrated probabilities or professional recommendations.
 - **Data may be incomplete.** Free-tier providers have rate limits and coverage gaps. Missing data can suppress signals or cause partial analysis.
 - **Non-US fundamentals may not be fully supported.** Companies without SEC EDGAR coverage may remain as tracking-only if the primary provider does not supply sufficient fundamental data.
+- **Tracking-only rows are suppressed by display state.** Old consumers that read only `final_signal` may miss `signal_display_state`, `stored_final_signal`, and readiness-suppression semantics.
 - **Valuation models are based on assumptions, not predictions.** DCF outputs are scenario estimates. Small changes in growth or discount rate assumptions can materially change the intrinsic value range.
-- **Probabilities are rule-based, not statistically calibrated.** `p_buy_adj` and `p_sell` reflect formula outputs, not historical win rates.
+- **Internal buy/sell scores are rule-based, not statistically calibrated.** `p_buy_adj` and `p_sell` reflect formula outputs, not historical win rates.
 - **Near-zero margin of safety is treated as near fair value.** Values within ±0.5% of zero are clamped to zero in signal calibration.
 - **Signal calibration uses midpoint fair value.** `iv_p10` remains the conservative margin-of-safety diagnostic, while `iv_p50` anchors sell-pressure calibration and uncertainty-adjusted hold/sell boundaries.
 - **Cloudflare Pages deployment is planned but not yet live.** The frontend currently runs locally.
@@ -491,6 +520,10 @@ Do not put `SUPABASE_SERVICE_ROLE_KEY` into Cloudflare Pages.
 - Improved operator dashboards for `pipeline_runs` and provider health.
 - Additional valuation diagnostics and model calibration tools.
 - Expanded alert rule management in the frontend.
+
+## Next planned slice
+
+After the current Phase 12G checkpoint, the next planned work is the Data Quality / Readiness Gating Matrix. That slice should classify data-quality warning codes as informational, confidence-limiting, or blocking, while keeping diagnostics separate from signal labels and avoiding threshold tuning or new signal categories.
 
 ## Phase status
 

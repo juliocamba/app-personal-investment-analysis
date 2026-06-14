@@ -41,6 +41,8 @@ function makeRow(overrides: Partial<WatchlistRow> = {}): WatchlistRow {
     p_buy_adjusted: null,
     p_sell: null,
     final_signal: null,
+    stored_final_signal: null,
+    signal_display_state: null,
     red_flags: null,
     explanation: null,
     freshness_flag: null,

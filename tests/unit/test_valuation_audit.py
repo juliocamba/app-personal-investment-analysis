@@ -318,7 +318,7 @@ class TestBuildDiagnosticsStatus:
 
     def test_all_required_keys_present(self):
         result = _call()
-        # PR 11A.2 added mos_basis, scenario_count, uncertainty_category.
+        # Phase 12G Slice 2B adds valuation sanity diagnostics fields.
         assert set(result.keys()) == {
             "valuation_status",
             "freshness_flag",
@@ -328,6 +328,18 @@ class TestBuildDiagnosticsStatus:
             "mos_basis",
             "scenario_count",
             "uncertainty_category",
+            "valuation_sanity_status",
+            "valuation_sanity_reason_codes",
+            "valuation_evidence_usable",
+            "valuation_display_suppressed",
+            "valuation_signal_influence_blocked",
+            "valuation_method_coverage",
+            "iv_range_ratio_p90_p10",
+            "distribution_span_ratio",
+            "dcf_multiples_gap_ratio",
+            "max_terminal_value_share",
+            "terminal_spread",
+            "midpoint_price_ratio",
         }
 
     def test_blockers_list_is_sorted(self):

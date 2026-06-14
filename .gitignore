@@ -45,3 +45,6 @@ frontend/.env.local
 *.log
 *.tmp
 *.bak
+
+# ─── Local exports ─────────────────────────────────────────────────────────────
+exports/

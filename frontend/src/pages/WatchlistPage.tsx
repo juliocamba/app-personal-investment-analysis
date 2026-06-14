@@ -498,8 +498,8 @@ export function WatchlistPage() {
                 <th scope="col">Company</th>
                 <th scope="col">Signal</th>
                 <th scope="col">Price</th>
-                <th scope="col" title="Probability of buy (adjusted)">p_buy_adj</th>
-                <th scope="col" title="Probability of sell">p_sell</th>
+                <th scope="col" title="Adjusted internal buy score">p_buy_adj</th>
+                <th scope="col" title="Internal sell score">p_sell</th>
                 <th scope="col" title="Final quality score (0–100)">Quality</th>
                 <th scope="col" title="Intrinsic value P25–P75 range">IV Range</th>
                 <th scope="col" title="Margin of safety (conservative)">MoS</th>

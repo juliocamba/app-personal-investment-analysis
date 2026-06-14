@@ -10,6 +10,7 @@ def build_top_feature_contributors(
 	quality_multiplier: float,
 	risk_penalty: float,
 	uncertainty_penalty: float,
+	reasoning_metadata: dict[str, Any] | None = None,
 ) -> list[dict[str, Any]]:
 	"""Return an auditable JSON-serialisable contributor payload."""
 	contributors: list[dict[str, Any]] = []
@@ -60,6 +61,16 @@ def build_top_feature_contributors(
 			"direction": "negative" if uncertainty_penalty > 0 else "neutral",
 		}
 	)
+	if reasoning_metadata:
+		contributors.append(
+			{
+				"name": "signal_reasoning_metadata",
+				"kind": "metadata",
+				"value": reasoning_metadata,
+				"impact": 0.0,
+				"direction": "neutral",
+			}
+		)
 
 	contributors.sort(
 		key=lambda item: abs(float(item.get("weighted_impact", item.get("impact", 0.0)))),
@@ -85,6 +96,7 @@ _RED_FLAG_LABELS: dict[str, str] = {
 	"missing_valuation":          "valuation unavailable",
 	"missing_qualitative_score":  "qualitative data unavailable",
 	"missing_ratio_factors":      "ratio factors unavailable",
+	"valuation_unreliable":       "valuation output deemed unreliable",
 	"freshness_stale":            "stale input data",
 	"freshness_missing_inputs":   "missing core inputs",
 }
@@ -153,6 +165,8 @@ def build_signal_explanation(
 	p_buy_adjusted: float,
 	p_sell: float,
 	uncertainty_width: float | None = None,
+	valuation_sanity_status: str | None = None,
+	reasoning_metadata: dict[str, Any] | None = None,
 ) -> str:
 	"""Build a short, structured, plain-English explanation string.
 
@@ -174,6 +188,15 @@ def build_signal_explanation(
 		red_flags=red_flags,
 	)
 	has_wide_uncertainty = uncertainty_width is not None and uncertainty_width > 0.50
+	sanity_status = str(valuation_sanity_status or "usable").strip().lower()
+	reasoning = reasoning_metadata or {}
+	hold_reason = reasoning.get("hold_reason")
+	dominant_signal_driver = reasoning.get("dominant_signal_driver")
+	confidence_limiter_codes = reasoning.get("confidence_limiter_codes") or []
+	strong_sell_basis = reasoning.get("strong_sell_basis")
+
+	def _has_limiter(code: str) -> bool:
+		return any(str(item).strip() == code for item in confidence_limiter_codes)
 
 	# Optional uncertainty suffix appended to every label when width is wide.
 	uncertainty_note = (
@@ -197,83 +220,117 @@ def build_signal_explanation(
 	# ── Sell / Strong sell ───────────────────────────────────────────────────
 	if sig in ("STRONG_SELL", "SELL"):
 		label = "Strong sell" if sig == "STRONG_SELL" else "Sell"
+		if sig == "STRONG_SELL":
+			if strong_sell_basis == "risk":
+				top = _top_bearish(red_flags)
+				if top:
+					reasons = " and ".join(_label(f) for f in top)
+					return f"{label} - risk evidence dominates: {reasons}." + uncertainty_note
+				return f"{label} - risk evidence dominates the downside case." + uncertainty_note
+			if strong_sell_basis == "valuation":
+				if current_price is not None and iv_p50 is not None and iv_p50 > 0.0:
+					premium = (current_price - iv_p50) / iv_p50
+					return (
+						f"{label} - valuation indicates material downside versus midpoint fair value "
+						f"({premium:.0%} above iv_p50)."
+						+ uncertainty_note
+					)
+				return f"{label} - valuation indicates material downside versus fair value references." + uncertainty_note
+			if strong_sell_basis == "combined":
+				top = _top_bearish(red_flags)
+				reasons = " and ".join(_label(f) for f in top) if top else "risk evidence"
+				return (
+					f"{label} - downside is supported by both valuation stretch and {reasons}."
+					+ uncertainty_note
+				)
 		top = _top_bearish(red_flags)
 		if top:
 			reasons = " and ".join(_label(f) for f in top)
-			return f"{label} — {reasons}." + uncertainty_note
+			return f"{label} - {reasons}." + uncertainty_note
 		if current_price is not None and iv_p50 is not None and iv_p50 > 0.0:
 			premium = (current_price - iv_p50) / iv_p50
 			if premium > 0.0:
 				return (
-					f"{label} — price materially above midpoint fair-value estimate "
+					f"{label} - price materially above midpoint fair-value estimate "
 					f"({premium:.0%} above iv_p50)."
 					+ uncertainty_note
 				)
 		if mos is not None and mos < 0.0:
 			return (
-				f"{label} — price above conservative intrinsic value reference "
+				f"{label} - price above conservative intrinsic value reference "
 				f"({mos:.0%} conservative MoS)."
 				+ uncertainty_note
 			)
-		return f"{label} — elevated sell pressure (p_sell={p_sell:.2f})." + uncertainty_note
+		return f"{label} - bearish internal model score remains elevated (sell_score={p_sell:.2f})." + uncertainty_note
 
 	# ── Buy / Strong buy ─────────────────────────────────────────────────────
 	if sig in ("STRONG_BUY", "BUY"):
 		label = "Strong buy" if sig == "STRONG_BUY" else "Buy"
 		if mos is not None:
-			parts: list[str] = [f"{label} — conservative margin of safety {mos:.0%}"]
+			parts: list[str] = [f"{label} - conservative margin of safety {mos:.0%}"]
 			if quality_score >= 60.0:
 				parts.append("supported by strong quality score")
 			if not red_flags:
 				parts.append("no major red flags")
 			return "; ".join(parts) + "." + uncertainty_note
 		return (
-			f"{label} — buy probability {p_buy_adjusted:.2f} with no disqualifying red flags."
+			f"{label} - supportive internal model score {p_buy_adjusted:.2f} with no disqualifying red flags."
 			+ uncertainty_note
 		)
 
 	# ── Hold ─────────────────────────────────────────────────────────────────
-	if p_buy_adjusted >= 0.50 and p_sell >= 0.50:
-		return "Hold — mixed signals; buy and sell pressure both elevated." + uncertainty_note
-	if p_buy_adjusted >= 0.55:
-		return (
-			f"Hold — buy probability ({p_buy_adjusted:.2f}) just below threshold."
-			+ uncertainty_note
-		)
-	if freshness_flag == "missing_inputs":
-		return "Hold — low confidence due to missing core inputs." + uncertainty_note
-	if freshness_flag == "stale":
-		return "Hold — low confidence due to stale input data." + uncertainty_note
-	if freshness_flag == "limited":
-		return "Hold — limited evidence; no high-conviction signal." + uncertainty_note
+	if sanity_status in {"unreliable", "model_failure"} or hold_reason == "valuation_unreliable_hold" or _has_limiter("valuation_unreliable"):
+		return "Hold - valuation was not relied on because the valuation output was flagged as unreliable."
+	if hold_reason == "data_constrained_hold":
+		if freshness_flag == "missing_inputs":
+			return "Hold - missing core inputs limited conviction."
+		if freshness_flag == "stale":
+			return "Hold - stale inputs and readiness limits kept conviction low."
+		return "Hold - readiness and data freshness limits kept conviction low."
+	if hold_reason == "risk_offset_hold":
+		return "Hold - risk signals offset the valuation case, so conviction stayed capped."
+	if hold_reason == "uncertainty_constrained_hold":
+		if midpoint_premium is not None and midpoint_premium > 0.0:
+			return "Hold - price sat above midpoint fair value, but valuation uncertainty limited conviction."
+		return "Hold - valuation uncertainty limited conviction around fair value."
+	if hold_reason == "near_fair_value_hold":
+		return "Hold - price was near midpoint fair value, leaving no clear edge."
+	if hold_reason == "neutral_mixed_hold" and p_buy_adjusted >= 0.50 and p_sell >= 0.50:
+		if dominant_signal_driver == "neutral_mixed":
+			return "Hold - mixed evidence kept bullish and bearish scores in play, with no dominant driver."
+		return "Hold - mixed evidence kept bullish and bearish scores in play."
+	if hold_reason == "neutral_mixed_hold" and p_buy_adjusted >= 0.55:
+		return f"Hold - supportive evidence stayed just below the buy threshold ({p_buy_adjusted:.2f})."
+	if hold_reason == "neutral_mixed_hold":
+		return "Hold - mixed evidence was not strong enough to favor either side."
 	if has_valuation_concern:
 		if has_wide_uncertainty:
 			if midpoint_premium is not None and midpoint_premium > 0.0:
 				return (
-					"Hold — shares trade above midpoint fair-value estimate, "
+					"Hold - shares trade above midpoint fair-value estimate, "
 					"but wide valuation uncertainty limits conviction."
 				)
 			if mos is not None and mos < 0.0:
 				return (
-					"Hold — conservative valuation metrics are negative, "
+					"Hold - conservative valuation metrics are negative, "
 					"but valuation ranges remain highly uncertain."
 				)
 			return (
-				"Hold — valuation indicators appear stretched, "
+				"Hold - valuation indicators appear stretched, "
 				"but wide valuation uncertainty limits conviction."
 			)
 		if midpoint_premium is not None and midpoint_premium > 0.0:
 			return (
-				"Hold — shares trade above midpoint fair-value estimate, "
+				"Hold - shares trade above midpoint fair-value estimate, "
 				"though evidence does not support a stronger sell signal."
 			)
 		return (
-			"Hold — valuation indicators appear stretched, "
+			"Hold - valuation indicators appear stretched, "
 			"but sell pressure is not high enough for a stronger signal."
 		)
 	if p_buy_adjusted >= 0.40:
 		return (
-			f"Hold — insufficient directional conviction (p_buy_adj={p_buy_adjusted:.2f})."
+			f"Hold - insufficient directional conviction (model_score={p_buy_adjusted:.2f})."
 			+ uncertainty_note
 		)
-	return "Hold — no strong buy or sell case established." + uncertainty_note
+	return "Hold - no strong buy or sell case established." + uncertainty_note

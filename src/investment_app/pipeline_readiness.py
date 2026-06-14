@@ -104,6 +104,7 @@ def classify_company_for_pipeline(
 
         result = classify_company_readiness(
             company,
+            as_of_date=factor_date,
             latest_price_row=inputs["latest_price_row"],
             statement_rows=inputs["statement_rows"],
             filing_rows=inputs["filing_rows"],

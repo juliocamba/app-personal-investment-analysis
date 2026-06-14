@@ -118,6 +118,10 @@ def _adjustment(result: dict[str, Any], name: str) -> dict[str, Any]:
     raise AssertionError(f"missing contributor {name}")
 
 
+def _reasoning_metadata(result: dict[str, Any]) -> dict[str, Any]:
+    return _adjustment(result, "signal_reasoning_metadata")["value"]
+
+
 def test_compute_signal_run_returns_required_keys():
     repo = _FakeSignalRepo(
         valuation=_VALUATION_GOOD,
@@ -231,6 +235,86 @@ def test_missing_valuation_is_conservative():
     assert result["final_signal"] == "hold"
     assert "missing_valuation" in result["red_flags"]
     assert result["p_buy_adjusted"] < 0.60
+    reasoning = _reasoning_metadata(result)
+    assert reasoning["valuation_used_in_signal"] is False
+    assert "valuation_missing" in reasoning["confidence_limiter_codes"]
+
+
+def test_unreliable_valuation_blocks_valuation_only_strong_conclusions():
+    valuation_unreliable = {
+        **_VALUATION_GOOD,
+        "current_price": 220.0,
+        "iv_p75": 110.0,
+        "margin_of_safety_conservative": -0.50,
+        "assumptions": {
+            "diagnostics": {
+                "freshness_flag": "ok",
+                "blockers": [],
+                "warnings": [],
+                "valuation_sanity_status": "unreliable",
+                "valuation_signal_influence_blocked": True,
+            }
+        },
+    }
+    repo = _FakeSignalRepo(
+        valuation=valuation_unreliable,
+        qualitative=_QUAL_GOOD,
+        ratios=[_RATIO_GOOD],
+        prices=[_PRICE_GOOD],
+        filings=[_FILING_10K],
+    )
+    result = compute_signal_run(_COMPANY_ID, repo, _SIGNAL_DATE)
+    assert result is not None
+    assert result["final_signal"] != "strong_sell"
+    assert "valuation_unreliable" in result["red_flags"]
+    assert "overvalued_vs_iv_p75" not in result["red_flags"]
+    reasoning = _reasoning_metadata(result)
+    assert reasoning["valuation_used_in_signal"] is False
+    assert reasoning["hold_reason"] == "valuation_unreliable_hold"
+    assert "valuation_unreliable" in reasoning["confidence_limiter_codes"]
+
+
+def test_reasoning_metadata_embeds_internal_score_note_and_no_language_warning():
+    repo = _FakeSignalRepo(
+        valuation=_VALUATION_GOOD,
+        qualitative=_QUAL_GOOD,
+        ratios=[_RATIO_GOOD],
+        prices=[_PRICE_GOOD],
+        filings=[_FILING_10K],
+    )
+    result = compute_signal_run(_COMPANY_ID, repo, _SIGNAL_DATE)
+    reasoning = _reasoning_metadata(result)
+    assert reasoning["probability_interpretation_note"].startswith("Internal rule-based model scores")
+    assert reasoning["recommendation_language_warning"] is None
+    assert "probability" not in result["explanation"].lower()
+
+
+def test_reasoning_metadata_marks_risk_driven_strong_sell():
+    valuation = {
+        **_VALUATION_GOOD,
+        "current_price": 108.0,
+        "iv_p50": 100.0,
+        "iv_p75": 120.0,
+        "uncertainty_width": 1.60,
+        "margin_of_safety_conservative": -0.02,
+    }
+    ratios = {
+        **_RATIO_GOOD,
+        "net_debt_to_ebitda": 6.5,
+    }
+    repo = _FakeSignalRepo(
+        valuation=valuation,
+        qualitative=_QUAL_GOOD,
+        ratios=[ratios],
+        prices=[_PRICE_GOOD],
+        filings=[_FILING_10K],
+    )
+    result = compute_signal_run(_COMPANY_ID, repo, _SIGNAL_DATE)
+    assert result is not None
+    assert result["final_signal"] == "strong_sell"
+    reasoning = _reasoning_metadata(result)
+    assert reasoning["strong_sell_basis"] == "risk"
+    assert reasoning["risk_override_applied"] is True
 
 
 def test_missing_qualitative_score_is_conservative():

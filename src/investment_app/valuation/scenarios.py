@@ -17,6 +17,7 @@ All numbers are in the company's reporting currency.
 """
 from __future__ import annotations
 
+import math
 from typing import Any
 
 from investment_app.valuation.dcf import extract_base_fcf, run_dcf_scenario
@@ -40,6 +41,65 @@ _DEFAULT_METHOD_WEIGHTS = {
     "multiples": 0.30,
     "ddm": 0.20,
 }
+
+_SANITY_USABLE = "usable"
+_SANITY_HIGH_UNCERTAINTY = "high_uncertainty"
+_SANITY_UNRELIABLE = "unreliable"
+_SANITY_MODEL_FAILURE = "model_failure"
+
+
+def _is_finite_number(value: Any) -> bool:
+    if value is None:
+        return False
+    try:
+        return math.isfinite(float(value))
+    except (TypeError, ValueError):
+        return False
+
+
+def _safe_ratio(numerator: float | None, denominator: float | None) -> float | None:
+    if numerator is None or denominator is None:
+        return None
+    if denominator <= 0.0:
+        return None
+    return numerator / denominator
+
+
+def _classify_method_coverage(
+    *,
+    has_dcf_component: bool,
+    has_multiples_component: bool,
+    has_ddm_component: bool,
+) -> str:
+    count = int(has_dcf_component) + int(has_multiples_component) + int(has_ddm_component)
+    if count == 0:
+        return "no_usable_method"
+    if count >= 2:
+        return "multi_method"
+    if has_dcf_component:
+        return "dcf_only"
+    if has_multiples_component:
+        return "multiples_only"
+    return "ddm_only"
+
+
+def _max_terminal_value_share(dcf_output: dict[str, Any] | None) -> float | None:
+    if not isinstance(dcf_output, dict):
+        return None
+    scenarios = dcf_output.get("scenarios")
+    if not isinstance(scenarios, dict):
+        return None
+
+    shares: list[float] = []
+    for payload in scenarios.values():
+        if not isinstance(payload, dict):
+            continue
+        pv_terminal = _get(payload, "pv_terminal_value")
+        enterprise_value = _get(payload, "enterprise_value")
+        share = _safe_ratio(pv_terminal, enterprise_value)
+        if share is not None:
+            shares.append(share)
+    return max(shares) if shares else None
 
 
 # ---------------------------------------------------------------------------
@@ -244,6 +304,13 @@ def _build_diagnostics(
     wacc: float,
     distribution: list[dict[str, Any]],
     uncertainty_width: float | None = None,
+    iv_p10: float | None = None,
+    iv_p25: float | None = None,
+    iv_p50: float | None = None,
+    iv_p75: float | None = None,
+    iv_p90: float | None = None,
+    method_estimates: dict[str, float] | None = None,
+    dcf_output: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Build a compact, safe diagnostics payload for assumptions JSON."""
     blockers: list[str] = []
@@ -314,6 +381,139 @@ def _build_diagnostics(
     elif blockers or warnings:
         data_quality_flag = "limited"
 
+    method_estimates = method_estimates or {}
+    has_dcf_component = _is_finite_number(method_estimates.get("dcf"))
+    has_multiples_component = _is_finite_number(method_estimates.get("multiples"))
+    has_ddm_component = _is_finite_number(method_estimates.get("ddm"))
+    valuation_method_coverage = _classify_method_coverage(
+        has_dcf_component=has_dcf_component,
+        has_multiples_component=has_multiples_component,
+        has_ddm_component=has_ddm_component,
+    )
+
+    iv_values = [iv_p10, iv_p25, iv_p50, iv_p75, iv_p90]
+    finite_percentiles = all(_is_finite_number(value) for value in iv_values)
+    monotonic_percentiles = (
+        finite_percentiles
+        and float(iv_p10) <= float(iv_p25) <= float(iv_p50) <= float(iv_p75) <= float(iv_p90)
+    )
+
+    iv_range_ratio_p90_p10 = _safe_ratio(
+        float(iv_p90) if _is_finite_number(iv_p90) else None,
+        float(iv_p10) if _is_finite_number(iv_p10) else None,
+    )
+
+    distribution_values = [
+        float(entry.get("value"))
+        for entry in distribution
+        if _is_finite_number(entry.get("value"))
+    ]
+    distribution_span_ratio = None
+    if distribution_values:
+        distribution_min = min(distribution_values)
+        distribution_max = max(distribution_values)
+        distribution_span_ratio = _safe_ratio(distribution_max, distribution_min)
+
+    dcf_mid = method_estimates.get("dcf")
+    multiples_mid = method_estimates.get("multiples")
+    dcf_multiples_gap_ratio = None
+    if _is_finite_number(dcf_mid) and _is_finite_number(multiples_mid):
+        high = max(float(dcf_mid), float(multiples_mid))
+        low = min(float(dcf_mid), float(multiples_mid))
+        dcf_multiples_gap_ratio = _safe_ratio(high, low)
+
+    midpoint_price_ratio = _safe_ratio(
+        float(iv_p50) if _is_finite_number(iv_p50) else None,
+        float(current_price) if _is_finite_number(current_price) else None,
+    )
+
+    terminal_spread = wacc - terminal_growth
+    max_terminal_value_share = _max_terminal_value_share(dcf_output)
+
+    sanity_reason_codes: set[str] = set()
+    sanity_status = _SANITY_USABLE
+
+    def _escalate(next_status: str, reason: str) -> None:
+        nonlocal sanity_status
+        rank = {
+            _SANITY_USABLE: 0,
+            _SANITY_HIGH_UNCERTAINTY: 1,
+            _SANITY_UNRELIABLE: 2,
+            _SANITY_MODEL_FAILURE: 3,
+        }
+        if rank[next_status] > rank[sanity_status]:
+            sanity_status = next_status
+        sanity_reason_codes.add(reason)
+
+    # Integrity / model-failure checks.
+    if valuation_status != "blocked" and not finite_percentiles:
+        _escalate(_SANITY_MODEL_FAILURE, "missing_finite_percentiles")
+    if valuation_status != "blocked" and finite_percentiles and not monotonic_percentiles:
+        _escalate(_SANITY_MODEL_FAILURE, "non_monotonic_percentiles")
+    if valuation_status != "blocked" and not distribution:
+        _escalate(_SANITY_MODEL_FAILURE, "no_usable_distribution")
+    if terminal_growth >= wacc:
+        _escalate(_SANITY_MODEL_FAILURE, "invalid_terminal_growth_gte_discount_rate")
+
+    # Method coverage and moderate uncertainty checks.
+    if valuation_method_coverage == "no_usable_method":
+        _escalate(_SANITY_MODEL_FAILURE, "no_usable_method")
+    if not has_dcf_component and not has_multiples_component:
+        _escalate(_SANITY_UNRELIABLE, "missing_dcf_and_multiples")
+    if not has_dcf_component and (has_multiples_component or has_ddm_component):
+        _escalate(_SANITY_HIGH_UNCERTAINTY, "missing_dcf_component")
+    if not has_multiples_component and has_dcf_component:
+        _escalate(_SANITY_HIGH_UNCERTAINTY, "missing_multiples_component")
+    if scenario_count <= 1:
+        _escalate(_SANITY_HIGH_UNCERTAINTY, "sparse_scenario_count")
+    if uncertainty_category == "extreme":
+        _escalate(_SANITY_HIGH_UNCERTAINTY, "extreme_uncertainty")
+
+    # Economic plausibility checks.
+    if iv_range_ratio_p90_p10 is not None:
+        if iv_range_ratio_p90_p10 > 6.0:
+            _escalate(_SANITY_UNRELIABLE, "severe_intrinsic_value_span")
+        elif iv_range_ratio_p90_p10 > 3.0:
+            _escalate(_SANITY_HIGH_UNCERTAINTY, "wide_intrinsic_value_span")
+
+    if distribution_span_ratio is not None:
+        if distribution_span_ratio > 6.0:
+            _escalate(_SANITY_UNRELIABLE, "severe_distribution_span_ratio")
+        elif distribution_span_ratio > 3.0:
+            _escalate(_SANITY_HIGH_UNCERTAINTY, "wide_distribution_span_ratio")
+
+    if dcf_multiples_gap_ratio is not None:
+        if dcf_multiples_gap_ratio > 3.5:
+            _escalate(_SANITY_UNRELIABLE, "severe_dcf_multiples_divergence")
+        elif dcf_multiples_gap_ratio > 2.0:
+            _escalate(_SANITY_HIGH_UNCERTAINTY, "dcf_multiples_divergence")
+
+    if max_terminal_value_share is not None:
+        if max_terminal_value_share > 0.95:
+            _escalate(_SANITY_UNRELIABLE, "severe_terminal_value_dominance")
+        elif max_terminal_value_share > 0.85:
+            _escalate(_SANITY_HIGH_UNCERTAINTY, "terminal_value_dominance")
+
+    if terminal_spread < 0.015:
+        _escalate(_SANITY_UNRELIABLE, "terminal_spread_too_narrow")
+    elif terminal_spread < 0.025:
+        _escalate(_SANITY_HIGH_UNCERTAINTY, "terminal_spread_narrow")
+
+    if midpoint_price_ratio is None:
+        _escalate(_SANITY_HIGH_UNCERTAINTY, "missing_current_price_for_relative_checks")
+    else:
+        if midpoint_price_ratio > 8.0 or midpoint_price_ratio < 0.125:
+            _escalate(_SANITY_UNRELIABLE, "severe_midpoint_price_implausibility")
+        elif midpoint_price_ratio > 4.0 or midpoint_price_ratio < 0.25:
+            _escalate(_SANITY_HIGH_UNCERTAINTY, "midpoint_price_implausibility")
+
+    if fcf_data is not None and fcf_data.get("direct_fcf_status") in {"negative", "zero"} and distribution:
+        _escalate(_SANITY_UNRELIABLE, "negative_or_zero_fcf_path")
+
+    valuation_evidence_usable = sanity_status in {_SANITY_USABLE, _SANITY_HIGH_UNCERTAINTY}
+    valuation_display_suppressed = sanity_status in {_SANITY_UNRELIABLE, _SANITY_MODEL_FAILURE}
+    valuation_signal_influence_blocked = sanity_status in {_SANITY_UNRELIABLE, _SANITY_MODEL_FAILURE}
+
     return {
         "valuation_status": valuation_status,
         "freshness_flag": freshness_flag,
@@ -323,6 +523,18 @@ def _build_diagnostics(
         "mos_basis": "iv_p10",
         "scenario_count": scenario_count,
         "uncertainty_category": uncertainty_category,
+        "valuation_sanity_status": sanity_status,
+        "valuation_sanity_reason_codes": sorted(sanity_reason_codes),
+        "valuation_evidence_usable": valuation_evidence_usable,
+        "valuation_display_suppressed": valuation_display_suppressed,
+        "valuation_signal_influence_blocked": valuation_signal_influence_blocked,
+        "valuation_method_coverage": valuation_method_coverage,
+        "iv_range_ratio_p90_p10": iv_range_ratio_p90_p10,
+        "distribution_span_ratio": distribution_span_ratio,
+        "dcf_multiples_gap_ratio": dcf_multiples_gap_ratio,
+        "max_terminal_value_share": max_terminal_value_share,
+        "terminal_spread": terminal_spread,
+        "midpoint_price_ratio": midpoint_price_ratio,
     }
 
 
@@ -718,6 +930,13 @@ def compute_valuation_run(
         wacc=wacc,
         distribution=distribution,
         uncertainty_width=uncertainty_width,
+        iv_p10=iv_p10,
+        iv_p25=iv_p25,
+        iv_p50=iv_p50,
+        iv_p75=iv_p75,
+        iv_p90=iv_p90,
+        method_estimates=method_estimates,
+        dcf_output=dcf_output,
     )
     assumptions["aggregation"] = {
         "distribution_method": "weighted_step_percentiles",

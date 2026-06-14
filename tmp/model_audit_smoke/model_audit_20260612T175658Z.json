@@ -1,0 +1,4546 @@
+{
+  "exported_at": "2026-06-12T17:56:58.133391+00:00",
+  "row_count": 14,
+  "rows": [
+    {
+      "company_id": "1e65555d-b9fb-49b1-8da6-e21e8e4c9250",
+      "ticker": "AAPL",
+      "company_name": "Apple Inc.",
+      "sector": "Technology",
+      "industry": "Consumer Electronics",
+      "latest_price": 292.8228,
+      "price_date": "2026-06-12",
+      "price_provider": "fmp",
+      "readiness_status": "analysis_ready",
+      "provider_mix": "primary_only",
+      "readiness_reason_codes": [
+        "valuation_ready"
+      ],
+      "can_run_valuation": true,
+      "can_run_signal": true,
+      "limiting_domain": null,
+      "readiness_updated_at": "2026-06-12T15:46:43.958611+00:00",
+      "data_quality_status": "not_comparable",
+      "data_quality_warning_codes": [
+        "price_not_comparable",
+        "fundamentals_provider_overlap_missing"
+      ],
+      "price_validation_status": "not_comparable",
+      "statement_completeness_status": "ok",
+      "statement_completeness_summary": "Complete",
+      "fundamentals_provider_comparison_status": "not_comparable",
+      "fundamentals_provider_comparison_summary": "No overlapping FMP and SEC annual periods",
+      "data_quality_details_json": {
+        "price_validation": {
+          "comparison_date": null,
+          "reference_provider": "fmp",
+          "comparison_provider": "twelve_data"
+        },
+        "statement_completeness": {
+          "status": "ok",
+          "latest_source": "fmp",
+          "missing_fields": [],
+          "latest_fiscal_year": 2025,
+          "annual_periods_found": 5,
+          "latest_period_end_date": "2025-09-27",
+          "missing_optional_fields": [],
+          "missing_statement_domains": []
+        },
+        "fundamentals_provider_comparison": {
+          "compared_fields": [],
+          "discrepancy_level": "not_comparable",
+          "discrepant_fields": [],
+          "overlapping_period_count": 0,
+          "max_relative_difference_pct": null
+        }
+      },
+      "statement_source": "fmp",
+      "fiscal_year": 2025,
+      "fiscal_period": "annual",
+      "latest_statement_date": "2025-09-27",
+      "revenue": 416161000000.0,
+      "gross_profit": 195201000000.0,
+      "operating_income": 133050000000.0,
+      "ebit": 132729000000.0,
+      "ebitda": 144427000000.0,
+      "net_income": 112010000000.0,
+      "cfo": 111482000000.0,
+      "capex": -12715000000.0,
+      "free_cash_flow": 98767000000.0,
+      "depreciation_amortization": 11698000000.0,
+      "cash_and_equivalents": 35934000000.0,
+      "total_debt": 112377000000.0,
+      "total_equity": 73733000000.0,
+      "diluted_shares": 15004697000.0,
+      "factor_date": "2026-06-12",
+      "roic": 0.6628672357766887,
+      "roe": 1.7142244974480232,
+      "fcf_yield": 0.0224791426627036,
+      "net_debt_to_ebitda": 0.5292846905357032,
+      "interest_coverage": null,
+      "ev_to_ebitda": 30.951002158125554,
+      "price_to_sales": 10.557734599569876,
+      "price_to_book": 59.58956489891364,
+      "news_sentiment_7d": null,
+      "ratio_data_quality_score": 100.0,
+      "valuation_run_id": "3cc810b5-db84-4290-9f52-27f0ae256b63",
+      "valuation_date": "2026-06-12",
+      "valuation_model_version": "valuation_v1",
+      "valuation_currency": "USD",
+      "valuation_current_price": 292.8228,
+      "iv_p10": 78.01021642490768,
+      "iv_p25": 110.66798712580017,
+      "iv_p50": 149.99532483346024,
+      "iv_p75": 307.34,
+      "iv_p90": 307.34,
+      "margin_of_safety_conservative": -0.7335924100687935,
+      "uncertainty_width": 2.939740383823242,
+      "valuation_assumptions_json": {
+        "dcf": {
+          "base_iv": 110.66798712580017,
+          "bear_iv": 78.01021642490768,
+          "bull_iv": 149.99532483346024,
+          "base_fcf": 98767000000.0,
+          "direct_fcf": 98767000000.0,
+          "fcf_source": "direct",
+          "direct_fcf_status": "positive"
+        },
+        "wacc": 0.09,
+        "sector": "Technology",
+        "tax_rate": 0.25,
+        "multiples": {
+          "pb_value": 307.34,
+          "pe_value": 307.34,
+          "ps_value": 307.34000000000003,
+          "blended_value": 307.34,
+          "ev_ebitda_value": 307.34
+        },
+        "aggregation": {
+          "distribution": [
+            {
+              "value": 78.01021642490768,
+              "method": "dcf",
+              "source": "dcf_bear",
+              "weight": 0.15625,
+              "scenario": "bear"
+            },
+            {
+              "value": 110.66798712580017,
+              "method": "dcf",
+              "source": "dcf_base",
+              "weight": 0.3125,
+              "scenario": "base"
+            },
+            {
+              "value": 149.99532483346024,
+              "method": "dcf",
+              "source": "dcf_bull",
+              "weight": 0.15625,
+              "scenario": "bull"
+            },
+            {
+              "value": 307.34,
+              "method": "multiples",
+              "source": "multiples",
+              "weight": 0.37499999999999994,
+              "scenario": null
+            }
+          ],
+          "distribution_method": "weighted_step_percentiles",
+          "method_weights_used": {
+            "dcf": 0.625,
+            "multiples": 0.37499999999999994
+          },
+          "scenario_weights_used": {
+            "base": 0.5,
+            "bear": 0.25,
+            "bull": 0.25
+          }
+        },
+        "base_growth": 0.0642551178283274,
+        "diagnostics": {
+          "blockers": [],
+          "warnings": [],
+          "mos_basis": "iv_p10",
+          "freshness_flag": "ok",
+          "scenario_count": 3,
+          "valuation_status": "ok",
+          "data_quality_flag": "ok",
+          "uncertainty_category": "extreme"
+        },
+        "model_version": "valuation_v1",
+        "forecast_years": 5,
+        "terminal_growth": 0.02,
+        "scenario_weights_configured": {
+          "base": 0.5,
+          "bear": 0.25,
+          "bull": 0.25
+        }
+      },
+      "mos_basis": "iv_p10",
+      "scenario_count": 3,
+      "uncertainty_category": "extreme",
+      "distribution_collapsed": false,
+      "valuation_status": "ok",
+      "qualitative_score_id": "7e93c63a-dd71-4dd0-87a3-54ba81d8a704",
+      "qualitative_score_date": "2026-06-12",
+      "qualitative_model_version": "qual_v0",
+      "final_quality_score": 73.85,
+      "signal_run_id": "668de478-4f63-4b58-a55f-6906e6b81c3a",
+      "signal_date": "2026-06-12",
+      "signal_model_version": "signal_rule_v3",
+      "p_buy": 0.3201,
+      "p_buy_adjusted": 0.2329,
+      "p_sell": 0.4378,
+      "final_signal": "hold",
+      "uncertainty_penalty": 0.35,
+      "red_flags": [
+        "negative_margin_of_safety"
+      ],
+      "top_feature_contributors": [
+        {
+          "kind": "adjustment",
+          "name": "uncertainty_penalty",
+          "value": 0.35,
+          "impact": -35.0,
+          "direction": "negative"
+        },
+        {
+          "kind": "family",
+          "name": "valuation",
+          "score": 5.0,
+          "weight": 0.4,
+          "evidence": {
+            "iv_p25": 110.66798712580017,
+            "iv_p50": 149.99532483346024,
+            "iv_p75": 307.34,
+            "mos_signal": "below -10%",
+            "price_vs_iv": "above_iv_p50",
+            "current_price": 292.8228,
+            "uncertainty_width": 2.939740383823242,
+            "uncertainty_signal": ">120% width",
+            "margin_of_safety_conservative": -0.7335924100687935
+          },
+          "direction": "negative",
+          "weighted_impact": -18.0
+        },
+        {
+          "kind": "adjustment",
+          "name": "quality_confidence_multiplier",
+          "value": 1.1193,
+          "impact": 11.93,
+          "direction": "positive"
+        },
+        {
+          "kind": "family",
+          "name": "quality",
+          "score": 73.85,
+          "weight": 0.25,
+          "evidence": {
+            "signal": "from qualitative score",
+            "final_quality_score": 73.85
+          },
+          "direction": "positive",
+          "weighted_impact": 5.96
+        },
+        {
+          "kind": "family",
+          "name": "balance_sheet",
+          "score": 60.0,
+          "weight": 0.15,
+          "evidence": {
+            "coverage_signal": "missing",
+            "leverage_signal": "low leverage",
+            "interest_coverage": null,
+            "data_quality_score": 100.0,
+            "net_debt_to_ebitda": 0.5292846905357032,
+            "data_quality_signal": "ok_or_missing"
+          },
+          "direction": "positive",
+          "weighted_impact": 1.5
+        },
+        {
+          "kind": "family",
+          "name": "market_regime",
+          "score": 62.0,
+          "weight": 0.1,
+          "evidence": {
+            "momentum_60d": 0.17157237737056882,
+            "momentum_250d": 0.49057164672944764,
+            "volatility_90d": 0.24720170929751237,
+            "momentum_signal": "strong positive trend",
+            "volatility_signal": "normal volatility"
+          },
+          "direction": "positive",
+          "weighted_impact": 1.2
+        },
+        {
+          "kind": "family",
+          "name": "news",
+          "score": 53.0,
+          "weight": 0.1,
+          "evidence": {
+            "filing_signal": "recent annual filing",
+            "volume_signal": "neutral_or_missing",
+            "news_volume_7d": 0.0,
+            "sentiment_signal": "missing",
+            "news_sentiment_7d": null,
+            "recent_filing_types": [
+              "10-K",
+              "10-Q"
+            ]
+          },
+          "direction": "positive",
+          "weighted_impact": 0.3
+        },
+        {
+          "kind": "adjustment",
+          "name": "risk_penalty",
+          "value": 0.0,
+          "impact": 0.0,
+          "direction": "neutral"
+        }
+      ],
+      "explanation": "Hold \u2014 shares trade above midpoint fair-value estimate, but wide valuation uncertainty limits conviction.",
+      "freshness_flag": "ok",
+      "price_to_iv_mid": 1.9522128461345114,
+      "price_to_iv_high": 0.952765015943255,
+      "valuation_bucket": "modestly_overvalued",
+      "strong_sell_confirmation_type": "not_strong_sell",
+      "hold_uncertainty_constrained": true,
+      "stale_input_blocked": false,
+      "valuation_sanity_status": null,
+      "valuation_sanity_reason_codes": null,
+      "valuation_evidence_usable": null,
+      "valuation_display_suppressed": null,
+      "valuation_signal_influence_blocked": null,
+      "valuation_method_coverage": null,
+      "iv_range_ratio_p90_p10": null,
+      "distribution_span_ratio_diagnostics": null,
+      "dcf_multiples_gap_ratio": null,
+      "max_terminal_value_share": null,
+      "terminal_spread": null,
+      "midpoint_price_ratio": null,
+      "statement_age_days": 258,
+      "latest_statement_year": 2025,
+      "stale_statement_input": false,
+      "has_dcf_component": true,
+      "valuation_partial_flag": false,
+      "multiples_vs_dcf_mid_gap": 196.67201287419982,
+      "dominant_signal_driver": null,
+      "hold_reason": null,
+      "valuation_used_in_signal": null,
+      "risk_override_applied": null,
+      "confidence_limiter_codes": null,
+      "strong_sell_basis": null,
+      "buy_conviction_limited": null,
+      "explanation_quality_warning": null,
+      "recommendation_language_warning": null,
+      "probability_interpretation_note": null,
+      "distribution_min": 78.01021642490768,
+      "distribution_max": 307.34,
+      "distribution_span_ratio": 3.939740383823242
+    },
+    {
+      "company_id": "2a8ab438-6327-4bef-b9e3-23fbca7b73f9",
+      "ticker": "AER",
+      "company_name": "AerCap Holdings N.V.",
+      "sector": "Industrials",
+      "industry": "Rental & Leasing Services",
+      "latest_price": 140.5,
+      "price_date": "2026-06-12",
+      "price_provider": "twelve_data",
+      "readiness_status": "partial_analysis",
+      "provider_mix": "mixed_sources",
+      "readiness_reason_codes": [
+        "missing_fcf_path",
+        "valuation_partial"
+      ],
+      "can_run_valuation": true,
+      "can_run_signal": true,
+      "limiting_domain": "fundamentals",
+      "readiness_updated_at": "2026-06-12T15:46:31.436874+00:00",
+      "data_quality_status": "warning",
+      "data_quality_warning_codes": [
+        "price_not_comparable",
+        "missing_key_fields",
+        "fundamentals_provider_overlap_missing"
+      ],
+      "price_validation_status": "not_comparable",
+      "statement_completeness_status": "warning",
+      "statement_completeness_summary": "Missing key fields",
+      "fundamentals_provider_comparison_status": "not_comparable",
+      "fundamentals_provider_comparison_summary": "No overlapping FMP and SEC annual periods",
+      "data_quality_details_json": {
+        "price_validation": {
+          "comparison_date": null,
+          "reference_provider": "fmp",
+          "comparison_provider": "twelve_data"
+        },
+        "statement_completeness": {
+          "status": "warning",
+          "latest_source": "sec_edgar",
+          "missing_fields": [
+            "capex"
+          ],
+          "latest_fiscal_year": 2025,
+          "annual_periods_found": 5,
+          "latest_period_end_date": "2025-12-31",
+          "missing_optional_fields": [],
+          "missing_statement_domains": []
+        },
+        "fundamentals_provider_comparison": {
+          "compared_fields": [],
+          "discrepancy_level": "not_comparable",
+          "discrepant_fields": [],
+          "overlapping_period_count": 0,
+          "max_relative_difference_pct": null
+        }
+      },
+      "statement_source": "sec_edgar",
+      "fiscal_year": 2025,
+      "fiscal_period": "annual",
+      "latest_statement_date": "2025-12-31",
+      "revenue": 8516668000.0,
+      "gross_profit": null,
+      "operating_income": null,
+      "ebit": null,
+      "ebitda": null,
+      "net_income": 3750612000.0,
+      "cfo": 5393124000.0,
+      "capex": null,
+      "free_cash_flow": null,
+      "depreciation_amortization": null,
+      "cash_and_equivalents": 1379180000.0,
+      "total_debt": null,
+      "total_equity": 18323280000.0,
+      "diluted_shares": 176115641.0,
+      "factor_date": "2026-06-12",
+      "roic": null,
+      "roe": 0.21125505496621413,
+      "fcf_yield": null,
+      "net_debt_to_ebitda": null,
+      "interest_coverage": null,
+      "ev_to_ebitda": null,
+      "price_to_sales": 2.9053906481384506,
+      "price_to_book": 1.3504267554990155,
+      "news_sentiment_7d": null,
+      "ratio_data_quality_score": 100.0,
+      "valuation_run_id": "29b68f75-0521-4722-bac0-f699f0ddc881",
+      "valuation_date": "2026-06-12",
+      "valuation_model_version": "valuation_v1",
+      "valuation_currency": "USD",
+      "valuation_current_price": 140.5,
+      "iv_p10": 136.94,
+      "iv_p25": 136.94,
+      "iv_p50": 136.94,
+      "iv_p75": 136.94,
+      "iv_p90": 136.94,
+      "margin_of_safety_conservative": -0.02533807829181496,
+      "uncertainty_width": 0.0,
+      "valuation_assumptions_json": {
+        "dcf": {
+          "base_iv": null,
+          "bear_iv": null,
+          "bull_iv": null,
+          "base_fcf": null,
+          "direct_fcf": null,
+          "fcf_source": null,
+          "direct_fcf_status": "missing"
+        },
+        "wacc": 0.09,
+        "sector": "Industrials",
+        "tax_rate": 0.25,
+        "multiples": {
+          "pb_value": 136.94,
+          "pe_value": 136.94,
+          "ps_value": 136.94,
+          "blended_value": 136.94,
+          "ev_ebitda_value": null
+        },
+        "aggregation": {
+          "distribution": [
+            {
+              "value": 136.94,
+              "method": "multiples",
+              "source": "multiples",
+              "weight": 1.0,
+              "scenario": null
+            }
+          ],
+          "distribution_method": "weighted_step_percentiles",
+          "method_weights_used": {
+            "multiples": 1.0
+          },
+          "scenario_weights_used": {}
+        },
+        "base_growth": 0.06503028020254496,
+        "diagnostics": {
+          "blockers": [
+            "missing_fcf"
+          ],
+          "warnings": [
+            "dcf_unavailable"
+          ],
+          "mos_basis": "iv_p10",
+          "freshness_flag": "ok",
+          "scenario_count": 0,
+          "valuation_status": "partial",
+          "data_quality_flag": "limited",
+          "uncertainty_category": "low"
+        },
+        "model_version": "valuation_v1",
+        "forecast_years": 5,
+        "terminal_growth": 0.02,
+        "scenario_weights_configured": {
+          "base": 0.5,
+          "bear": 0.25,
+          "bull": 0.25
+        }
+      },
+      "mos_basis": "iv_p10",
+      "scenario_count": 0,
+      "uncertainty_category": "low",
+      "distribution_collapsed": false,
+      "valuation_status": "partial",
+      "qualitative_score_id": "a1e0ba54-4f1c-4a5c-92b3-75d4f00ed5f1",
+      "qualitative_score_date": "2026-06-12",
+      "qualitative_model_version": "qual_v0",
+      "final_quality_score": 50.4,
+      "signal_run_id": "00171408-ca4c-4d72-b5cd-03f8b2f676fb",
+      "signal_date": "2026-06-12",
+      "signal_model_version": "signal_rule_v3",
+      "p_buy": 0.3318,
+      "p_buy_adjusted": 0.3325,
+      "p_sell": 0.2227,
+      "final_signal": "hold",
+      "uncertainty_penalty": 0.0,
+      "red_flags": [
+        "overvalued_vs_iv_p75"
+      ],
+      "top_feature_contributors": [
+        {
+          "kind": "family",
+          "name": "valuation",
+          "score": 28.0,
+          "weight": 0.4,
+          "evidence": {
+            "iv_p25": 136.94,
+            "iv_p50": 136.94,
+            "iv_p75": 136.94,
+            "mos_signal": "negative but above -10%",
+            "price_vs_iv": "above_iv_p75",
+            "current_price": 140.5,
+            "uncertainty_width": 0.0,
+            "uncertainty_signal": "contained",
+            "margin_of_safety_conservative": -0.02533807829181496
+          },
+          "direction": "negative",
+          "weighted_impact": -8.8
+        },
+        {
+          "kind": "family",
+          "name": "news",
+          "score": 53.0,
+          "weight": 0.1,
+          "evidence": {
+            "filing_signal": "recent annual filing",
+            "volume_signal": "neutral_or_missing",
+            "news_volume_7d": 0.0,
+            "sentiment_signal": "missing",
+            "news_sentiment_7d": null,
+            "recent_filing_types": [
+              "20-F"
+            ]
+          },
+          "direction": "positive",
+          "weighted_impact": 0.3
+        },
+        {
+          "kind": "adjustment",
+          "name": "quality_confidence_multiplier",
+          "value": 1.002,
+          "impact": 0.2,
+          "direction": "positive"
+        },
+        {
+          "kind": "family",
+          "name": "quality",
+          "score": 50.4,
+          "weight": 0.25,
+          "evidence": {
+            "signal": "from qualitative score",
+            "final_quality_score": 50.4
+          },
+          "direction": "positive",
+          "weighted_impact": 0.1
+        },
+        {
+          "kind": "family",
+          "name": "balance_sheet",
+          "score": 50.0,
+          "weight": 0.15,
+          "evidence": {
+            "coverage_signal": "missing",
+            "leverage_signal": "missing",
+            "interest_coverage": null,
+            "data_quality_score": 100.0,
+            "net_debt_to_ebitda": null,
+            "data_quality_signal": "ok_or_missing"
+          },
+          "direction": "neutral",
+          "weighted_impact": 0.0
+        },
+        {
+          "kind": "family",
+          "name": "market_regime",
+          "score": 50.0,
+          "weight": 0.1,
+          "evidence": {
+            "momentum_60d": null,
+            "momentum_250d": null,
+            "volatility_90d": null,
+            "momentum_signal": "missing",
+            "volatility_signal": "missing"
+          },
+          "direction": "neutral",
+          "weighted_impact": 0.0
+        },
+        {
+          "kind": "adjustment",
+          "name": "risk_penalty",
+          "value": 0.0,
+          "impact": 0.0,
+          "direction": "neutral"
+        },
+        {
+          "kind": "adjustment",
+          "name": "uncertainty_penalty",
+          "value": 0.0,
+          "impact": 0.0,
+          "direction": "neutral"
+        }
+      ],
+      "explanation": "Hold \u2014 shares trade above midpoint fair-value estimate, though evidence does not support a stronger sell signal.",
+      "freshness_flag": "ok",
+      "price_to_iv_mid": 1.025996786913977,
+      "price_to_iv_high": 1.025996786913977,
+      "valuation_bucket": "near_fair_value",
+      "strong_sell_confirmation_type": "not_strong_sell",
+      "hold_uncertainty_constrained": false,
+      "stale_input_blocked": false,
+      "valuation_sanity_status": null,
+      "valuation_sanity_reason_codes": null,
+      "valuation_evidence_usable": null,
+      "valuation_display_suppressed": null,
+      "valuation_signal_influence_blocked": null,
+      "valuation_method_coverage": null,
+      "iv_range_ratio_p90_p10": null,
+      "distribution_span_ratio_diagnostics": null,
+      "dcf_multiples_gap_ratio": null,
+      "max_terminal_value_share": null,
+      "terminal_spread": null,
+      "midpoint_price_ratio": null,
+      "statement_age_days": 163,
+      "latest_statement_year": 2025,
+      "stale_statement_input": false,
+      "has_dcf_component": false,
+      "valuation_partial_flag": true,
+      "multiples_vs_dcf_mid_gap": null,
+      "dominant_signal_driver": null,
+      "hold_reason": null,
+      "valuation_used_in_signal": null,
+      "risk_override_applied": null,
+      "confidence_limiter_codes": null,
+      "strong_sell_basis": null,
+      "buy_conviction_limited": null,
+      "explanation_quality_warning": null,
+      "recommendation_language_warning": null,
+      "probability_interpretation_note": null,
+      "distribution_min": 136.94,
+      "distribution_max": 136.94,
+      "distribution_span_ratio": 1.0
+    },
+    {
+      "company_id": "c35c0549-91a3-4d0e-84db-dacecb4e09b3",
+      "ticker": "BTSG",
+      "company_name": "BrightSpring Health Services, Inc. Common Stock",
+      "sector": "Healthcare",
+      "industry": "Medical - Healthcare Information Services",
+      "latest_price": 62.44,
+      "price_date": "2026-06-12",
+      "price_provider": "twelve_data",
+      "readiness_status": "analysis_ready",
+      "provider_mix": "mixed_sources",
+      "readiness_reason_codes": [
+        "valuation_ready"
+      ],
+      "can_run_valuation": true,
+      "can_run_signal": true,
+      "limiting_domain": null,
+      "readiness_updated_at": "2026-06-12T15:47:52.202184+00:00",
+      "data_quality_status": "not_comparable",
+      "data_quality_warning_codes": [
+        "price_not_comparable",
+        "fundamentals_provider_overlap_missing"
+      ],
+      "price_validation_status": "not_comparable",
+      "statement_completeness_status": "ok",
+      "statement_completeness_summary": "Complete",
+      "fundamentals_provider_comparison_status": "not_comparable",
+      "fundamentals_provider_comparison_summary": "No overlapping FMP and SEC annual periods",
+      "data_quality_details_json": {
+        "price_validation": {
+          "comparison_date": null,
+          "reference_provider": "fmp",
+          "comparison_provider": "twelve_data"
+        },
+        "statement_completeness": {
+          "status": "ok",
+          "latest_source": "sec_edgar",
+          "missing_fields": [],
+          "latest_fiscal_year": 2025,
+          "annual_periods_found": 2,
+          "latest_period_end_date": "2025-12-31",
+          "missing_optional_fields": [],
+          "missing_statement_domains": []
+        },
+        "fundamentals_provider_comparison": {
+          "compared_fields": [],
+          "discrepancy_level": "not_comparable",
+          "discrepant_fields": [],
+          "overlapping_period_count": 0,
+          "max_relative_difference_pct": null
+        }
+      },
+      "statement_source": "sec_edgar",
+      "fiscal_year": 2025,
+      "fiscal_period": "annual",
+      "latest_statement_date": "2025-12-31",
+      "revenue": 12910564000.0,
+      "gross_profit": 1517777000.0,
+      "operating_income": 295252000.0,
+      "ebit": 295252000.0,
+      "ebitda": null,
+      "net_income": 190666000.0,
+      "cfo": 490169000.0,
+      "capex": -95484000.0,
+      "free_cash_flow": 394685000.0,
+      "depreciation_amortization": null,
+      "cash_and_equivalents": 88370000.0,
+      "total_debt": 52340000.0,
+      "total_equity": 1875065000.0,
+      "diluted_shares": 219774000.0,
+      "factor_date": "2026-06-12",
+      "roic": 0.12041043264538195,
+      "roe": 0.10824316192249611,
+      "fcf_yield": 0.028761492201350373,
+      "net_debt_to_ebitda": null,
+      "interest_coverage": null,
+      "ev_to_ebitda": null,
+      "price_to_sales": 1.0629038793347836,
+      "price_to_book": 7.318513523531184,
+      "news_sentiment_7d": null,
+      "ratio_data_quality_score": 100.0,
+      "valuation_run_id": "31b0545e-9ef7-420a-8421-628ef99f0be0",
+      "valuation_date": "2026-06-12",
+      "valuation_model_version": "valuation_v1",
+      "valuation_currency": "USD",
+      "valuation_current_price": 62.44,
+      "iv_p10": 26.994268578510184,
+      "iv_p25": 44.23078556969841,
+      "iv_p50": 60.32,
+      "iv_p75": 60.32,
+      "iv_p90": 69.16430440827155,
+      "margin_of_safety_conservative": -0.5676766723492923,
+      "uncertainty_width": 1.5621847914535616,
+      "valuation_assumptions_json": {
+        "dcf": {
+          "base_iv": 44.23078556969841,
+          "bear_iv": 26.994268578510184,
+          "bull_iv": 69.16430440827155,
+          "base_fcf": 394685000.0,
+          "direct_fcf": 394685000.0,
+          "fcf_source": "direct",
+          "direct_fcf_status": "positive"
+        },
+        "wacc": 0.09,
+        "sector": "Healthcare",
+        "tax_rate": 0.25,
+        "multiples": {
+          "pb_value": 60.31999999999999,
+          "pe_value": 60.32,
+          "ps_value": 60.32000000000001,
+          "blended_value": 60.32,
+          "ev_ebitda_value": null
+        },
+        "aggregation": {
+          "distribution": [
+            {
+              "value": 26.994268578510184,
+              "method": "dcf",
+              "source": "dcf_bear",
+              "weight": 0.15625,
+              "scenario": "bear"
+            },
+            {
+              "value": 44.23078556969841,
+              "method": "dcf",
+              "source": "dcf_base",
+              "weight": 0.3125,
+              "scenario": "base"
+            },
+            {
+              "value": 69.16430440827155,
+              "method": "dcf",
+              "source": "dcf_bull",
+              "weight": 0.15625,
+              "scenario": "bull"
+            },
+            {
+              "value": 60.32,
+              "method": "multiples",
+              "source": "multiples",
+              "weight": 0.37499999999999994,
+              "scenario": null
+            }
+          ],
+          "distribution_method": "weighted_step_percentiles",
+          "method_weights_used": {
+            "dcf": 0.625,
+            "multiples": 0.37499999999999994
+          },
+          "scenario_weights_used": {
+            "base": 0.5,
+            "bear": 0.25,
+            "bull": 0.25
+          }
+        },
+        "base_growth": 0.14592784680066662,
+        "diagnostics": {
+          "blockers": [],
+          "warnings": [],
+          "mos_basis": "iv_p10",
+          "freshness_flag": "ok",
+          "scenario_count": 3,
+          "valuation_status": "ok",
+          "data_quality_flag": "ok",
+          "uncertainty_category": "extreme"
+        },
+        "model_version": "valuation_v1",
+        "forecast_years": 5,
+        "terminal_growth": 0.02,
+        "scenario_weights_configured": {
+          "base": 0.5,
+          "bear": 0.25,
+          "bull": 0.25
+        }
+      },
+      "mos_basis": "iv_p10",
+      "scenario_count": 3,
+      "uncertainty_category": "extreme",
+      "distribution_collapsed": false,
+      "valuation_status": "ok",
+      "qualitative_score_id": "47125213-502d-4e0a-ba3a-2901409673f9",
+      "qualitative_score_date": "2026-06-12",
+      "qualitative_model_version": "qual_v0",
+      "final_quality_score": 57.85,
+      "signal_run_id": "302e141a-0745-49ca-acd6-52c3757c6074",
+      "signal_date": "2026-06-12",
+      "signal_model_version": "signal_rule_v3",
+      "p_buy": 0.1857,
+      "p_buy_adjusted": 0.1254,
+      "p_sell": 0.2227,
+      "final_signal": "hold",
+      "uncertainty_penalty": 0.35,
+      "red_flags": [
+        "negative_margin_of_safety",
+        "overvalued_vs_iv_p75"
+      ],
+      "top_feature_contributors": [
+        {
+          "kind": "adjustment",
+          "name": "uncertainty_penalty",
+          "value": 0.35,
+          "impact": -35.0,
+          "direction": "negative"
+        },
+        {
+          "kind": "family",
+          "name": "valuation",
+          "score": 0.0,
+          "weight": 0.4,
+          "evidence": {
+            "iv_p25": 44.23078556969841,
+            "iv_p50": 60.32,
+            "iv_p75": 60.32,
+            "mos_signal": "below -10%",
+            "price_vs_iv": "above_iv_p75",
+            "current_price": 62.44,
+            "uncertainty_width": 1.5621847914535616,
+            "uncertainty_signal": ">120% width",
+            "margin_of_safety_conservative": -0.5676766723492923
+          },
+          "direction": "negative",
+          "weighted_impact": -20.0
+        },
+        {
+          "kind": "adjustment",
+          "name": "quality_confidence_multiplier",
+          "value": 1.0393,
+          "impact": 3.93,
+          "direction": "positive"
+        },
+        {
+          "kind": "family",
+          "name": "quality",
+          "score": 57.85,
+          "weight": 0.25,
+          "evidence": {
+            "signal": "from qualitative score",
+            "final_quality_score": 57.85
+          },
+          "direction": "positive",
+          "weighted_impact": 1.96
+        },
+        {
+          "kind": "family",
+          "name": "news",
+          "score": 53.0,
+          "weight": 0.1,
+          "evidence": {
+            "filing_signal": "recent annual filing",
+            "volume_signal": "neutral_or_missing",
+            "news_volume_7d": 0.0,
+            "sentiment_signal": "missing",
+            "news_sentiment_7d": null,
+            "recent_filing_types": [
+              "10-K",
+              "10-Q"
+            ]
+          },
+          "direction": "positive",
+          "weighted_impact": 0.3
+        },
+        {
+          "kind": "family",
+          "name": "balance_sheet",
+          "score": 50.0,
+          "weight": 0.15,
+          "evidence": {
+            "coverage_signal": "missing",
+            "leverage_signal": "missing",
+            "interest_coverage": null,
+            "data_quality_score": 100.0,
+            "net_debt_to_ebitda": null,
+            "data_quality_signal": "ok_or_missing"
+          },
+          "direction": "neutral",
+          "weighted_impact": 0.0
+        },
+        {
+          "kind": "family",
+          "name": "market_regime",
+          "score": 50.0,
+          "weight": 0.1,
+          "evidence": {
+            "momentum_60d": null,
+            "momentum_250d": null,
+            "volatility_90d": null,
+            "momentum_signal": "missing",
+            "volatility_signal": "missing"
+          },
+          "direction": "neutral",
+          "weighted_impact": 0.0
+        },
+        {
+          "kind": "adjustment",
+          "name": "risk_penalty",
+          "value": 0.0,
+          "impact": 0.0,
+          "direction": "neutral"
+        }
+      ],
+      "explanation": "Hold \u2014 shares trade above midpoint fair-value estimate, but wide valuation uncertainty limits conviction.",
+      "freshness_flag": "ok",
+      "price_to_iv_mid": 1.0351458885941645,
+      "price_to_iv_high": 0.9027778206431674,
+      "valuation_bucket": "near_fair_value",
+      "strong_sell_confirmation_type": "not_strong_sell",
+      "hold_uncertainty_constrained": true,
+      "stale_input_blocked": false,
+      "valuation_sanity_status": null,
+      "valuation_sanity_reason_codes": null,
+      "valuation_evidence_usable": null,
+      "valuation_display_suppressed": null,
+      "valuation_signal_influence_blocked": null,
+      "valuation_method_coverage": null,
+      "iv_range_ratio_p90_p10": null,
+      "distribution_span_ratio_diagnostics": null,
+      "dcf_multiples_gap_ratio": null,
+      "max_terminal_value_share": null,
+      "terminal_spread": null,
+      "midpoint_price_ratio": null,
+      "statement_age_days": 163,
+      "latest_statement_year": 2025,
+      "stale_statement_input": false,
+      "has_dcf_component": true,
+      "valuation_partial_flag": false,
+      "multiples_vs_dcf_mid_gap": 16.08921443030159,
+      "dominant_signal_driver": null,
+      "hold_reason": null,
+      "valuation_used_in_signal": null,
+      "risk_override_applied": null,
+      "confidence_limiter_codes": null,
+      "strong_sell_basis": null,
+      "buy_conviction_limited": null,
+      "explanation_quality_warning": null,
+      "recommendation_language_warning": null,
+      "probability_interpretation_note": null,
+      "distribution_min": 26.994268578510184,
+      "distribution_max": 69.16430440827155,
+      "distribution_span_ratio": 2.5621847914535616
+    },
+    {
+      "company_id": "8ca0b164-b9ea-497f-a1cf-1753c3fa0591",
+      "ticker": "CSTM",
+      "company_name": "Constellium SE",
+      "sector": "Basic Materials",
+      "industry": "Aluminum",
+      "latest_price": 35.44,
+      "price_date": "2026-06-12",
+      "price_provider": "twelve_data",
+      "readiness_status": "analysis_ready",
+      "provider_mix": "mixed_sources",
+      "readiness_reason_codes": [
+        "valuation_ready"
+      ],
+      "can_run_valuation": true,
+      "can_run_signal": true,
+      "limiting_domain": null,
+      "readiness_updated_at": "2026-06-12T15:46:20.389379+00:00",
+      "data_quality_status": "not_comparable",
+      "data_quality_warning_codes": [
+        "price_not_comparable",
+        "fundamentals_provider_overlap_missing"
+      ],
+      "price_validation_status": "not_comparable",
+      "statement_completeness_status": "ok",
+      "statement_completeness_summary": "Complete",
+      "fundamentals_provider_comparison_status": "not_comparable",
+      "fundamentals_provider_comparison_summary": "No overlapping FMP and SEC annual periods",
+      "data_quality_details_json": {
+        "price_validation": {
+          "comparison_date": null,
+          "reference_provider": "fmp",
+          "comparison_provider": "twelve_data"
+        },
+        "statement_completeness": {
+          "status": "ok",
+          "latest_source": "sec_edgar",
+          "missing_fields": [],
+          "latest_fiscal_year": 2025,
+          "annual_periods_found": 2,
+          "latest_period_end_date": "2025-12-31",
+          "missing_optional_fields": [],
+          "missing_statement_domains": []
+        },
+        "fundamentals_provider_comparison": {
+          "compared_fields": [],
+          "discrepancy_level": "not_comparable",
+          "discrepant_fields": [],
+          "overlapping_period_count": 0,
+          "max_relative_difference_pct": null
+        }
+      },
+      "statement_source": "sec_edgar",
+      "fiscal_year": 2025,
+      "fiscal_period": "annual",
+      "latest_statement_date": "2025-12-31",
+      "revenue": 8449000000.0,
+      "gross_profit": null,
+      "operating_income": null,
+      "ebit": null,
+      "ebitda": null,
+      "net_income": 273000000.0,
+      "cfo": 489000000.0,
+      "capex": -330000000.0,
+      "free_cash_flow": 159000000.0,
+      "depreciation_amortization": 330000000.0,
+      "cash_and_equivalents": 120000000.0,
+      "total_debt": null,
+      "total_equity": 952000000.0,
+      "diluted_shares": 141941220.0,
+      "factor_date": "2026-06-12",
+      "roic": null,
+      "roe": 0.3293124246079614,
+      "fcf_yield": 0.03160784430302424,
+      "net_debt_to_ebitda": null,
+      "interest_coverage": null,
+      "ev_to_ebitda": null,
+      "price_to_sales": 0.5953836947331044,
+      "price_to_book": 5.284030290756302,
+      "news_sentiment_7d": null,
+      "ratio_data_quality_score": 100.0,
+      "valuation_run_id": "e6cf50c4-153d-4ada-80ac-a868b1523d84",
+      "valuation_date": "2026-06-12",
+      "valuation_model_version": "valuation_v1",
+      "valuation_currency": "USD",
+      "valuation_current_price": 35.44,
+      "iv_p10": 16.939210338214764,
+      "iv_p25": 28.142232842774703,
+      "iv_p50": 34.26,
+      "iv_p75": 34.26,
+      "iv_p90": 44.5298359697971,
+      "margin_of_safety_conservative": -0.5220313109984547,
+      "uncertainty_width": 1.628802351508561,
+      "valuation_assumptions_json": {
+        "dcf": {
+          "base_iv": 28.142232842774703,
+          "bear_iv": 16.939210338214764,
+          "bull_iv": 44.5298359697971,
+          "base_fcf": 159000000.0,
+          "direct_fcf": 159000000.0,
+          "fcf_source": "direct",
+          "direct_fcf_status": "positive"
+        },
+        "wacc": 0.09,
+        "sector": "Basic Materials",
+        "tax_rate": 0.25,
+        "multiples": {
+          "pb_value": 34.26,
+          "pe_value": 34.26,
+          "ps_value": 34.26,
+          "blended_value": 34.26,
+          "ev_ebitda_value": null
+        },
+        "aggregation": {
+          "distribution": [
+            {
+              "value": 16.939210338214764,
+              "method": "dcf",
+              "source": "dcf_bear",
+              "weight": 0.15625,
+              "scenario": "bear"
+            },
+            {
+              "value": 28.142232842774703,
+              "method": "dcf",
+              "source": "dcf_base",
+              "weight": 0.3125,
+              "scenario": "base"
+            },
+            {
+              "value": 44.5298359697971,
+              "method": "dcf",
+              "source": "dcf_bull",
+              "weight": 0.15625,
+              "scenario": "bull"
+            },
+            {
+              "value": 34.26,
+              "method": "multiples",
+              "source": "multiples",
+              "weight": 0.37499999999999994,
+              "scenario": null
+            }
+          ],
+          "distribution_method": "weighted_step_percentiles",
+          "method_weights_used": {
+            "dcf": 0.625,
+            "multiples": 0.37499999999999994
+          },
+          "scenario_weights_used": {
+            "base": 0.5,
+            "bear": 0.25,
+            "bull": 0.25
+          }
+        },
+        "base_growth": 0.15187457396046353,
+        "diagnostics": {
+          "blockers": [],
+          "warnings": [],
+          "mos_basis": "iv_p10",
+          "freshness_flag": "ok",
+          "scenario_count": 3,
+          "valuation_status": "ok",
+          "data_quality_flag": "ok",
+          "uncertainty_category": "extreme"
+        },
+        "model_version": "valuation_v1",
+        "forecast_years": 5,
+        "terminal_growth": 0.02,
+        "scenario_weights_configured": {
+          "base": 0.5,
+          "bear": 0.25,
+          "bull": 0.25
+        }
+      },
+      "mos_basis": "iv_p10",
+      "scenario_count": 3,
+      "uncertainty_category": "extreme",
+      "distribution_collapsed": false,
+      "valuation_status": "ok",
+      "qualitative_score_id": "b3d0d96d-5779-4dff-b0e6-10b56632e97b",
+      "qualitative_score_date": "2026-06-12",
+      "qualitative_model_version": "qual_v0",
+      "final_quality_score": 49.35,
+      "signal_run_id": "5e42ded6-8809-4951-8353-e7e8075f0375",
+      "signal_date": "2026-06-12",
+      "signal_model_version": "signal_rule_v3",
+      "p_buy": 0.1604,
+      "p_buy_adjusted": 0.1039,
+      "p_sell": 0.3029,
+      "final_signal": "hold",
+      "uncertainty_penalty": 0.35,
+      "red_flags": [
+        "negative_margin_of_safety",
+        "overvalued_vs_iv_p75"
+      ],
+      "top_feature_contributors": [
+        {
+          "kind": "adjustment",
+          "name": "uncertainty_penalty",
+          "value": 0.35,
+          "impact": -35.0,
+          "direction": "negative"
+        },
+        {
+          "kind": "family",
+          "name": "valuation",
+          "score": 0.0,
+          "weight": 0.4,
+          "evidence": {
+            "iv_p25": 28.142232842774703,
+            "iv_p50": 34.26,
+            "iv_p75": 34.26,
+            "mos_signal": "below -10%",
+            "price_vs_iv": "above_iv_p75",
+            "current_price": 35.44,
+            "uncertainty_width": 1.628802351508561,
+            "uncertainty_signal": ">120% width",
+            "margin_of_safety_conservative": -0.5220313109984547
+          },
+          "direction": "negative",
+          "weighted_impact": -20.0
+        },
+        {
+          "kind": "adjustment",
+          "name": "quality_confidence_multiplier",
+          "value": 0.9968,
+          "impact": -0.32,
+          "direction": "negative"
+        },
+        {
+          "kind": "family",
+          "name": "news",
+          "score": 53.0,
+          "weight": 0.1,
+          "evidence": {
+            "filing_signal": "recent annual filing",
+            "volume_signal": "neutral_or_missing",
+            "news_volume_7d": 0.0,
+            "sentiment_signal": "missing",
+            "news_sentiment_7d": null,
+            "recent_filing_types": [
+              "10-K",
+              "10-Q"
+            ]
+          },
+          "direction": "positive",
+          "weighted_impact": 0.3
+        },
+        {
+          "kind": "family",
+          "name": "quality",
+          "score": 49.35,
+          "weight": 0.25,
+          "evidence": {
+            "signal": "from qualitative score",
+            "final_quality_score": 49.35
+          },
+          "direction": "negative",
+          "weighted_impact": -0.16
+        },
+        {
+          "kind": "family",
+          "name": "balance_sheet",
+          "score": 50.0,
+          "weight": 0.15,
+          "evidence": {
+            "coverage_signal": "missing",
+            "leverage_signal": "missing",
+            "interest_coverage": null,
+            "data_quality_score": 100.0,
+            "net_debt_to_ebitda": null,
+            "data_quality_signal": "ok_or_missing"
+          },
+          "direction": "neutral",
+          "weighted_impact": 0.0
+        },
+        {
+          "kind": "family",
+          "name": "market_regime",
+          "score": 50.0,
+          "weight": 0.1,
+          "evidence": {
+            "momentum_60d": null,
+            "momentum_250d": null,
+            "volatility_90d": null,
+            "momentum_signal": "missing",
+            "volatility_signal": "missing"
+          },
+          "direction": "neutral",
+          "weighted_impact": 0.0
+        },
+        {
+          "kind": "adjustment",
+          "name": "risk_penalty",
+          "value": 0.0,
+          "impact": 0.0,
+          "direction": "neutral"
+        }
+      ],
+      "explanation": "Hold \u2014 shares trade above midpoint fair-value estimate, but wide valuation uncertainty limits conviction.",
+      "freshness_flag": "ok",
+      "price_to_iv_mid": 1.034442498540572,
+      "price_to_iv_high": 0.7958708858491553,
+      "valuation_bucket": "near_fair_value",
+      "strong_sell_confirmation_type": "not_strong_sell",
+      "hold_uncertainty_constrained": true,
+      "stale_input_blocked": false,
+      "valuation_sanity_status": null,
+      "valuation_sanity_reason_codes": null,
+      "valuation_evidence_usable": null,
+      "valuation_display_suppressed": null,
+      "valuation_signal_influence_blocked": null,
+      "valuation_method_coverage": null,
+      "iv_range_ratio_p90_p10": null,
+      "distribution_span_ratio_diagnostics": null,
+      "dcf_multiples_gap_ratio": null,
+      "max_terminal_value_share": null,
+      "terminal_spread": null,
+      "midpoint_price_ratio": null,
+      "statement_age_days": 163,
+      "latest_statement_year": 2025,
+      "stale_statement_input": false,
+      "has_dcf_component": true,
+      "valuation_partial_flag": false,
+      "multiples_vs_dcf_mid_gap": 6.117767157225295,
+      "dominant_signal_driver": null,
+      "hold_reason": null,
+      "valuation_used_in_signal": null,
+      "risk_override_applied": null,
+      "confidence_limiter_codes": null,
+      "strong_sell_basis": null,
+      "buy_conviction_limited": null,
+      "explanation_quality_warning": null,
+      "recommendation_language_warning": null,
+      "probability_interpretation_note": null,
+      "distribution_min": 16.939210338214764,
+      "distribution_max": 44.5298359697971,
+      "distribution_span_ratio": 2.628802351508561
+    },
+    {
+      "company_id": "32ea6fc2-df66-4766-b6a1-8b2a0f6f5bbd",
+      "ticker": "FOUR",
+      "company_name": "Shift4 Payments, Inc.",
+      "sector": "Technology",
+      "industry": "Software - Infrastructure",
+      "latest_price": 40.725,
+      "price_date": "2026-06-12",
+      "price_provider": "twelve_data",
+      "readiness_status": "analysis_ready",
+      "provider_mix": "mixed_sources",
+      "readiness_reason_codes": [
+        "valuation_ready"
+      ],
+      "can_run_valuation": true,
+      "can_run_signal": true,
+      "limiting_domain": null,
+      "readiness_updated_at": "2026-06-12T15:48:12.733912+00:00",
+      "data_quality_status": "not_comparable",
+      "data_quality_warning_codes": [
+        "price_not_comparable",
+        "fundamentals_provider_overlap_missing"
+      ],
+      "price_validation_status": "not_comparable",
+      "statement_completeness_status": "ok",
+      "statement_completeness_summary": "Complete",
+      "fundamentals_provider_comparison_status": "not_comparable",
+      "fundamentals_provider_comparison_summary": "No overlapping FMP and SEC annual periods",
+      "data_quality_details_json": {
+        "price_validation": {
+          "comparison_date": null,
+          "reference_provider": "fmp",
+          "comparison_provider": "twelve_data"
+        },
+        "statement_completeness": {
+          "status": "ok",
+          "latest_source": "sec_edgar",
+          "missing_fields": [],
+          "latest_fiscal_year": 2025,
+          "annual_periods_found": 5,
+          "latest_period_end_date": "2025-12-31",
+          "missing_optional_fields": [],
+          "missing_statement_domains": []
+        },
+        "fundamentals_provider_comparison": {
+          "compared_fields": [],
+          "discrepancy_level": "not_comparable",
+          "discrepant_fields": [],
+          "overlapping_period_count": 0,
+          "max_relative_difference_pct": null
+        }
+      },
+      "statement_source": "sec_edgar",
+      "fiscal_year": 2025,
+      "fiscal_period": "annual",
+      "latest_statement_date": "2025-12-31",
+      "revenue": 4180000000.0,
+      "gross_profit": null,
+      "operating_income": 351000000.0,
+      "ebit": 351000000.0,
+      "ebitda": 783000000.0,
+      "net_income": 119000000.0,
+      "cfo": 634000000.0,
+      "capex": -10000000.0,
+      "free_cash_flow": 624000000.0,
+      "depreciation_amortization": 432000000.0,
+      "cash_and_equivalents": 964000000.0,
+      "total_debt": 10000000.0,
+      "total_equity": 1442000000.0,
+      "diluted_shares": 1333686.0,
+      "factor_date": "2026-06-12",
+      "roic": 0.5394467213114754,
+      "roe": 0.10584363604020279,
+      "fcf_yield": 11.488673952921772,
+      "net_debt_to_ebitda": -1.2183908045977012,
+      "interest_coverage": null,
+      "ev_to_ebitda": -1.149023802873563,
+      "price_to_sales": 0.01299386659090909,
+      "price_to_book": 0.03766599330790569,
+      "news_sentiment_7d": null,
+      "ratio_data_quality_score": 100.0,
+      "valuation_run_id": "795f1f60-8087-4361-96e0-87e0302dcc0e",
+      "valuation_date": "2026-06-12",
+      "valuation_model_version": "valuation_v1",
+      "valuation_currency": "USD",
+      "valuation_current_price": 40.725,
+      "iv_p10": 40.725,
+      "iv_p25": 40.725,
+      "iv_p50": 9411.91921648931,
+      "iv_p75": 18154.152722576826,
+      "iv_p90": 33270.99539159116,
+      "margin_of_safety_conservative": 0.0,
+      "uncertainty_width": 815.967351543061,
+      "valuation_assumptions_json": {
+        "dcf": {
+          "base_iv": 18154.152722576826,
+          "bear_iv": 9411.91921648931,
+          "bull_iv": 33270.99539159116,
+          "base_fcf": 624000000.0,
+          "direct_fcf": 624000000.0,
+          "fcf_source": "direct",
+          "direct_fcf_status": "positive"
+        },
+        "wacc": 0.09,
+        "sector": "Technology",
+        "tax_rate": 0.25,
+        "multiples": {
+          "pb_value": 40.725,
+          "pe_value": 40.725,
+          "ps_value": 40.724999999999994,
+          "blended_value": 40.725,
+          "ev_ebitda_value": null
+        },
+        "aggregation": {
+          "distribution": [
+            {
+              "value": 9411.91921648931,
+              "method": "dcf",
+              "source": "dcf_bear",
+              "weight": 0.15625,
+              "scenario": "bear"
+            },
+            {
+              "value": 18154.152722576826,
+              "method": "dcf",
+              "source": "dcf_base",
+              "weight": 0.3125,
+              "scenario": "base"
+            },
+            {
+              "value": 33270.99539159116,
+              "method": "dcf",
+              "source": "dcf_bull",
+              "weight": 0.15625,
+              "scenario": "bull"
+            },
+            {
+              "value": 40.725,
+              "method": "multiples",
+              "source": "multiples",
+              "weight": 0.37499999999999994,
+              "scenario": null
+            }
+          ],
+          "distribution_method": "weighted_step_percentiles",
+          "method_weights_used": {
+            "dcf": 0.625,
+            "multiples": 0.37499999999999994
+          },
+          "scenario_weights_used": {
+            "base": 0.5,
+            "bear": 0.25,
+            "bull": 0.25
+          }
+        },
+        "base_growth": 0.2550291238815829,
+        "diagnostics": {
+          "blockers": [],
+          "warnings": [],
+          "mos_basis": "iv_p10",
+          "freshness_flag": "ok",
+          "scenario_count": 3,
+          "valuation_status": "ok",
+          "data_quality_flag": "ok",
+          "uncertainty_category": "extreme"
+        },
+        "model_version": "valuation_v1",
+        "forecast_years": 5,
+        "terminal_growth": 0.02,
+        "scenario_weights_configured": {
+          "base": 0.5,
+          "bear": 0.25,
+          "bull": 0.25
+        }
+      },
+      "mos_basis": "iv_p10",
+      "scenario_count": 3,
+      "uncertainty_category": "extreme",
+      "distribution_collapsed": false,
+      "valuation_status": "ok",
+      "qualitative_score_id": "a6b573e4-6c61-404c-abb3-f3c2c168105c",
+      "qualitative_score_date": "2026-06-12",
+      "qualitative_model_version": "qual_v0",
+      "final_quality_score": 67.15,
+      "signal_run_id": "7c356678-b831-4b97-b0d6-f88e20f0213b",
+      "signal_date": "2026-06-12",
+      "signal_model_version": "signal_rule_v3",
+      "p_buy": 0.5994,
+      "p_buy_adjusted": 0.423,
+      "p_sell": 0.2227,
+      "final_signal": "hold",
+      "uncertainty_penalty": 0.35,
+      "red_flags": [],
+      "top_feature_contributors": [
+        {
+          "kind": "adjustment",
+          "name": "uncertainty_penalty",
+          "value": 0.35,
+          "impact": -35.0,
+          "direction": "negative"
+        },
+        {
+          "kind": "adjustment",
+          "name": "quality_confidence_multiplier",
+          "value": 1.0857,
+          "impact": 8.57,
+          "direction": "positive"
+        },
+        {
+          "kind": "family",
+          "name": "quality",
+          "score": 67.15,
+          "weight": 0.25,
+          "evidence": {
+            "signal": "from qualitative score",
+            "final_quality_score": 67.15
+          },
+          "direction": "positive",
+          "weighted_impact": 4.29
+        },
+        {
+          "kind": "family",
+          "name": "balance_sheet",
+          "score": 65.0,
+          "weight": 0.15,
+          "evidence": {
+            "coverage_signal": "missing",
+            "leverage_signal": "net cash",
+            "interest_coverage": null,
+            "data_quality_score": 100.0,
+            "net_debt_to_ebitda": -1.2183908045977012,
+            "data_quality_signal": "ok_or_missing"
+          },
+          "direction": "positive",
+          "weighted_impact": 2.25
+        },
+        {
+          "kind": "family",
+          "name": "valuation",
+          "score": 45.0,
+          "weight": 0.4,
+          "evidence": {
+            "iv_p25": 40.725,
+            "iv_p50": 9411.91921648931,
+            "iv_p75": 18154.152722576826,
+            "mos_signal": "0-10%",
+            "price_vs_iv": "below_or_equal_iv_p25",
+            "current_price": 40.725,
+            "uncertainty_width": 815.967351543061,
+            "uncertainty_signal": ">120% width",
+            "margin_of_safety_conservative": 0.0
+          },
+          "direction": "negative",
+          "weighted_impact": -2.0
+        },
+        {
+          "kind": "family",
+          "name": "news",
+          "score": 53.0,
+          "weight": 0.1,
+          "evidence": {
+            "filing_signal": "recent annual filing",
+            "volume_signal": "neutral_or_missing",
+            "news_volume_7d": 0.0,
+            "sentiment_signal": "missing",
+            "news_sentiment_7d": null,
+            "recent_filing_types": [
+              "10-K",
+              "10-Q"
+            ]
+          },
+          "direction": "positive",
+          "weighted_impact": 0.3
+        },
+        {
+          "kind": "family",
+          "name": "market_regime",
+          "score": 50.0,
+          "weight": 0.1,
+          "evidence": {
+            "momentum_60d": null,
+            "momentum_250d": null,
+            "volatility_90d": null,
+            "momentum_signal": "missing",
+            "volatility_signal": "missing"
+          },
+          "direction": "neutral",
+          "weighted_impact": 0.0
+        },
+        {
+          "kind": "adjustment",
+          "name": "risk_penalty",
+          "value": 0.0,
+          "impact": 0.0,
+          "direction": "neutral"
+        }
+      ],
+      "explanation": "Hold \u2014 insufficient directional conviction (p_buy_adj=0.42). Wide valuation range limits conviction; high valuation uncertainty reduces signal confidence.",
+      "freshness_flag": "ok",
+      "price_to_iv_mid": 0.004326960215367277,
+      "price_to_iv_high": 0.0012240391223850415,
+      "valuation_bucket": "below_fair_value",
+      "strong_sell_confirmation_type": "not_strong_sell",
+      "hold_uncertainty_constrained": false,
+      "stale_input_blocked": false,
+      "valuation_sanity_status": null,
+      "valuation_sanity_reason_codes": null,
+      "valuation_evidence_usable": null,
+      "valuation_display_suppressed": null,
+      "valuation_signal_influence_blocked": null,
+      "valuation_method_coverage": null,
+      "iv_range_ratio_p90_p10": null,
+      "distribution_span_ratio_diagnostics": null,
+      "dcf_multiples_gap_ratio": null,
+      "max_terminal_value_share": null,
+      "terminal_spread": null,
+      "midpoint_price_ratio": null,
+      "statement_age_days": 163,
+      "latest_statement_year": 2025,
+      "stale_statement_input": false,
+      "has_dcf_component": true,
+      "valuation_partial_flag": false,
+      "multiples_vs_dcf_mid_gap": -18113.427722576827,
+      "dominant_signal_driver": null,
+      "hold_reason": null,
+      "valuation_used_in_signal": null,
+      "risk_override_applied": null,
+      "confidence_limiter_codes": null,
+      "strong_sell_basis": null,
+      "buy_conviction_limited": null,
+      "explanation_quality_warning": null,
+      "recommendation_language_warning": null,
+      "probability_interpretation_note": null,
+      "distribution_min": 40.725,
+      "distribution_max": 33270.99539159116,
+      "distribution_span_ratio": 816.967351543061
+    },
+    {
+      "company_id": "4b50c3da-b7f0-431d-83b0-8c6826bf224a",
+      "ticker": "IDXX",
+      "company_name": "IDEXX Laboratories, Inc.",
+      "sector": "Healthcare",
+      "industry": "Medical - Diagnostics & Research",
+      "latest_price": 556.87,
+      "price_date": "2026-06-12",
+      "price_provider": "twelve_data",
+      "readiness_status": "analysis_ready",
+      "provider_mix": "mixed_sources",
+      "readiness_reason_codes": [
+        "valuation_ready"
+      ],
+      "can_run_valuation": true,
+      "can_run_signal": true,
+      "limiting_domain": null,
+      "readiness_updated_at": "2026-06-12T15:48:41.702413+00:00",
+      "data_quality_status": "not_comparable",
+      "data_quality_warning_codes": [
+        "price_not_comparable",
+        "fundamentals_provider_overlap_missing"
+      ],
+      "price_validation_status": "not_comparable",
+      "statement_completeness_status": "ok",
+      "statement_completeness_summary": "Complete",
+      "fundamentals_provider_comparison_status": "not_comparable",
+      "fundamentals_provider_comparison_summary": "No overlapping FMP and SEC annual periods",
+      "data_quality_details_json": {
+        "price_validation": {
+          "comparison_date": null,
+          "reference_provider": "fmp",
+          "comparison_provider": "twelve_data"
+        },
+        "statement_completeness": {
+          "status": "ok",
+          "latest_source": "sec_edgar",
+          "missing_fields": [],
+          "latest_fiscal_year": 2025,
+          "annual_periods_found": 5,
+          "latest_period_end_date": "2025-12-31",
+          "missing_optional_fields": [],
+          "missing_statement_domains": []
+        },
+        "fundamentals_provider_comparison": {
+          "compared_fields": [],
+          "discrepancy_level": "not_comparable",
+          "discrepant_fields": [],
+          "overlapping_period_count": 0,
+          "max_relative_difference_pct": null
+        }
+      },
+      "statement_source": "sec_edgar",
+      "fiscal_year": 2025,
+      "fiscal_period": "annual",
+      "latest_statement_date": "2025-12-31",
+      "revenue": 4303702000.0,
+      "gross_profit": 2659579000.0,
+      "operating_income": 1360031000.0,
+      "ebit": 1360031000.0,
+      "ebitda": 1505214000.0,
+      "net_income": 1059464000.0,
+      "cfo": 1181805000.0,
+      "capex": -124676000.0,
+      "free_cash_flow": 1057129000.0,
+      "depreciation_amortization": 145183000.0,
+      "cash_and_equivalents": 180070000.0,
+      "total_debt": 74995000.0,
+      "total_equity": 1605383000.0,
+      "diluted_shares": 81025000.0,
+      "factor_date": "2026-06-12",
+      "roic": 0.6798758988154432,
+      "roe": 0.6620210104302314,
+      "fcf_yield": 0.023429074061618715,
+      "net_debt_to_ebitda": -0.06980734965260754,
+      "interest_coverage": null,
+      "ev_to_ebitda": 29.90625701727462,
+      "price_to_sales": 10.484088291893816,
+      "price_to_book": 28.105686773810362,
+      "news_sentiment_7d": null,
+      "ratio_data_quality_score": 100.0,
+      "valuation_run_id": "653b1e1d-22a1-4671-bae6-31c3594488b4",
+      "valuation_date": "2026-06-12",
+      "valuation_model_version": "valuation_v1",
+      "valuation_currency": "USD",
+      "valuation_current_price": 556.87,
+      "iv_p10": 180.25476411705668,
+      "iv_p25": 271.97099771117945,
+      "iv_p50": 393.8048526665304,
+      "iv_p75": 561.16998,
+      "iv_p90": 561.16998,
+      "margin_of_safety_conservative": -0.6763072815611244,
+      "uncertainty_width": 2.113204706398654,
+      "valuation_assumptions_json": {
+        "dcf": {
+          "base_iv": 271.97099771117945,
+          "bear_iv": 180.25476411705668,
+          "bull_iv": 393.8048526665304,
+          "base_fcf": 1057129000.0,
+          "direct_fcf": 1057129000.0,
+          "fcf_source": "direct",
+          "direct_fcf_status": "positive"
+        },
+        "wacc": 0.09,
+        "sector": "Healthcare",
+        "tax_rate": 0.25,
+        "multiples": {
+          "pb_value": 561.16998,
+          "pe_value": 561.16998,
+          "ps_value": 561.16998,
+          "blended_value": 561.16998,
+          "ev_ebitda_value": 561.16998
+        },
+        "aggregation": {
+          "distribution": [
+            {
+              "value": 180.25476411705668,
+              "method": "dcf",
+              "source": "dcf_bear",
+              "weight": 0.15625,
+              "scenario": "bear"
+            },
+            {
+              "value": 271.97099771117945,
+              "method": "dcf",
+              "source": "dcf_base",
+              "weight": 0.3125,
+              "scenario": "base"
+            },
+            {
+              "value": 393.8048526665304,
+              "method": "dcf",
+              "source": "dcf_bull",
+              "weight": 0.15625,
+              "scenario": "bull"
+            },
+            {
+              "value": 561.16998,
+              "method": "multiples",
+              "source": "multiples",
+              "weight": 0.37499999999999994,
+              "scenario": null
+            }
+          ],
+          "distribution_method": "weighted_step_percentiles",
+          "method_weights_used": {
+            "dcf": 0.625,
+            "multiples": 0.37499999999999994
+          },
+          "scenario_weights_used": {
+            "base": 0.5,
+            "bear": 0.25,
+            "bull": 0.25
+          }
+        },
+        "base_growth": 0.10422003415519265,
+        "diagnostics": {
+          "blockers": [],
+          "warnings": [],
+          "mos_basis": "iv_p10",
+          "freshness_flag": "ok",
+          "scenario_count": 3,
+          "valuation_status": "ok",
+          "data_quality_flag": "ok",
+          "uncertainty_category": "extreme"
+        },
+        "model_version": "valuation_v1",
+        "forecast_years": 5,
+        "terminal_growth": 0.02,
+        "scenario_weights_configured": {
+          "base": 0.5,
+          "bear": 0.25,
+          "bull": 0.25
+        }
+      },
+      "mos_basis": "iv_p10",
+      "scenario_count": 3,
+      "uncertainty_category": "extreme",
+      "distribution_collapsed": false,
+      "valuation_status": "ok",
+      "qualitative_score_id": "8976d7f0-f08a-46fa-835c-18e5a6ca6f44",
+      "qualitative_score_date": "2026-06-12",
+      "qualitative_model_version": "qual_v0",
+      "final_quality_score": 73.1,
+      "signal_run_id": "530718e3-cc64-40c4-bc56-76ef8d149d4b",
+      "signal_date": "2026-06-12",
+      "signal_model_version": "signal_rule_v3",
+      "p_buy": 0.3087,
+      "p_buy_adjusted": 0.2238,
+      "p_sell": 0.4378,
+      "final_signal": "hold",
+      "uncertainty_penalty": 0.35,
+      "red_flags": [
+        "negative_margin_of_safety"
+      ],
+      "top_feature_contributors": [
+        {
+          "kind": "adjustment",
+          "name": "uncertainty_penalty",
+          "value": 0.35,
+          "impact": -35.0,
+          "direction": "negative"
+        },
+        {
+          "kind": "family",
+          "name": "valuation",
+          "score": 5.0,
+          "weight": 0.4,
+          "evidence": {
+            "iv_p25": 271.97099771117945,
+            "iv_p50": 393.8048526665304,
+            "iv_p75": 561.16998,
+            "mos_signal": "below -10%",
+            "price_vs_iv": "above_iv_p50",
+            "current_price": 556.87,
+            "uncertainty_width": 2.113204706398654,
+            "uncertainty_signal": ">120% width",
+            "margin_of_safety_conservative": -0.6763072815611244
+          },
+          "direction": "negative",
+          "weighted_impact": -18.0
+        },
+        {
+          "kind": "adjustment",
+          "name": "quality_confidence_multiplier",
+          "value": 1.1155,
+          "impact": 11.55,
+          "direction": "positive"
+        },
+        {
+          "kind": "family",
+          "name": "quality",
+          "score": 73.1,
+          "weight": 0.25,
+          "evidence": {
+            "signal": "from qualitative score",
+            "final_quality_score": 73.1
+          },
+          "direction": "positive",
+          "weighted_impact": 5.77
+        },
+        {
+          "kind": "family",
+          "name": "balance_sheet",
+          "score": 65.0,
+          "weight": 0.15,
+          "evidence": {
+            "coverage_signal": "missing",
+            "leverage_signal": "net cash",
+            "interest_coverage": null,
+            "data_quality_score": 100.0,
+            "net_debt_to_ebitda": -0.06980734965260754,
+            "data_quality_signal": "ok_or_missing"
+          },
+          "direction": "positive",
+          "weighted_impact": 2.25
+        },
+        {
+          "kind": "family",
+          "name": "news",
+          "score": 53.0,
+          "weight": 0.1,
+          "evidence": {
+            "filing_signal": "recent annual filing",
+            "volume_signal": "neutral_or_missing",
+            "news_volume_7d": 0.0,
+            "sentiment_signal": "missing",
+            "news_sentiment_7d": null,
+            "recent_filing_types": [
+              "10-K",
+              "10-Q"
+            ]
+          },
+          "direction": "positive",
+          "weighted_impact": 0.3
+        },
+        {
+          "kind": "family",
+          "name": "market_regime",
+          "score": 50.0,
+          "weight": 0.1,
+          "evidence": {
+            "momentum_60d": null,
+            "momentum_250d": null,
+            "volatility_90d": null,
+            "momentum_signal": "missing",
+            "volatility_signal": "missing"
+          },
+          "direction": "neutral",
+          "weighted_impact": 0.0
+        },
+        {
+          "kind": "adjustment",
+          "name": "risk_penalty",
+          "value": 0.0,
+          "impact": 0.0,
+          "direction": "neutral"
+        }
+      ],
+      "explanation": "Hold \u2014 shares trade above midpoint fair-value estimate, but wide valuation uncertainty limits conviction.",
+      "freshness_flag": "ok",
+      "price_to_iv_mid": 1.4140760232620886,
+      "price_to_iv_high": 0.9923374732197898,
+      "valuation_bucket": "modestly_overvalued",
+      "strong_sell_confirmation_type": "not_strong_sell",
+      "hold_uncertainty_constrained": true,
+      "stale_input_blocked": false,
+      "valuation_sanity_status": null,
+      "valuation_sanity_reason_codes": null,
+      "valuation_evidence_usable": null,
+      "valuation_display_suppressed": null,
+      "valuation_signal_influence_blocked": null,
+      "valuation_method_coverage": null,
+      "iv_range_ratio_p90_p10": null,
+      "distribution_span_ratio_diagnostics": null,
+      "dcf_multiples_gap_ratio": null,
+      "max_terminal_value_share": null,
+      "terminal_spread": null,
+      "midpoint_price_ratio": null,
+      "statement_age_days": 163,
+      "latest_statement_year": 2025,
+      "stale_statement_input": false,
+      "has_dcf_component": true,
+      "valuation_partial_flag": false,
+      "multiples_vs_dcf_mid_gap": 289.19898228882056,
+      "dominant_signal_driver": null,
+      "hold_reason": null,
+      "valuation_used_in_signal": null,
+      "risk_override_applied": null,
+      "confidence_limiter_codes": null,
+      "strong_sell_basis": null,
+      "buy_conviction_limited": null,
+      "explanation_quality_warning": null,
+      "recommendation_language_warning": null,
+      "probability_interpretation_note": null,
+      "distribution_min": 180.25476411705668,
+      "distribution_max": 561.16998,
+      "distribution_span_ratio": 3.1132047063986534
+    },
+    {
+      "company_id": "7c81d62f-f229-426f-9bb7-0bb0dcab4fb7",
+      "ticker": "MFC",
+      "company_name": "Manulife Financial Corporation",
+      "sector": "Financial Services",
+      "industry": "Insurance - Life",
+      "latest_price": 40.435,
+      "price_date": "2026-06-12",
+      "price_provider": "twelve_data",
+      "readiness_status": "tracking_only",
+      "provider_mix": "price_only",
+      "readiness_reason_codes": [
+        "provider_limited"
+      ],
+      "can_run_valuation": false,
+      "can_run_signal": false,
+      "limiting_domain": null,
+      "readiness_updated_at": "2026-06-12T15:47:19.674164+00:00",
+      "data_quality_status": "not_comparable",
+      "data_quality_warning_codes": [
+        "price_not_comparable",
+        "no_statements_available",
+        "fundamentals_provider_overlap_missing"
+      ],
+      "price_validation_status": "not_comparable",
+      "statement_completeness_status": "warning",
+      "statement_completeness_summary": "No annual statements available",
+      "fundamentals_provider_comparison_status": "not_comparable",
+      "fundamentals_provider_comparison_summary": "No overlapping FMP and SEC annual periods",
+      "data_quality_details_json": {
+        "price_validation": {
+          "comparison_date": null,
+          "reference_provider": "fmp",
+          "comparison_provider": "twelve_data"
+        },
+        "statement_completeness": {
+          "status": "warning",
+          "latest_source": null,
+          "missing_fields": [],
+          "latest_fiscal_year": null,
+          "annual_periods_found": 0,
+          "latest_period_end_date": null,
+          "missing_optional_fields": [],
+          "missing_statement_domains": [
+            "income",
+            "cashflow",
+            "balance"
+          ]
+        },
+        "fundamentals_provider_comparison": {
+          "compared_fields": [],
+          "discrepancy_level": "not_comparable",
+          "discrepant_fields": [],
+          "overlapping_period_count": 0,
+          "max_relative_difference_pct": null
+        }
+      },
+      "statement_source": null,
+      "fiscal_year": null,
+      "fiscal_period": null,
+      "latest_statement_date": null,
+      "revenue": null,
+      "gross_profit": null,
+      "operating_income": null,
+      "ebit": null,
+      "ebitda": null,
+      "net_income": null,
+      "cfo": null,
+      "capex": null,
+      "free_cash_flow": null,
+      "depreciation_amortization": null,
+      "cash_and_equivalents": null,
+      "total_debt": null,
+      "total_equity": null,
+      "diluted_shares": null,
+      "factor_date": "2026-06-12",
+      "roic": null,
+      "roe": null,
+      "fcf_yield": null,
+      "net_debt_to_ebitda": null,
+      "interest_coverage": null,
+      "ev_to_ebitda": null,
+      "price_to_sales": null,
+      "price_to_book": null,
+      "news_sentiment_7d": null,
+      "ratio_data_quality_score": 40.0,
+      "valuation_run_id": null,
+      "valuation_date": null,
+      "valuation_model_version": null,
+      "valuation_currency": null,
+      "valuation_current_price": null,
+      "iv_p10": null,
+      "iv_p25": null,
+      "iv_p50": null,
+      "iv_p75": null,
+      "iv_p90": null,
+      "margin_of_safety_conservative": null,
+      "uncertainty_width": null,
+      "valuation_assumptions_json": null,
+      "mos_basis": null,
+      "scenario_count": null,
+      "uncertainty_category": null,
+      "distribution_collapsed": false,
+      "valuation_status": null,
+      "qualitative_score_id": "fc18978d-209d-4fbd-9d9a-25202855303b",
+      "qualitative_score_date": "2026-06-12",
+      "qualitative_model_version": "qual_v0",
+      "final_quality_score": 48.5,
+      "signal_run_id": null,
+      "signal_date": null,
+      "signal_model_version": null,
+      "p_buy": null,
+      "p_buy_adjusted": null,
+      "p_sell": null,
+      "final_signal": null,
+      "uncertainty_penalty": null,
+      "red_flags": null,
+      "top_feature_contributors": null,
+      "explanation": null,
+      "freshness_flag": null,
+      "price_to_iv_mid": null,
+      "price_to_iv_high": null,
+      "valuation_bucket": "unknown",
+      "strong_sell_confirmation_type": "not_strong_sell",
+      "hold_uncertainty_constrained": false,
+      "stale_input_blocked": false,
+      "valuation_sanity_status": null,
+      "valuation_sanity_reason_codes": null,
+      "valuation_evidence_usable": null,
+      "valuation_display_suppressed": null,
+      "valuation_signal_influence_blocked": null,
+      "valuation_method_coverage": null,
+      "iv_range_ratio_p90_p10": null,
+      "distribution_span_ratio_diagnostics": null,
+      "dcf_multiples_gap_ratio": null,
+      "max_terminal_value_share": null,
+      "terminal_spread": null,
+      "midpoint_price_ratio": null,
+      "statement_age_days": null,
+      "latest_statement_year": null,
+      "stale_statement_input": false,
+      "has_dcf_component": false,
+      "valuation_partial_flag": false,
+      "multiples_vs_dcf_mid_gap": null,
+      "dominant_signal_driver": null,
+      "hold_reason": null,
+      "valuation_used_in_signal": null,
+      "risk_override_applied": null,
+      "confidence_limiter_codes": null,
+      "strong_sell_basis": null,
+      "buy_conviction_limited": null,
+      "explanation_quality_warning": null,
+      "recommendation_language_warning": null,
+      "probability_interpretation_note": null,
+      "distribution_min": null,
+      "distribution_max": null,
+      "distribution_span_ratio": null
+    },
+    {
+      "company_id": "628c7d7d-1217-42b4-89f7-213a213664dd",
+      "ticker": "MU",
+      "company_name": "Micron Technology, Inc.",
+      "sector": "Technology",
+      "industry": "Semiconductors",
+      "latest_price": 998.46,
+      "price_date": "2026-06-12",
+      "price_provider": "twelve_data",
+      "readiness_status": "tracking_only",
+      "provider_mix": "mixed_sources",
+      "readiness_reason_codes": [
+        "missing_min_statement_history",
+        "provider_limited",
+        "valuation_ready",
+        "stale_fundamentals"
+      ],
+      "can_run_valuation": false,
+      "can_run_signal": false,
+      "limiting_domain": "fundamentals",
+      "readiness_updated_at": "2026-06-12T15:48:31.653604+00:00",
+      "data_quality_status": "warning",
+      "data_quality_warning_codes": [
+        "price_not_comparable",
+        "insufficient_period_coverage",
+        "fundamentals_provider_overlap_missing"
+      ],
+      "price_validation_status": "not_comparable",
+      "statement_completeness_status": "warning",
+      "statement_completeness_summary": "Limited annual history",
+      "fundamentals_provider_comparison_status": "not_comparable",
+      "fundamentals_provider_comparison_summary": "No overlapping FMP and SEC annual periods",
+      "data_quality_details_json": {
+        "price_validation": {
+          "comparison_date": null,
+          "reference_provider": "fmp",
+          "comparison_provider": "twelve_data"
+        },
+        "statement_completeness": {
+          "status": "warning",
+          "latest_source": "sec_edgar",
+          "missing_fields": [],
+          "latest_fiscal_year": 2018,
+          "annual_periods_found": 1,
+          "latest_period_end_date": "2018-08-30",
+          "missing_optional_fields": [],
+          "missing_statement_domains": []
+        },
+        "fundamentals_provider_comparison": {
+          "compared_fields": [],
+          "discrepancy_level": "not_comparable",
+          "discrepant_fields": [],
+          "overlapping_period_count": 0,
+          "max_relative_difference_pct": null
+        }
+      },
+      "statement_source": "sec_edgar",
+      "fiscal_year": 2018,
+      "fiscal_period": "annual",
+      "latest_statement_date": "2018-08-30",
+      "revenue": 30391000000.0,
+      "gross_profit": 17891000000.0,
+      "operating_income": 14994000000.0,
+      "ebit": 14994000000.0,
+      "ebitda": 19753000000.0,
+      "net_income": 14135000000.0,
+      "cfo": 17400000000.0,
+      "capex": -8879000000.0,
+      "free_cash_flow": 8521000000.0,
+      "depreciation_amortization": 4759000000.0,
+      "cash_and_equivalents": 6506000000.0,
+      "total_debt": null,
+      "total_equity": 32294000000.0,
+      "diluted_shares": 1229000000.0,
+      "factor_date": "2026-06-12",
+      "roic": null,
+      "roe": 0.4376974050907289,
+      "fcf_yield": 0.006943972806812483,
+      "net_debt_to_ebitda": null,
+      "interest_coverage": null,
+      "ev_to_ebitda": null,
+      "price_to_sales": 40.377326840182945,
+      "price_to_book": 37.99799777048368,
+      "news_sentiment_7d": null,
+      "ratio_data_quality_score": 100.0,
+      "valuation_run_id": "36af8fa0-29c9-4755-ab3f-3fa2dd89bbbb",
+      "valuation_date": "2026-06-12",
+      "valuation_model_version": "valuation_v1",
+      "valuation_currency": "USD",
+      "valuation_current_price": 995.87,
+      "iv_p10": 76.45227609457916,
+      "iv_p25": 92.62916353077487,
+      "iv_p50": 107.90001822511041,
+      "iv_p75": 935.8900100000001,
+      "iv_p90": 935.8900100000001,
+      "margin_of_safety_conservative": -0.9232306665583067,
+      "uncertainty_width": 11.241493096192583,
+      "valuation_assumptions_json": {
+        "dcf": {
+          "base_iv": 92.62916353077487,
+          "bear_iv": 76.45227609457916,
+          "bull_iv": 107.90001822511041,
+          "base_fcf": 8521000000.0,
+          "direct_fcf": 8521000000.0,
+          "fcf_source": "direct",
+          "direct_fcf_status": "positive"
+        },
+        "wacc": 0.09,
+        "sector": "Technology",
+        "tax_rate": 0.25,
+        "multiples": {
+          "pb_value": 935.89001,
+          "pe_value": 935.8900100000001,
+          "ps_value": 935.89001,
+          "blended_value": 935.8900100000001,
+          "ev_ebitda_value": null
+        },
+        "aggregation": {
+          "distribution": [
+            {
+              "value": 76.45227609457916,
+              "method": "dcf",
+              "source": "dcf_bear",
+              "weight": 0.15625,
+              "scenario": "bear"
+            },
+            {
+              "value": 92.62916353077487,
+              "method": "dcf",
+              "source": "dcf_base",
+              "weight": 0.3125,
+              "scenario": "base"
+            },
+            {
+              "value": 107.90001822511041,
+              "method": "dcf",
+              "source": "dcf_bull",
+              "weight": 0.15625,
+              "scenario": "bull"
+            },
+            {
+              "value": 935.8900100000001,
+              "method": "multiples",
+              "source": "multiples",
+              "weight": 0.37499999999999994,
+              "scenario": null
+            }
+          ],
+          "distribution_method": "weighted_step_percentiles",
+          "method_weights_used": {
+            "dcf": 0.625,
+            "multiples": 0.37499999999999994
+          },
+          "scenario_weights_used": {
+            "base": 0.5,
+            "bear": 0.25,
+            "bull": 0.25
+          }
+        },
+        "base_growth": 0.0,
+        "diagnostics": {
+          "blockers": [],
+          "warnings": [
+            "limited_statement_history"
+          ],
+          "mos_basis": "iv_p10",
+          "freshness_flag": "ok",
+          "scenario_count": 3,
+          "valuation_status": "ok",
+          "data_quality_flag": "limited",
+          "uncertainty_category": "extreme"
+        },
+        "model_version": "valuation_v1",
+        "forecast_years": 5,
+        "terminal_growth": 0.02,
+        "scenario_weights_configured": {
+          "base": 0.5,
+          "bear": 0.25,
+          "bull": 0.25
+        }
+      },
+      "mos_basis": "iv_p10",
+      "scenario_count": 3,
+      "uncertainty_category": "extreme",
+      "distribution_collapsed": false,
+      "valuation_status": "ok",
+      "qualitative_score_id": "700160c8-daae-4acc-b328-ce84ff7f8fb3",
+      "qualitative_score_date": "2026-06-12",
+      "qualitative_model_version": "qual_v0",
+      "final_quality_score": 53.75,
+      "signal_run_id": "7a4cf6a8-c87f-41c9-a3d2-483c5779166f",
+      "signal_date": "2026-06-12",
+      "signal_model_version": "signal_rule_v3",
+      "p_buy": 0.1731,
+      "p_buy_adjusted": 0.1147,
+      "p_sell": 0.4378,
+      "final_signal": "hold",
+      "uncertainty_penalty": 0.35,
+      "red_flags": [
+        "negative_margin_of_safety",
+        "overvalued_vs_iv_p75"
+      ],
+      "top_feature_contributors": [
+        {
+          "kind": "adjustment",
+          "name": "uncertainty_penalty",
+          "value": 0.35,
+          "impact": -35.0,
+          "direction": "negative"
+        },
+        {
+          "kind": "family",
+          "name": "valuation",
+          "score": 0.0,
+          "weight": 0.4,
+          "evidence": {
+            "iv_p25": 92.62916353077487,
+            "iv_p50": 107.90001822511041,
+            "iv_p75": 935.8900100000001,
+            "mos_signal": "below -10%",
+            "price_vs_iv": "above_iv_p75",
+            "current_price": 995.87,
+            "uncertainty_width": 11.241493096192583,
+            "uncertainty_signal": ">120% width",
+            "margin_of_safety_conservative": -0.9232306665583067
+          },
+          "direction": "negative",
+          "weighted_impact": -20.0
+        },
+        {
+          "kind": "adjustment",
+          "name": "quality_confidence_multiplier",
+          "value": 1.0188,
+          "impact": 1.88,
+          "direction": "positive"
+        },
+        {
+          "kind": "family",
+          "name": "quality",
+          "score": 53.75,
+          "weight": 0.25,
+          "evidence": {
+            "signal": "from qualitative score",
+            "final_quality_score": 53.75
+          },
+          "direction": "positive",
+          "weighted_impact": 0.94
+        },
+        {
+          "kind": "family",
+          "name": "news",
+          "score": 53.0,
+          "weight": 0.1,
+          "evidence": {
+            "filing_signal": "recent annual filing",
+            "volume_signal": "neutral_or_missing",
+            "news_volume_7d": 0.0,
+            "sentiment_signal": "missing",
+            "news_sentiment_7d": null,
+            "recent_filing_types": [
+              "10-K",
+              "10-Q"
+            ]
+          },
+          "direction": "positive",
+          "weighted_impact": 0.3
+        },
+        {
+          "kind": "family",
+          "name": "balance_sheet",
+          "score": 50.0,
+          "weight": 0.15,
+          "evidence": {
+            "coverage_signal": "missing",
+            "leverage_signal": "missing",
+            "interest_coverage": null,
+            "data_quality_score": 100.0,
+            "net_debt_to_ebitda": null,
+            "data_quality_signal": "ok_or_missing"
+          },
+          "direction": "neutral",
+          "weighted_impact": 0.0
+        },
+        {
+          "kind": "family",
+          "name": "market_regime",
+          "score": 50.0,
+          "weight": 0.1,
+          "evidence": {
+            "momentum_60d": null,
+            "momentum_250d": null,
+            "volatility_90d": null,
+            "momentum_signal": "missing",
+            "volatility_signal": "missing"
+          },
+          "direction": "neutral",
+          "weighted_impact": 0.0
+        },
+        {
+          "kind": "adjustment",
+          "name": "risk_penalty",
+          "value": 0.0,
+          "impact": 0.0,
+          "direction": "neutral"
+        }
+      ],
+      "explanation": "Hold \u2014 shares trade above midpoint fair-value estimate, but wide valuation uncertainty limits conviction.",
+      "freshness_flag": "ok",
+      "price_to_iv_mid": 9.253566555632325,
+      "price_to_iv_high": 1.0668561362248112,
+      "valuation_bucket": "modestly_overvalued",
+      "strong_sell_confirmation_type": "not_strong_sell",
+      "hold_uncertainty_constrained": true,
+      "stale_input_blocked": true,
+      "valuation_sanity_status": null,
+      "valuation_sanity_reason_codes": null,
+      "valuation_evidence_usable": null,
+      "valuation_display_suppressed": null,
+      "valuation_signal_influence_blocked": null,
+      "valuation_method_coverage": null,
+      "iv_range_ratio_p90_p10": null,
+      "distribution_span_ratio_diagnostics": null,
+      "dcf_multiples_gap_ratio": null,
+      "max_terminal_value_share": null,
+      "terminal_spread": null,
+      "midpoint_price_ratio": null,
+      "statement_age_days": 2843,
+      "latest_statement_year": 2018,
+      "stale_statement_input": true,
+      "has_dcf_component": true,
+      "valuation_partial_flag": false,
+      "multiples_vs_dcf_mid_gap": 843.2608464692252,
+      "dominant_signal_driver": null,
+      "hold_reason": null,
+      "valuation_used_in_signal": null,
+      "risk_override_applied": null,
+      "confidence_limiter_codes": null,
+      "strong_sell_basis": null,
+      "buy_conviction_limited": null,
+      "explanation_quality_warning": null,
+      "recommendation_language_warning": null,
+      "probability_interpretation_note": null,
+      "distribution_min": 76.45227609457916,
+      "distribution_max": 935.8900100000001,
+      "distribution_span_ratio": 12.241493096192583
+    },
+    {
+      "company_id": "c8dcd260-e65b-4635-822b-915dd8424205",
+      "ticker": "ORCL",
+      "company_name": "Oracle Corporation",
+      "sector": "Technology",
+      "industry": "Software - Infrastructure",
+      "latest_price": 182.795,
+      "price_date": "2026-06-12",
+      "price_provider": "twelve_data",
+      "readiness_status": "partial_analysis",
+      "provider_mix": "mixed_sources",
+      "readiness_reason_codes": [
+        "valuation_partial"
+      ],
+      "can_run_valuation": true,
+      "can_run_signal": true,
+      "limiting_domain": null,
+      "readiness_updated_at": "2026-06-12T15:47:29.688888+00:00",
+      "data_quality_status": "not_comparable",
+      "data_quality_warning_codes": [
+        "price_not_comparable",
+        "fundamentals_provider_overlap_missing"
+      ],
+      "price_validation_status": "not_comparable",
+      "statement_completeness_status": "ok",
+      "statement_completeness_summary": "Complete",
+      "fundamentals_provider_comparison_status": "not_comparable",
+      "fundamentals_provider_comparison_summary": "No overlapping FMP and SEC annual periods",
+      "data_quality_details_json": {
+        "price_validation": {
+          "comparison_date": null,
+          "reference_provider": "fmp",
+          "comparison_provider": "twelve_data"
+        },
+        "statement_completeness": {
+          "status": "ok",
+          "latest_source": "sec_edgar",
+          "missing_fields": [],
+          "latest_fiscal_year": 2025,
+          "annual_periods_found": 5,
+          "latest_period_end_date": "2025-05-31",
+          "missing_optional_fields": [],
+          "missing_statement_domains": []
+        },
+        "fundamentals_provider_comparison": {
+          "compared_fields": [],
+          "discrepancy_level": "not_comparable",
+          "discrepant_fields": [],
+          "overlapping_period_count": 0,
+          "max_relative_difference_pct": null
+        }
+      },
+      "statement_source": "sec_edgar",
+      "fiscal_year": 2025,
+      "fiscal_period": "annual",
+      "latest_statement_date": "2025-05-31",
+      "revenue": 57399000000.0,
+      "gross_profit": null,
+      "operating_income": 17678000000.0,
+      "ebit": 17678000000.0,
+      "ebitda": null,
+      "net_income": 12443000000.0,
+      "cfo": 20821000000.0,
+      "capex": -21215000000.0,
+      "free_cash_flow": -394000000.0,
+      "depreciation_amortization": null,
+      "cash_and_equivalents": 10786000000.0,
+      "total_debt": 92568000000.0,
+      "total_equity": 20451000000.0,
+      "diluted_shares": 2866000000.0,
+      "factor_date": "2026-06-12",
+      "roic": 0.12968904365517983,
+      "roe": 0.8535757160006859,
+      "fcf_yield": -0.0007520655987500594,
+      "net_debt_to_ebitda": null,
+      "interest_coverage": null,
+      "ev_to_ebitda": null,
+      "price_to_sales": 9.127170682416068,
+      "price_to_book": 25.61686323407168,
+      "news_sentiment_7d": null,
+      "ratio_data_quality_score": 100.0,
+      "valuation_run_id": "4edfd11d-c464-4f37-a5ef-2e48de1b2baa",
+      "valuation_date": "2026-06-12",
+      "valuation_model_version": "valuation_v1",
+      "valuation_currency": "USD",
+      "valuation_current_price": 182.795,
+      "iv_p10": 205.80999999999997,
+      "iv_p25": 205.80999999999997,
+      "iv_p50": 205.80999999999997,
+      "iv_p75": 205.80999999999997,
+      "iv_p90": 205.80999999999997,
+      "margin_of_safety_conservative": 0.12590606964085443,
+      "uncertainty_width": 0.0,
+      "valuation_assumptions_json": {
+        "dcf": {
+          "base_iv": null,
+          "bear_iv": null,
+          "bull_iv": null,
+          "base_fcf": null,
+          "direct_fcf": -394000000.0,
+          "fcf_source": "direct_negative",
+          "direct_fcf_status": "negative"
+        },
+        "wacc": 0.09,
+        "sector": "Technology",
+        "tax_rate": 0.25,
+        "multiples": {
+          "pb_value": 205.80999999999997,
+          "pe_value": 205.80999999999997,
+          "ps_value": 205.80999999999997,
+          "blended_value": 205.80999999999997,
+          "ev_ebitda_value": null
+        },
+        "aggregation": {
+          "distribution": [
+            {
+              "value": 205.80999999999997,
+              "method": "multiples",
+              "source": "multiples",
+              "weight": 1.0,
+              "scenario": null
+            }
+          ],
+          "distribution_method": "weighted_step_percentiles",
+          "method_weights_used": {
+            "multiples": 1.0
+          },
+          "scenario_weights_used": {}
+        },
+        "base_growth": 0.08379751137629576,
+        "diagnostics": {
+          "blockers": [
+            "negative_direct_fcf"
+          ],
+          "warnings": [
+            "dcf_unavailable"
+          ],
+          "mos_basis": "iv_p10",
+          "freshness_flag": "ok",
+          "scenario_count": 0,
+          "valuation_status": "partial",
+          "data_quality_flag": "limited",
+          "uncertainty_category": "low"
+        },
+        "model_version": "valuation_v1",
+        "forecast_years": 5,
+        "terminal_growth": 0.02,
+        "scenario_weights_configured": {
+          "base": 0.5,
+          "bear": 0.25,
+          "bull": 0.25
+        }
+      },
+      "mos_basis": "iv_p10",
+      "scenario_count": 0,
+      "uncertainty_category": "low",
+      "distribution_collapsed": false,
+      "valuation_status": "partial",
+      "qualitative_score_id": "f767e490-ff68-45f9-a4cc-d43e3fef20ac",
+      "qualitative_score_date": "2026-06-12",
+      "qualitative_model_version": "qual_v0",
+      "final_quality_score": 58.35,
+      "signal_run_id": "e6de8f88-b8bf-410c-bce5-8f0a29d94d5d",
+      "signal_date": "2026-06-12",
+      "signal_model_version": "signal_rule_v3",
+      "p_buy": 0.7038,
+      "p_buy_adjusted": 0.7332,
+      "p_sell": 0.6027,
+      "final_signal": "strong_sell",
+      "uncertainty_penalty": 0.0,
+      "red_flags": [
+        "negative_direct_fcf"
+      ],
+      "top_feature_contributors": [
+        {
+          "kind": "family",
+          "name": "valuation",
+          "score": 70.0,
+          "weight": 0.4,
+          "evidence": {
+            "iv_p25": 205.80999999999997,
+            "iv_p50": 205.80999999999997,
+            "iv_p75": 205.80999999999997,
+            "mos_signal": ">=10%",
+            "price_vs_iv": "below_or_equal_iv_p25",
+            "current_price": 182.795,
+            "uncertainty_width": 0.0,
+            "uncertainty_signal": "contained",
+            "margin_of_safety_conservative": 0.12590606964085443
+          },
+          "direction": "positive",
+          "weighted_impact": 8.0
+        },
+        {
+          "kind": "adjustment",
+          "name": "quality_confidence_multiplier",
+          "value": 1.0417,
+          "impact": 4.17,
+          "direction": "positive"
+        },
+        {
+          "kind": "family",
+          "name": "quality",
+          "score": 58.35,
+          "weight": 0.25,
+          "evidence": {
+            "signal": "from qualitative score",
+            "final_quality_score": 58.35
+          },
+          "direction": "positive",
+          "weighted_impact": 2.09
+        },
+        {
+          "kind": "family",
+          "name": "news",
+          "score": 53.0,
+          "weight": 0.1,
+          "evidence": {
+            "filing_signal": "recent annual filing",
+            "volume_signal": "neutral_or_missing",
+            "news_volume_7d": 0.0,
+            "sentiment_signal": "missing",
+            "news_sentiment_7d": null,
+            "recent_filing_types": [
+              "10-K",
+              "10-Q"
+            ]
+          },
+          "direction": "positive",
+          "weighted_impact": 0.3
+        },
+        {
+          "kind": "family",
+          "name": "balance_sheet",
+          "score": 50.0,
+          "weight": 0.15,
+          "evidence": {
+            "coverage_signal": "missing",
+            "leverage_signal": "missing",
+            "interest_coverage": null,
+            "data_quality_score": 100.0,
+            "net_debt_to_ebitda": null,
+            "data_quality_signal": "ok_or_missing"
+          },
+          "direction": "neutral",
+          "weighted_impact": 0.0
+        },
+        {
+          "kind": "family",
+          "name": "market_regime",
+          "score": 50.0,
+          "weight": 0.1,
+          "evidence": {
+            "momentum_60d": null,
+            "momentum_250d": null,
+            "volatility_90d": null,
+            "momentum_signal": "missing",
+            "volatility_signal": "missing"
+          },
+          "direction": "neutral",
+          "weighted_impact": 0.0
+        },
+        {
+          "kind": "adjustment",
+          "name": "risk_penalty",
+          "value": 0.0,
+          "impact": 0.0,
+          "direction": "neutral"
+        },
+        {
+          "kind": "adjustment",
+          "name": "uncertainty_penalty",
+          "value": 0.0,
+          "impact": 0.0,
+          "direction": "neutral"
+        }
+      ],
+      "explanation": "Strong sell \u2014 negative free cash flow.",
+      "freshness_flag": "ok",
+      "price_to_iv_mid": 0.8881735581361451,
+      "price_to_iv_high": 0.8881735581361451,
+      "valuation_bucket": "below_fair_value",
+      "strong_sell_confirmation_type": "hard_risk_confirmed",
+      "hold_uncertainty_constrained": false,
+      "stale_input_blocked": false,
+      "valuation_sanity_status": null,
+      "valuation_sanity_reason_codes": null,
+      "valuation_evidence_usable": null,
+      "valuation_display_suppressed": null,
+      "valuation_signal_influence_blocked": null,
+      "valuation_method_coverage": null,
+      "iv_range_ratio_p90_p10": null,
+      "distribution_span_ratio_diagnostics": null,
+      "dcf_multiples_gap_ratio": null,
+      "max_terminal_value_share": null,
+      "terminal_spread": null,
+      "midpoint_price_ratio": null,
+      "statement_age_days": 377,
+      "latest_statement_year": 2025,
+      "stale_statement_input": true,
+      "has_dcf_component": false,
+      "valuation_partial_flag": true,
+      "multiples_vs_dcf_mid_gap": null,
+      "dominant_signal_driver": null,
+      "hold_reason": null,
+      "valuation_used_in_signal": null,
+      "risk_override_applied": null,
+      "confidence_limiter_codes": null,
+      "strong_sell_basis": null,
+      "buy_conviction_limited": null,
+      "explanation_quality_warning": null,
+      "recommendation_language_warning": null,
+      "probability_interpretation_note": null,
+      "distribution_min": 205.80999999999997,
+      "distribution_max": 205.80999999999997,
+      "distribution_span_ratio": 1.0
+    },
+    {
+      "company_id": "c54fea95-efde-41e2-859c-0cd62eb2f79f",
+      "ticker": "TDG",
+      "company_name": "TransDigm Group Incorporated",
+      "sector": "Industrials",
+      "industry": "Aerospace & Defense",
+      "latest_price": 1255.82,
+      "price_date": "2026-06-12",
+      "price_provider": "twelve_data",
+      "readiness_status": "analysis_ready",
+      "provider_mix": "mixed_sources",
+      "readiness_reason_codes": [
+        "valuation_ready"
+      ],
+      "can_run_valuation": true,
+      "can_run_signal": true,
+      "limiting_domain": null,
+      "readiness_updated_at": "2026-06-12T15:48:02.222116+00:00",
+      "data_quality_status": "not_comparable",
+      "data_quality_warning_codes": [
+        "price_not_comparable",
+        "fundamentals_provider_overlap_missing"
+      ],
+      "price_validation_status": "not_comparable",
+      "statement_completeness_status": "ok",
+      "statement_completeness_summary": "Complete",
+      "fundamentals_provider_comparison_status": "not_comparable",
+      "fundamentals_provider_comparison_summary": "No overlapping FMP and SEC annual periods",
+      "data_quality_details_json": {
+        "price_validation": {
+          "comparison_date": null,
+          "reference_provider": "fmp",
+          "comparison_provider": "twelve_data"
+        },
+        "statement_completeness": {
+          "status": "ok",
+          "latest_source": "sec_edgar",
+          "missing_fields": [],
+          "latest_fiscal_year": 2025,
+          "annual_periods_found": 5,
+          "latest_period_end_date": "2025-09-30",
+          "missing_optional_fields": [],
+          "missing_statement_domains": []
+        },
+        "fundamentals_provider_comparison": {
+          "compared_fields": [],
+          "discrepancy_level": "not_comparable",
+          "discrepant_fields": [],
+          "overlapping_period_count": 0,
+          "max_relative_difference_pct": null
+        }
+      },
+      "statement_source": "sec_edgar",
+      "fiscal_year": 2025,
+      "fiscal_period": "annual",
+      "latest_statement_date": "2025-09-30",
+      "revenue": 8831000000.0,
+      "gross_profit": 5311000000.0,
+      "operating_income": 4165000000.0,
+      "ebit": 4165000000.0,
+      "ebitda": 4532000000.0,
+      "net_income": 2074000000.0,
+      "cfo": 2038000000.0,
+      "capex": -222000000.0,
+      "free_cash_flow": 1816000000.0,
+      "depreciation_amortization": 367000000.0,
+      "cash_and_equivalents": 2808000000.0,
+      "total_debt": 124000000.0,
+      "total_equity": -9686000000.0,
+      "diluted_shares": 58200000.0,
+      "factor_date": "2026-06-12",
+      "roic": -0.25252627324171384,
+      "roe": -0.2596394591887832,
+      "fcf_yield": 0.02484651394379248,
+      "net_debt_to_ebitda": -0.5922330097087378,
+      "interest_coverage": null,
+      "ev_to_ebitda": 15.53502294792586,
+      "price_to_sales": 8.276381383761748,
+      "price_to_book": -7.545810861036547,
+      "news_sentiment_7d": null,
+      "ratio_data_quality_score": 100.0,
+      "valuation_run_id": "2eaea356-fd03-41b0-b226-01bbb5ed3295",
+      "valuation_date": "2026-06-12",
+      "valuation_model_version": "valuation_v1",
+      "valuation_currency": "USD",
+      "valuation_current_price": 1255.82,
+      "iv_p10": 481.21403524393986,
+      "iv_p25": 714.8657223559348,
+      "iv_p50": 1030.6993545289345,
+      "iv_p75": 1238.73999,
+      "iv_p90": 1238.73999,
+      "margin_of_safety_conservative": -0.6168128909844246,
+      "uncertainty_width": 1.5741975488558861,
+      "valuation_assumptions_json": {
+        "dcf": {
+          "base_iv": 714.8657223559348,
+          "bear_iv": 481.21403524393986,
+          "bull_iv": 1030.6993545289345,
+          "base_fcf": 1816000000.0,
+          "direct_fcf": 1816000000.0,
+          "fcf_source": "direct",
+          "direct_fcf_status": "positive"
+        },
+        "wacc": 0.09,
+        "sector": "Industrials",
+        "tax_rate": 0.25,
+        "multiples": {
+          "pb_value": null,
+          "pe_value": 1238.7399900000003,
+          "ps_value": 1238.73999,
+          "blended_value": 1238.73999,
+          "ev_ebitda_value": 1238.73999
+        },
+        "aggregation": {
+          "distribution": [
+            {
+              "value": 481.21403524393986,
+              "method": "dcf",
+              "source": "dcf_bear",
+              "weight": 0.15625,
+              "scenario": "bear"
+            },
+            {
+              "value": 714.8657223559348,
+              "method": "dcf",
+              "source": "dcf_base",
+              "weight": 0.3125,
+              "scenario": "base"
+            },
+            {
+              "value": 1030.6993545289345,
+              "method": "dcf",
+              "source": "dcf_bull",
+              "weight": 0.15625,
+              "scenario": "bull"
+            },
+            {
+              "value": 1238.73999,
+              "method": "multiples",
+              "source": "multiples",
+              "weight": 0.37499999999999994,
+              "scenario": null
+            }
+          ],
+          "distribution_method": "weighted_step_percentiles",
+          "method_weights_used": {
+            "dcf": 0.625,
+            "multiples": 0.37499999999999994
+          },
+          "scenario_weights_used": {
+            "base": 0.5,
+            "bear": 0.25,
+            "bull": 0.25
+          }
+        },
+        "base_growth": 0.11221662468513854,
+        "diagnostics": {
+          "blockers": [],
+          "warnings": [],
+          "mos_basis": "iv_p10",
+          "freshness_flag": "ok",
+          "scenario_count": 3,
+          "valuation_status": "ok",
+          "data_quality_flag": "ok",
+          "uncertainty_category": "extreme"
+        },
+        "model_version": "valuation_v1",
+        "forecast_years": 5,
+        "terminal_growth": 0.02,
+        "scenario_weights_configured": {
+          "base": 0.5,
+          "bear": 0.25,
+          "bull": 0.25
+        }
+      },
+      "mos_basis": "iv_p10",
+      "scenario_count": 3,
+      "uncertainty_category": "extreme",
+      "distribution_collapsed": false,
+      "valuation_status": "ok",
+      "qualitative_score_id": "7d90c59d-f2d0-41b1-b043-5ad04d92e17f",
+      "qualitative_score_date": "2026-06-12",
+      "qualitative_model_version": "qual_v0",
+      "final_quality_score": 60.85,
+      "signal_run_id": "ec8ec7fb-5fe9-4e34-aea3-3454e897a574",
+      "signal_date": "2026-06-12",
+      "signal_model_version": "signal_rule_v3",
+      "p_buy": 0.2265,
+      "p_buy_adjusted": 0.1552,
+      "p_sell": 0.2227,
+      "final_signal": "hold",
+      "uncertainty_penalty": 0.35,
+      "red_flags": [
+        "negative_margin_of_safety",
+        "overvalued_vs_iv_p75"
+      ],
+      "top_feature_contributors": [
+        {
+          "kind": "adjustment",
+          "name": "uncertainty_penalty",
+          "value": 0.35,
+          "impact": -35.0,
+          "direction": "negative"
+        },
+        {
+          "kind": "family",
+          "name": "valuation",
+          "score": 0.0,
+          "weight": 0.4,
+          "evidence": {
+            "iv_p25": 714.8657223559348,
+            "iv_p50": 1030.6993545289345,
+            "iv_p75": 1238.73999,
+            "mos_signal": "below -10%",
+            "price_vs_iv": "above_iv_p75",
+            "current_price": 1255.82,
+            "uncertainty_width": 1.5741975488558861,
+            "uncertainty_signal": ">120% width",
+            "margin_of_safety_conservative": -0.6168128909844246
+          },
+          "direction": "negative",
+          "weighted_impact": -20.0
+        },
+        {
+          "kind": "adjustment",
+          "name": "quality_confidence_multiplier",
+          "value": 1.0542,
+          "impact": 5.42,
+          "direction": "positive"
+        },
+        {
+          "kind": "family",
+          "name": "quality",
+          "score": 60.85,
+          "weight": 0.25,
+          "evidence": {
+            "signal": "from qualitative score",
+            "final_quality_score": 60.85
+          },
+          "direction": "positive",
+          "weighted_impact": 2.71
+        },
+        {
+          "kind": "family",
+          "name": "balance_sheet",
+          "score": 65.0,
+          "weight": 0.15,
+          "evidence": {
+            "coverage_signal": "missing",
+            "leverage_signal": "net cash",
+            "interest_coverage": null,
+            "data_quality_score": 100.0,
+            "net_debt_to_ebitda": -0.5922330097087378,
+            "data_quality_signal": "ok_or_missing"
+          },
+          "direction": "positive",
+          "weighted_impact": 2.25
+        },
+        {
+          "kind": "family",
+          "name": "news",
+          "score": 53.0,
+          "weight": 0.1,
+          "evidence": {
+            "filing_signal": "recent annual filing",
+            "volume_signal": "neutral_or_missing",
+            "news_volume_7d": 0.0,
+            "sentiment_signal": "missing",
+            "news_sentiment_7d": null,
+            "recent_filing_types": [
+              "10-K",
+              "10-Q"
+            ]
+          },
+          "direction": "positive",
+          "weighted_impact": 0.3
+        },
+        {
+          "kind": "family",
+          "name": "market_regime",
+          "score": 50.0,
+          "weight": 0.1,
+          "evidence": {
+            "momentum_60d": null,
+            "momentum_250d": null,
+            "volatility_90d": null,
+            "momentum_signal": "missing",
+            "volatility_signal": "missing"
+          },
+          "direction": "neutral",
+          "weighted_impact": 0.0
+        },
+        {
+          "kind": "adjustment",
+          "name": "risk_penalty",
+          "value": 0.0,
+          "impact": 0.0,
+          "direction": "neutral"
+        }
+      ],
+      "explanation": "Hold \u2014 shares trade above midpoint fair-value estimate, but wide valuation uncertainty limits conviction.",
+      "freshness_flag": "ok",
+      "price_to_iv_mid": 1.2184154326689702,
+      "price_to_iv_high": 1.0137882123269468,
+      "valuation_bucket": "near_fair_value",
+      "strong_sell_confirmation_type": "not_strong_sell",
+      "hold_uncertainty_constrained": true,
+      "stale_input_blocked": false,
+      "valuation_sanity_status": null,
+      "valuation_sanity_reason_codes": null,
+      "valuation_evidence_usable": null,
+      "valuation_display_suppressed": null,
+      "valuation_signal_influence_blocked": null,
+      "valuation_method_coverage": null,
+      "iv_range_ratio_p90_p10": null,
+      "distribution_span_ratio_diagnostics": null,
+      "dcf_multiples_gap_ratio": null,
+      "max_terminal_value_share": null,
+      "terminal_spread": null,
+      "midpoint_price_ratio": null,
+      "statement_age_days": 255,
+      "latest_statement_year": 2025,
+      "stale_statement_input": false,
+      "has_dcf_component": true,
+      "valuation_partial_flag": false,
+      "multiples_vs_dcf_mid_gap": 523.8742676440652,
+      "dominant_signal_driver": null,
+      "hold_reason": null,
+      "valuation_used_in_signal": null,
+      "risk_override_applied": null,
+      "confidence_limiter_codes": null,
+      "strong_sell_basis": null,
+      "buy_conviction_limited": null,
+      "explanation_quality_warning": null,
+      "recommendation_language_warning": null,
+      "probability_interpretation_note": null,
+      "distribution_min": 481.21403524393986,
+      "distribution_max": 1238.73999,
+      "distribution_span_ratio": 2.5741975488558864
+    },
+    {
+      "company_id": "2eb7157e-8dc6-4524-908b-67b269b166b2",
+      "ticker": "TMDX",
+      "company_name": "TransMedics Group, Inc.",
+      "sector": "Healthcare",
+      "industry": "Medical - Devices",
+      "latest_price": 73.21,
+      "price_date": "2026-06-12",
+      "price_provider": "twelve_data",
+      "readiness_status": "analysis_ready",
+      "provider_mix": "mixed_sources",
+      "readiness_reason_codes": [
+        "valuation_ready"
+      ],
+      "can_run_valuation": true,
+      "can_run_signal": true,
+      "limiting_domain": null,
+      "readiness_updated_at": "2026-06-12T15:48:22.114475+00:00",
+      "data_quality_status": "not_comparable",
+      "data_quality_warning_codes": [
+        "price_not_comparable",
+        "fundamentals_provider_overlap_missing"
+      ],
+      "price_validation_status": "not_comparable",
+      "statement_completeness_status": "ok",
+      "statement_completeness_summary": "Complete",
+      "fundamentals_provider_comparison_status": "not_comparable",
+      "fundamentals_provider_comparison_summary": "No overlapping FMP and SEC annual periods",
+      "data_quality_details_json": {
+        "price_validation": {
+          "comparison_date": null,
+          "reference_provider": "fmp",
+          "comparison_provider": "twelve_data"
+        },
+        "statement_completeness": {
+          "status": "ok",
+          "latest_source": "sec_edgar",
+          "missing_fields": [],
+          "latest_fiscal_year": 2025,
+          "annual_periods_found": 5,
+          "latest_period_end_date": "2025-12-31",
+          "missing_optional_fields": [],
+          "missing_statement_domains": []
+        },
+        "fundamentals_provider_comparison": {
+          "compared_fields": [],
+          "discrepancy_level": "not_comparable",
+          "discrepant_fields": [],
+          "overlapping_period_count": 0,
+          "max_relative_difference_pct": null
+        }
+      },
+      "statement_source": "sec_edgar",
+      "fiscal_year": 2025,
+      "fiscal_period": "annual",
+      "latest_statement_date": "2025-12-31",
+      "revenue": 605494000.0,
+      "gross_profit": 362806000.0,
+      "operating_income": 108583000.0,
+      "ebit": 108583000.0,
+      "ebitda": 135768000.0,
+      "net_income": 190291000.0,
+      "cfo": 192840000.0,
+      "capex": -59251000.0,
+      "free_cash_flow": 133589000.0,
+      "depreciation_amortization": 27185000.0,
+      "cash_and_equivalents": 488866000.0,
+      "total_debt": 10000000.0,
+      "total_equity": 473100000.0,
+      "diluted_shares": 40540694.0,
+      "factor_date": "2026-06-12",
+      "roic": -14.123699271592091,
+      "roe": 0.5423690649747828,
+      "fcf_yield": 0.04501001038065584,
+      "net_debt_to_ebitda": -3.527090330563903,
+      "interest_coverage": null,
+      "ev_to_ebitda": 18.33361475266631,
+      "price_to_sales": 4.901756595011676,
+      "price_to_book": 6.273481732699217,
+      "news_sentiment_7d": null,
+      "ratio_data_quality_score": 100.0,
+      "valuation_run_id": "5c8bcdc0-1061-473e-885a-f13063db2a78",
+      "valuation_date": "2026-06-12",
+      "valuation_model_version": "valuation_v1",
+      "valuation_currency": "USD",
+      "valuation_current_price": 73.21,
+      "iv_p10": 70.15000000000002,
+      "iv_p25": 70.15000000000002,
+      "iv_p50": 78.69029391808382,
+      "iv_p75": 156.50711680200308,
+      "iv_p90": 299.602972461042,
+      "margin_of_safety_conservative": -0.041797568638163834,
+      "uncertainty_width": 3.270890555396178,
+      "valuation_assumptions_json": {
+        "dcf": {
+          "base_iv": 156.50711680200308,
+          "bear_iv": 78.69029391808382,
+          "bull_iv": 299.602972461042,
+          "base_fcf": 133589000.0,
+          "direct_fcf": 133589000.0,
+          "fcf_source": "direct",
+          "direct_fcf_status": "positive"
+        },
+        "wacc": 0.09,
+        "sector": "Healthcare",
+        "tax_rate": 0.25,
+        "multiples": {
+          "pb_value": 70.15000000000002,
+          "pe_value": 70.15000000000002,
+          "ps_value": 70.15000000000002,
+          "blended_value": 70.15000000000002,
+          "ev_ebitda_value": 70.15
+        },
+        "aggregation": {
+          "distribution": [
+            {
+              "value": 78.69029391808382,
+              "method": "dcf",
+              "source": "dcf_bear",
+              "weight": 0.15625,
+              "scenario": "bear"
+            },
+            {
+              "value": 156.50711680200308,
+              "method": "dcf",
+              "source": "dcf_base",
+              "weight": 0.3125,
+              "scenario": "base"
+            },
+            {
+              "value": 299.602972461042,
+              "method": "dcf",
+              "source": "dcf_bull",
+              "weight": 0.15625,
+              "scenario": "bull"
+            },
+            {
+              "value": 70.15000000000002,
+              "method": "multiples",
+              "source": "multiples",
+              "weight": 0.37499999999999994,
+              "scenario": null
+            }
+          ],
+          "distribution_method": "weighted_step_percentiles",
+          "method_weights_used": {
+            "dcf": 0.625,
+            "multiples": 0.37499999999999994
+          },
+          "scenario_weights_used": {
+            "base": 0.5,
+            "bear": 0.25,
+            "bull": 0.25
+          }
+        },
+        "base_growth": 0.3,
+        "diagnostics": {
+          "blockers": [],
+          "warnings": [],
+          "mos_basis": "iv_p10",
+          "freshness_flag": "ok",
+          "scenario_count": 3,
+          "valuation_status": "ok",
+          "data_quality_flag": "ok",
+          "uncertainty_category": "extreme"
+        },
+        "model_version": "valuation_v1",
+        "forecast_years": 5,
+        "terminal_growth": 0.02,
+        "scenario_weights_configured": {
+          "base": 0.5,
+          "bear": 0.25,
+          "bull": 0.25
+        }
+      },
+      "mos_basis": "iv_p10",
+      "scenario_count": 3,
+      "uncertainty_category": "extreme",
+      "distribution_collapsed": false,
+      "valuation_status": "ok",
+      "qualitative_score_id": "2627be10-2276-44e7-9c3b-7a2943e355d0",
+      "qualitative_score_date": "2026-06-12",
+      "qualitative_model_version": "qual_v0",
+      "final_quality_score": 43.35,
+      "signal_run_id": "92b9f68d-94bd-4f53-950f-3d7bb4c68dc0",
+      "signal_date": "2026-06-12",
+      "signal_model_version": "signal_rule_v3",
+      "p_buy": 0.3334,
+      "p_buy_adjusted": 0.2095,
+      "p_sell": 0.3029,
+      "final_signal": "hold",
+      "uncertainty_penalty": 0.35,
+      "red_flags": [],
+      "top_feature_contributors": [
+        {
+          "kind": "adjustment",
+          "name": "uncertainty_penalty",
+          "value": 0.35,
+          "impact": -35.0,
+          "direction": "negative"
+        },
+        {
+          "kind": "family",
+          "name": "valuation",
+          "score": 27.0,
+          "weight": 0.4,
+          "evidence": {
+            "iv_p25": 70.15000000000002,
+            "iv_p50": 78.69029391808382,
+            "iv_p75": 156.50711680200308,
+            "mos_signal": "negative but above -10%",
+            "price_vs_iv": "below_or_equal_iv_p50",
+            "current_price": 73.21,
+            "uncertainty_width": 3.270890555396178,
+            "uncertainty_signal": ">120% width",
+            "margin_of_safety_conservative": -0.041797568638163834
+          },
+          "direction": "negative",
+          "weighted_impact": -9.2
+        },
+        {
+          "kind": "adjustment",
+          "name": "quality_confidence_multiplier",
+          "value": 0.9667,
+          "impact": -3.33,
+          "direction": "negative"
+        },
+        {
+          "kind": "family",
+          "name": "balance_sheet",
+          "score": 65.0,
+          "weight": 0.15,
+          "evidence": {
+            "coverage_signal": "missing",
+            "leverage_signal": "net cash",
+            "interest_coverage": null,
+            "data_quality_score": 100.0,
+            "net_debt_to_ebitda": -3.527090330563903,
+            "data_quality_signal": "ok_or_missing"
+          },
+          "direction": "positive",
+          "weighted_impact": 2.25
+        },
+        {
+          "kind": "family",
+          "name": "quality",
+          "score": 43.35,
+          "weight": 0.25,
+          "evidence": {
+            "signal": "from qualitative score",
+            "final_quality_score": 43.35
+          },
+          "direction": "negative",
+          "weighted_impact": -1.66
+        },
+        {
+          "kind": "family",
+          "name": "news",
+          "score": 53.0,
+          "weight": 0.1,
+          "evidence": {
+            "filing_signal": "recent annual filing",
+            "volume_signal": "neutral_or_missing",
+            "news_volume_7d": 0.0,
+            "sentiment_signal": "missing",
+            "news_sentiment_7d": null,
+            "recent_filing_types": [
+              "10-K",
+              "10-Q"
+            ]
+          },
+          "direction": "positive",
+          "weighted_impact": 0.3
+        },
+        {
+          "kind": "family",
+          "name": "market_regime",
+          "score": 50.0,
+          "weight": 0.1,
+          "evidence": {
+            "momentum_60d": null,
+            "momentum_250d": null,
+            "volatility_90d": null,
+            "momentum_signal": "missing",
+            "volatility_signal": "missing"
+          },
+          "direction": "neutral",
+          "weighted_impact": 0.0
+        },
+        {
+          "kind": "adjustment",
+          "name": "risk_penalty",
+          "value": 0.0,
+          "impact": 0.0,
+          "direction": "neutral"
+        }
+      ],
+      "explanation": "Hold \u2014 conservative valuation metrics are negative, but valuation ranges remain highly uncertain.",
+      "freshness_flag": "ok",
+      "price_to_iv_mid": 0.9303561640805562,
+      "price_to_iv_high": 0.24435672115876503,
+      "valuation_bucket": "near_fair_value",
+      "strong_sell_confirmation_type": "not_strong_sell",
+      "hold_uncertainty_constrained": true,
+      "stale_input_blocked": false,
+      "valuation_sanity_status": null,
+      "valuation_sanity_reason_codes": null,
+      "valuation_evidence_usable": null,
+      "valuation_display_suppressed": null,
+      "valuation_signal_influence_blocked": null,
+      "valuation_method_coverage": null,
+      "iv_range_ratio_p90_p10": null,
+      "distribution_span_ratio_diagnostics": null,
+      "dcf_multiples_gap_ratio": null,
+      "max_terminal_value_share": null,
+      "terminal_spread": null,
+      "midpoint_price_ratio": null,
+      "statement_age_days": 163,
+      "latest_statement_year": 2025,
+      "stale_statement_input": false,
+      "has_dcf_component": true,
+      "valuation_partial_flag": false,
+      "multiples_vs_dcf_mid_gap": -86.35711680200306,
+      "dominant_signal_driver": null,
+      "hold_reason": null,
+      "valuation_used_in_signal": null,
+      "risk_override_applied": null,
+      "confidence_limiter_codes": null,
+      "strong_sell_basis": null,
+      "buy_conviction_limited": null,
+      "explanation_quality_warning": null,
+      "recommendation_language_warning": null,
+      "probability_interpretation_note": null,
+      "distribution_min": 70.15000000000002,
+      "distribution_max": 299.602972461042,
+      "distribution_span_ratio": 4.2708905553961785
+    },
+    {
+      "company_id": "754c1694-f719-45c2-980b-4c8b537c9fc8",
+      "ticker": "VISN",
+      "company_name": "Vistance Networks, Inc.",
+      "sector": "Technology",
+      "industry": "Communication Equipment",
+      "latest_price": 12.76,
+      "price_date": "2026-06-12",
+      "price_provider": "twelve_data",
+      "readiness_status": "analysis_ready",
+      "provider_mix": "mixed_sources",
+      "readiness_reason_codes": [
+        "valuation_ready"
+      ],
+      "can_run_valuation": true,
+      "can_run_signal": true,
+      "limiting_domain": null,
+      "readiness_updated_at": "2026-06-12T15:47:41.289807+00:00",
+      "data_quality_status": "not_comparable",
+      "data_quality_warning_codes": [
+        "price_not_comparable",
+        "fundamentals_provider_overlap_missing"
+      ],
+      "price_validation_status": "not_comparable",
+      "statement_completeness_status": "ok",
+      "statement_completeness_summary": "Complete",
+      "fundamentals_provider_comparison_status": "not_comparable",
+      "fundamentals_provider_comparison_summary": "No overlapping FMP and SEC annual periods",
+      "data_quality_details_json": {
+        "price_validation": {
+          "comparison_date": null,
+          "reference_provider": "fmp",
+          "comparison_provider": "twelve_data"
+        },
+        "statement_completeness": {
+          "status": "ok",
+          "latest_source": "sec_edgar",
+          "missing_fields": [],
+          "latest_fiscal_year": 2025,
+          "annual_periods_found": 5,
+          "latest_period_end_date": "2025-12-31",
+          "missing_optional_fields": [],
+          "missing_statement_domains": []
+        },
+        "fundamentals_provider_comparison": {
+          "compared_fields": [],
+          "discrepancy_level": "not_comparable",
+          "discrepant_fields": [],
+          "overlapping_period_count": 0,
+          "max_relative_difference_pct": null
+        }
+      },
+      "statement_source": "sec_edgar",
+      "fiscal_year": 2025,
+      "fiscal_period": "annual",
+      "latest_statement_date": "2025-12-31",
+      "revenue": 1931600000.0,
+      "gross_profit": 955900000.0,
+      "operating_income": 47600000.0,
+      "ebit": 47600000.0,
+      "ebitda": 324600000.0,
+      "net_income": 2283700000.0,
+      "cfo": 322900000.0,
+      "capex": -70300000.0,
+      "free_cash_flow": 252600000.0,
+      "depreciation_amortization": 277000000.0,
+      "cash_and_equivalents": 754400000.0,
+      "total_debt": 0.0,
+      "total_equity": -1004100000.0,
+      "diluted_shares": 230000000.0,
+      "factor_date": "2026-06-12",
+      "roic": -0.020301393232868923,
+      "roe": -1.0240347966458903,
+      "fcf_yield": 0.08607060106310481,
+      "net_debt_to_ebitda": -2.324091189155884,
+      "interest_coverage": null,
+      "ev_to_ebitda": 6.717190388170056,
+      "price_to_sales": 1.5193621867881548,
+      "price_to_book": -2.9228164525445672,
+      "news_sentiment_7d": null,
+      "ratio_data_quality_score": 100.0,
+      "valuation_run_id": "0d9c371c-b4a1-4fb6-a7b9-e30d7f2886bc",
+      "valuation_date": "2026-06-12",
+      "valuation_model_version": "valuation_v1",
+      "valuation_currency": "USD",
+      "valuation_current_price": 12.76,
+      "iv_p10": 3.6229905744264945,
+      "iv_p25": 4.516857393948823,
+      "iv_p50": 7.164422329255972,
+      "iv_p75": 12.37,
+      "iv_p90": 12.37,
+      "margin_of_safety_conservative": -0.7160665694023124,
+      "uncertainty_width": 2.414306426109906,
+      "valuation_assumptions_json": {
+        "dcf": {
+          "base_iv": 4.516857393948823,
+          "bear_iv": 7.164422329255972,
+          "bull_iv": 3.6229905744264945,
+          "base_fcf": 252600000.0,
+          "direct_fcf": 252600000.0,
+          "fcf_source": "direct",
+          "direct_fcf_status": "positive"
+        },
+        "wacc": 0.09,
+        "sector": "Technology",
+        "tax_rate": 0.25,
+        "multiples": {
+          "pb_value": null,
+          "pe_value": 12.37,
+          "ps_value": 12.37,
+          "blended_value": 12.37,
+          "ev_ebitda_value": 12.37
+        },
+        "aggregation": {
+          "distribution": [
+            {
+              "value": 7.164422329255972,
+              "method": "dcf",
+              "source": "dcf_bear",
+              "weight": 0.15625,
+              "scenario": "bear"
+            },
+            {
+              "value": 4.516857393948823,
+              "method": "dcf",
+              "source": "dcf_base",
+              "weight": 0.3125,
+              "scenario": "base"
+            },
+            {
+              "value": 3.6229905744264945,
+              "method": "dcf",
+              "source": "dcf_bull",
+              "weight": 0.15625,
+              "scenario": "bull"
+            },
+            {
+              "value": 12.37,
+              "method": "multiples",
+              "source": "multiples",
+              "weight": 0.37499999999999994,
+              "scenario": null
+            }
+          ],
+          "distribution_method": "weighted_step_percentiles",
+          "method_weights_used": {
+            "dcf": 0.625,
+            "multiples": 0.37499999999999994
+          },
+          "scenario_weights_used": {
+            "base": 0.5,
+            "bear": 0.25,
+            "bull": 0.25
+          }
+        },
+        "base_growth": -0.5,
+        "diagnostics": {
+          "blockers": [],
+          "warnings": [],
+          "mos_basis": "iv_p10",
+          "freshness_flag": "ok",
+          "scenario_count": 3,
+          "valuation_status": "ok",
+          "data_quality_flag": "ok",
+          "uncertainty_category": "extreme"
+        },
+        "model_version": "valuation_v1",
+        "forecast_years": 5,
+        "terminal_growth": 0.02,
+        "scenario_weights_configured": {
+          "base": 0.5,
+          "bear": 0.25,
+          "bull": 0.25
+        }
+      },
+      "mos_basis": "iv_p10",
+      "scenario_count": 3,
+      "uncertainty_category": "extreme",
+      "distribution_collapsed": false,
+      "valuation_status": "ok",
+      "qualitative_score_id": "59fa3ae3-2adc-499d-97fd-969f5007205d",
+      "qualitative_score_date": "2026-06-12",
+      "qualitative_model_version": "qual_v0",
+      "final_quality_score": 47.9,
+      "signal_run_id": "dfa1f367-b67b-4f1d-99ce-73e587f2d269",
+      "signal_date": "2026-06-12",
+      "signal_model_version": "signal_rule_v3",
+      "p_buy": 0.1827,
+      "p_buy_adjusted": 0.1175,
+      "p_sell": 0.5416,
+      "final_signal": "hold",
+      "uncertainty_penalty": 0.35,
+      "red_flags": [
+        "negative_margin_of_safety",
+        "overvalued_vs_iv_p75"
+      ],
+      "top_feature_contributors": [
+        {
+          "kind": "adjustment",
+          "name": "uncertainty_penalty",
+          "value": 0.35,
+          "impact": -35.0,
+          "direction": "negative"
+        },
+        {
+          "kind": "family",
+          "name": "valuation",
+          "score": 0.0,
+          "weight": 0.4,
+          "evidence": {
+            "iv_p25": 4.516857393948823,
+            "iv_p50": 7.164422329255972,
+            "iv_p75": 12.37,
+            "mos_signal": "below -10%",
+            "price_vs_iv": "above_iv_p75",
+            "current_price": 12.76,
+            "uncertainty_width": 2.414306426109906,
+            "uncertainty_signal": ">120% width",
+            "margin_of_safety_conservative": -0.7160665694023124
+          },
+          "direction": "negative",
+          "weighted_impact": -20.0
+        },
+        {
+          "kind": "family",
+          "name": "balance_sheet",
+          "score": 65.0,
+          "weight": 0.15,
+          "evidence": {
+            "coverage_signal": "missing",
+            "leverage_signal": "net cash",
+            "interest_coverage": null,
+            "data_quality_score": 100.0,
+            "net_debt_to_ebitda": -2.324091189155884,
+            "data_quality_signal": "ok_or_missing"
+          },
+          "direction": "positive",
+          "weighted_impact": 2.25
+        },
+        {
+          "kind": "adjustment",
+          "name": "quality_confidence_multiplier",
+          "value": 0.9895,
+          "impact": -1.05,
+          "direction": "negative"
+        },
+        {
+          "kind": "family",
+          "name": "quality",
+          "score": 47.9,
+          "weight": 0.25,
+          "evidence": {
+            "signal": "from qualitative score",
+            "final_quality_score": 47.9
+          },
+          "direction": "negative",
+          "weighted_impact": -0.53
+        },
+        {
+          "kind": "family",
+          "name": "news",
+          "score": 53.0,
+          "weight": 0.1,
+          "evidence": {
+            "filing_signal": "recent annual filing",
+            "volume_signal": "neutral_or_missing",
+            "news_volume_7d": 0.0,
+            "sentiment_signal": "missing",
+            "news_sentiment_7d": null,
+            "recent_filing_types": [
+              "10-K",
+              "10-Q"
+            ]
+          },
+          "direction": "positive",
+          "weighted_impact": 0.3
+        },
+        {
+          "kind": "family",
+          "name": "market_regime",
+          "score": 50.0,
+          "weight": 0.1,
+          "evidence": {
+            "momentum_60d": null,
+            "momentum_250d": null,
+            "volatility_90d": null,
+            "momentum_signal": "missing",
+            "volatility_signal": "missing"
+          },
+          "direction": "neutral",
+          "weighted_impact": 0.0
+        },
+        {
+          "kind": "adjustment",
+          "name": "risk_penalty",
+          "value": 0.0,
+          "impact": 0.0,
+          "direction": "neutral"
+        }
+      ],
+      "explanation": "Hold \u2014 shares trade above midpoint fair-value estimate, but wide valuation uncertainty limits conviction.",
+      "freshness_flag": "ok",
+      "price_to_iv_mid": 1.7810228673838007,
+      "price_to_iv_high": 1.0315278900565885,
+      "valuation_bucket": "modestly_overvalued",
+      "strong_sell_confirmation_type": "not_strong_sell",
+      "hold_uncertainty_constrained": true,
+      "stale_input_blocked": false,
+      "valuation_sanity_status": null,
+      "valuation_sanity_reason_codes": null,
+      "valuation_evidence_usable": null,
+      "valuation_display_suppressed": null,
+      "valuation_signal_influence_blocked": null,
+      "valuation_method_coverage": null,
+      "iv_range_ratio_p90_p10": null,
+      "distribution_span_ratio_diagnostics": null,
+      "dcf_multiples_gap_ratio": null,
+      "max_terminal_value_share": null,
+      "terminal_spread": null,
+      "midpoint_price_ratio": null,
+      "statement_age_days": 163,
+      "latest_statement_year": 2025,
+      "stale_statement_input": false,
+      "has_dcf_component": true,
+      "valuation_partial_flag": false,
+      "multiples_vs_dcf_mid_gap": 7.853142606051176,
+      "dominant_signal_driver": null,
+      "hold_reason": null,
+      "valuation_used_in_signal": null,
+      "risk_override_applied": null,
+      "confidence_limiter_codes": null,
+      "strong_sell_basis": null,
+      "buy_conviction_limited": null,
+      "explanation_quality_warning": null,
+      "recommendation_language_warning": null,
+      "probability_interpretation_note": null,
+      "distribution_min": 3.6229905744264945,
+      "distribution_max": 12.37,
+      "distribution_span_ratio": 3.414306426109906
+    },
+    {
+      "company_id": "9d24b8b3-a07b-4b7c-85a7-c8e58790d74a",
+      "ticker": "VRTX",
+      "company_name": "Vertex Pharmaceuticals Incorporated",
+      "sector": "Healthcare",
+      "industry": "Biotechnology",
+      "latest_price": 443.04,
+      "price_date": "2026-06-12",
+      "price_provider": "twelve_data",
+      "readiness_status": "tracking_only",
+      "provider_mix": "mixed_sources",
+      "readiness_reason_codes": [
+        "provider_limited",
+        "valuation_ready",
+        "stale_fundamentals"
+      ],
+      "can_run_valuation": false,
+      "can_run_signal": false,
+      "limiting_domain": "fundamentals",
+      "readiness_updated_at": "2026-06-12T15:47:07.579994+00:00",
+      "data_quality_status": "not_comparable",
+      "data_quality_warning_codes": [
+        "price_not_comparable",
+        "fundamentals_provider_overlap_missing"
+      ],
+      "price_validation_status": "not_comparable",
+      "statement_completeness_status": "ok",
+      "statement_completeness_summary": "Complete",
+      "fundamentals_provider_comparison_status": "not_comparable",
+      "fundamentals_provider_comparison_summary": "No overlapping FMP and SEC annual periods",
+      "data_quality_details_json": {
+        "price_validation": {
+          "comparison_date": null,
+          "reference_provider": "fmp",
+          "comparison_provider": "twelve_data"
+        },
+        "statement_completeness": {
+          "status": "ok",
+          "latest_source": "sec_edgar",
+          "missing_fields": [],
+          "latest_fiscal_year": 2017,
+          "annual_periods_found": 5,
+          "latest_period_end_date": "2017-12-31",
+          "missing_optional_fields": [],
+          "missing_statement_domains": []
+        },
+        "fundamentals_provider_comparison": {
+          "compared_fields": [],
+          "discrepancy_level": "not_comparable",
+          "discrepant_fields": [],
+          "overlapping_period_count": 0,
+          "max_relative_difference_pct": null
+        }
+      },
+      "statement_source": "sec_edgar",
+      "fiscal_year": 2017,
+      "fiscal_period": "annual",
+      "latest_statement_date": "2017-12-31",
+      "revenue": 2488652000.0,
+      "gross_profit": null,
+      "operating_income": 123243000.0,
+      "ebit": 123243000.0,
+      "ebitda": 184640000.0,
+      "net_income": 263484000.0,
+      "cfo": 844942000.0,
+      "capex": -99421000.0,
+      "free_cash_flow": 745521000.0,
+      "depreciation_amortization": 61397000.0,
+      "cash_and_equivalents": 1665412000.0,
+      "total_debt": null,
+      "total_equity": 2028579000.0,
+      "diluted_shares": 253225000.0,
+      "factor_date": "2026-06-12",
+      "roic": null,
+      "roe": 0.16544469808590523,
+      "fcf_yield": 0.006645235294602124,
+      "net_debt_to_ebitda": null,
+      "interest_coverage": null,
+      "ev_to_ebitda": null,
+      "price_to_sales": 45.08014941422103,
+      "price_to_book": 55.304133583163384,
+      "news_sentiment_7d": null,
+      "ratio_data_quality_score": 100.0,
+      "valuation_run_id": "7a2234b1-85d1-4be2-bd2a-890181ad5d22",
+      "valuation_date": "2026-06-12",
+      "valuation_model_version": "valuation_v1",
+      "valuation_currency": "USD",
+      "valuation_current_price": 445.040009,
+      "iv_p10": 59.75291208105541,
+      "iv_p25": 129.27891733421197,
+      "iv_p50": 257.1289482599952,
+      "iv_p75": 441.73999000000003,
+      "iv_p90": 441.73999000000003,
+      "margin_of_safety_conservative": -0.8657358644780735,
+      "uncertainty_width": 6.392777600542304,
+      "valuation_assumptions_json": {
+        "dcf": {
+          "base_iv": 129.27891733421197,
+          "bear_iv": 59.75291208105541,
+          "bull_iv": 257.1289482599952,
+          "base_fcf": 745521000.0,
+          "direct_fcf": 745521000.0,
+          "fcf_source": "direct",
+          "direct_fcf_status": "positive"
+        },
+        "wacc": 0.09,
+        "sector": "Healthcare",
+        "tax_rate": 0.25,
+        "multiples": {
+          "pb_value": 441.73999000000003,
+          "pe_value": 441.73999000000003,
+          "ps_value": 441.73999000000003,
+          "blended_value": 441.73999000000003,
+          "ev_ebitda_value": null
+        },
+        "aggregation": {
+          "distribution": [
+            {
+              "value": 59.75291208105541,
+              "method": "dcf",
+              "source": "dcf_bear",
+              "weight": 0.15625,
+              "scenario": "bear"
+            },
+            {
+              "value": 129.27891733421197,
+              "method": "dcf",
+              "source": "dcf_base",
+              "weight": 0.3125,
+              "scenario": "base"
+            },
+            {
+              "value": 257.1289482599952,
+              "method": "dcf",
+              "source": "dcf_bull",
+              "weight": 0.15625,
+              "scenario": "bull"
+            },
+            {
+              "value": 441.73999000000003,
+              "method": "multiples",
+              "source": "multiples",
+              "weight": 0.37499999999999994,
+              "scenario": null
+            }
+          ],
+          "distribution_method": "weighted_step_percentiles",
+          "method_weights_used": {
+            "dcf": 0.625,
+            "multiples": 0.37499999999999994
+          },
+          "scenario_weights_used": {
+            "base": 0.5,
+            "bear": 0.25,
+            "bull": 0.25
+          }
+        },
+        "base_growth": 0.3,
+        "diagnostics": {
+          "blockers": [],
+          "warnings": [],
+          "mos_basis": "iv_p10",
+          "freshness_flag": "ok",
+          "scenario_count": 3,
+          "valuation_status": "ok",
+          "data_quality_flag": "ok",
+          "uncertainty_category": "extreme"
+        },
+        "model_version": "valuation_v1",
+        "forecast_years": 5,
+        "terminal_growth": 0.02,
+        "scenario_weights_configured": {
+          "base": 0.5,
+          "bear": 0.25,
+          "bull": 0.25
+        }
+      },
+      "mos_basis": "iv_p10",
+      "scenario_count": 3,
+      "uncertainty_category": "extreme",
+      "distribution_collapsed": false,
+      "valuation_status": "ok",
+      "qualitative_score_id": "cdc2993b-78bb-48a4-a1b1-1815e9b750ac",
+      "qualitative_score_date": "2026-06-12",
+      "qualitative_model_version": "qual_v0",
+      "final_quality_score": 51.85,
+      "signal_run_id": "d9e99aec-7284-4ba1-bf3d-2f335a85cc87",
+      "signal_date": "2026-06-12",
+      "signal_model_version": "signal_rule_v3",
+      "p_buy": 0.1675,
+      "p_buy_adjusted": 0.1099,
+      "p_sell": 0.4378,
+      "final_signal": "hold",
+      "uncertainty_penalty": 0.35,
+      "red_flags": [
+        "negative_margin_of_safety",
+        "overvalued_vs_iv_p75"
+      ],
+      "top_feature_contributors": [
+        {
+          "kind": "adjustment",
+          "name": "uncertainty_penalty",
+          "value": 0.35,
+          "impact": -35.0,
+          "direction": "negative"
+        },
+        {
+          "kind": "family",
+          "name": "valuation",
+          "score": 0.0,
+          "weight": 0.4,
+          "evidence": {
+            "iv_p25": 129.27891733421197,
+            "iv_p50": 257.1289482599952,
+            "iv_p75": 441.73999000000003,
+            "mos_signal": "below -10%",
+            "price_vs_iv": "above_iv_p75",
+            "current_price": 445.040009,
+            "uncertainty_width": 6.392777600542304,
+            "uncertainty_signal": ">120% width",
+            "margin_of_safety_conservative": -0.8657358644780735
+          },
+          "direction": "negative",
+          "weighted_impact": -20.0
+        },
+        {
+          "kind": "adjustment",
+          "name": "quality_confidence_multiplier",
+          "value": 1.0092,
+          "impact": 0.92,
+          "direction": "positive"
+        },
+        {
+          "kind": "family",
+          "name": "quality",
+          "score": 51.85,
+          "weight": 0.25,
+          "evidence": {
+            "signal": "from qualitative score",
+            "final_quality_score": 51.85
+          },
+          "direction": "positive",
+          "weighted_impact": 0.46
+        },
+        {
+          "kind": "family",
+          "name": "news",
+          "score": 53.0,
+          "weight": 0.1,
+          "evidence": {
+            "filing_signal": "recent annual filing",
+            "volume_signal": "neutral_or_missing",
+            "news_volume_7d": 0.0,
+            "sentiment_signal": "missing",
+            "news_sentiment_7d": null,
+            "recent_filing_types": [
+              "10-K",
+              "10-Q"
+            ]
+          },
+          "direction": "positive",
+          "weighted_impact": 0.3
+        },
+        {
+          "kind": "family",
+          "name": "balance_sheet",
+          "score": 50.0,
+          "weight": 0.15,
+          "evidence": {
+            "coverage_signal": "missing",
+            "leverage_signal": "missing",
+            "interest_coverage": null,
+            "data_quality_score": 100.0,
+            "net_debt_to_ebitda": null,
+            "data_quality_signal": "ok_or_missing"
+          },
+          "direction": "neutral",
+          "weighted_impact": 0.0
+        },
+        {
+          "kind": "family",
+          "name": "market_regime",
+          "score": 50.0,
+          "weight": 0.1,
+          "evidence": {
+            "momentum_60d": null,
+            "momentum_250d": null,
+            "volatility_90d": null,
+            "momentum_signal": "missing",
+            "volatility_signal": "missing"
+          },
+          "direction": "neutral",
+          "weighted_impact": 0.0
+        },
+        {
+          "kind": "adjustment",
+          "name": "risk_penalty",
+          "value": 0.0,
+          "impact": 0.0,
+          "direction": "neutral"
+        }
+      ],
+      "explanation": "Hold \u2014 shares trade above midpoint fair-value estimate, but wide valuation uncertainty limits conviction.",
+      "freshness_flag": "ok",
+      "price_to_iv_mid": 1.7230265320107847,
+      "price_to_iv_high": 1.0029429302970736,
+      "valuation_bucket": "modestly_overvalued",
+      "strong_sell_confirmation_type": "not_strong_sell",
+      "hold_uncertainty_constrained": true,
+      "stale_input_blocked": true,
+      "valuation_sanity_status": null,
+      "valuation_sanity_reason_codes": null,
+      "valuation_evidence_usable": null,
+      "valuation_display_suppressed": null,
+      "valuation_signal_influence_blocked": null,
+      "valuation_method_coverage": null,
+      "iv_range_ratio_p90_p10": null,
+      "distribution_span_ratio_diagnostics": null,
+      "dcf_multiples_gap_ratio": null,
+      "max_terminal_value_share": null,
+      "terminal_spread": null,
+      "midpoint_price_ratio": null,
+      "statement_age_days": 3085,
+      "latest_statement_year": 2017,
+      "stale_statement_input": true,
+      "has_dcf_component": true,
+      "valuation_partial_flag": false,
+      "multiples_vs_dcf_mid_gap": 312.46107266578804,
+      "dominant_signal_driver": null,
+      "hold_reason": null,
+      "valuation_used_in_signal": null,
+      "risk_override_applied": null,
+      "confidence_limiter_codes": null,
+      "strong_sell_basis": null,
+      "buy_conviction_limited": null,
+      "explanation_quality_warning": null,
+      "recommendation_language_warning": null,
+      "probability_interpretation_note": null,
+      "distribution_min": 59.75291208105541,
+      "distribution_max": 441.73999000000003,
+      "distribution_span_ratio": 7.392777600542303
+    },
+    {
+      "company_id": "ba3cf6b9-1f06-4e5f-a5f6-6ab46d0d0757",
+      "ticker": "WLDN",
+      "company_name": "Willdan Group, Inc.",
+      "sector": "Industrials",
+      "industry": "Engineering & Construction",
+      "latest_price": 100.05,
+      "price_date": "2026-06-12",
+      "price_provider": "twelve_data",
+      "readiness_status": "tracking_only",
+      "provider_mix": "mixed_sources",
+      "readiness_reason_codes": [
+        "provider_limited",
+        "valuation_ready",
+        "stale_fundamentals"
+      ],
+      "can_run_valuation": false,
+      "can_run_signal": false,
+      "limiting_domain": "fundamentals",
+      "readiness_updated_at": "2026-06-12T15:46:55.612715+00:00",
+      "data_quality_status": "warning",
+      "data_quality_warning_codes": [
+        "price_not_comparable",
+        "missing_key_fields",
+        "fundamentals_provider_overlap_missing"
+      ],
+      "price_validation_status": "not_comparable",
+      "statement_completeness_status": "warning",
+      "statement_completeness_summary": "Missing key fields",
+      "fundamentals_provider_comparison_status": "not_comparable",
+      "fundamentals_provider_comparison_summary": "No overlapping FMP and SEC annual periods",
+      "data_quality_details_json": {
+        "price_validation": {
+          "comparison_date": null,
+          "reference_provider": "fmp",
+          "comparison_provider": "twelve_data"
+        },
+        "statement_completeness": {
+          "status": "warning",
+          "latest_source": "sec_edgar",
+          "missing_fields": [
+            "net_income"
+          ],
+          "latest_fiscal_year": 2017,
+          "annual_periods_found": 5,
+          "latest_period_end_date": "2017-12-29",
+          "missing_optional_fields": [],
+          "missing_statement_domains": []
+        },
+        "fundamentals_provider_comparison": {
+          "compared_fields": [],
+          "discrepancy_level": "not_comparable",
+          "discrepant_fields": [],
+          "overlapping_period_count": 0,
+          "max_relative_difference_pct": null
+        }
+      },
+      "statement_source": "sec_edgar",
+      "fiscal_year": 2017,
+      "fiscal_period": "annual",
+      "latest_statement_date": "2017-12-29",
+      "revenue": 273352000.0,
+      "gross_profit": null,
+      "operating_income": 13704000.0,
+      "ebit": 13704000.0,
+      "ebitda": 17786000.0,
+      "net_income": null,
+      "cfo": 11069000.0,
+      "capex": -2178000.0,
+      "free_cash_flow": 8891000.0,
+      "depreciation_amortization": 4082000.0,
+      "cash_and_equivalents": 14424000.0,
+      "total_debt": 2883000.0,
+      "total_equity": 70652000.0,
+      "diluted_shares": 9155000.0,
+      "factor_date": "2026-06-12",
+      "roic": 0.17387626668471182,
+      "roe": null,
+      "fcf_yield": 0.009706779597639738,
+      "net_debt_to_ebitda": -0.6488811424716069,
+      "interest_coverage": null,
+      "ev_to_ebitda": 50.849924097604855,
+      "price_to_sales": 3.350836101436975,
+      "price_to_book": 12.964356989186435,
+      "news_sentiment_7d": null,
+      "ratio_data_quality_score": 100.0,
+      "valuation_run_id": "d7426af9-8fc2-48ed-82ea-632479923404",
+      "valuation_date": "2026-06-12",
+      "valuation_model_version": "valuation_v1",
+      "valuation_currency": "USD",
+      "valuation_current_price": 97.48,
+      "iv_p10": 20.97114051698199,
+      "iv_p25": 43.90548001231778,
+      "iv_p50": 86.07899484413632,
+      "iv_p75": 95.71999999999998,
+      "iv_p90": 95.71999999999998,
+      "margin_of_safety_conservative": -0.7848672495180345,
+      "uncertainty_width": 3.564367871289019,
+      "valuation_assumptions_json": {
+        "dcf": {
+          "base_iv": 43.90548001231778,
+          "bear_iv": 20.97114051698199,
+          "bull_iv": 86.07899484413632,
+          "base_fcf": 8891000.0,
+          "direct_fcf": 8891000.0,
+          "fcf_source": "direct",
+          "direct_fcf_status": "positive"
+        },
+        "wacc": 0.09,
+        "sector": "Industrials",
+        "tax_rate": 0.25,
+        "multiples": {
+          "pb_value": 95.72,
+          "pe_value": null,
+          "ps_value": 95.72,
+          "blended_value": 95.71999999999998,
+          "ev_ebitda_value": 95.72
+        },
+        "aggregation": {
+          "distribution": [
+            {
+              "value": 20.97114051698199,
+              "method": "dcf",
+              "source": "dcf_bear",
+              "weight": 0.15625,
+              "scenario": "bear"
+            },
+            {
+              "value": 43.90548001231778,
+              "method": "dcf",
+              "source": "dcf_base",
+              "weight": 0.3125,
+              "scenario": "base"
+            },
+            {
+              "value": 86.07899484413632,
+              "method": "dcf",
+              "source": "dcf_bull",
+              "weight": 0.15625,
+              "scenario": "bull"
+            },
+            {
+              "value": 95.71999999999998,
+              "method": "multiples",
+              "source": "multiples",
+              "weight": 0.37499999999999994,
+              "scenario": null
+            }
+          ],
+          "distribution_method": "weighted_step_percentiles",
+          "method_weights_used": {
+            "dcf": 0.625,
+            "multiples": 0.37499999999999994
+          },
+          "scenario_weights_used": {
+            "base": 0.5,
+            "bear": 0.25,
+            "bull": 0.25
+          }
+        },
+        "base_growth": 0.3,
+        "diagnostics": {
+          "blockers": [],
+          "warnings": [],
+          "mos_basis": "iv_p10",
+          "freshness_flag": "ok",
+          "scenario_count": 3,
+          "valuation_status": "ok",
+          "data_quality_flag": "ok",
+          "uncertainty_category": "extreme"
+        },
+        "model_version": "valuation_v1",
+        "forecast_years": 5,
+        "terminal_growth": 0.02,
+        "scenario_weights_configured": {
+          "base": 0.5,
+          "bear": 0.25,
+          "bull": 0.25
+        }
+      },
+      "mos_basis": "iv_p10",
+      "scenario_count": 3,
+      "uncertainty_category": "extreme",
+      "distribution_collapsed": false,
+      "valuation_status": "ok",
+      "qualitative_score_id": "6add8a6d-7ca3-4175-8e18-9ddd726d4523",
+      "qualitative_score_date": "2026-06-12",
+      "qualitative_model_version": "qual_v0",
+      "final_quality_score": 62.15,
+      "signal_run_id": "48580174-947c-4a11-b654-eb688a50daac",
+      "signal_date": "2026-06-12",
+      "signal_model_version": "signal_rule_v3",
+      "p_buy": 0.2313,
+      "p_buy_adjusted": 0.1595,
+      "p_sell": 0.2227,
+      "final_signal": "hold",
+      "uncertainty_penalty": 0.35,
+      "red_flags": [
+        "negative_margin_of_safety",
+        "overvalued_vs_iv_p75"
+      ],
+      "top_feature_contributors": [
+        {
+          "kind": "adjustment",
+          "name": "uncertainty_penalty",
+          "value": 0.35,
+          "impact": -35.0,
+          "direction": "negative"
+        },
+        {
+          "kind": "family",
+          "name": "valuation",
+          "score": 0.0,
+          "weight": 0.4,
+          "evidence": {
+            "iv_p25": 43.90548001231778,
+            "iv_p50": 86.07899484413632,
+            "iv_p75": 95.71999999999998,
+            "mos_signal": "below -10%",
+            "price_vs_iv": "above_iv_p75",
+            "current_price": 97.48,
+            "uncertainty_width": 3.564367871289019,
+            "uncertainty_signal": ">120% width",
+            "margin_of_safety_conservative": -0.7848672495180345
+          },
+          "direction": "negative",
+          "weighted_impact": -20.0
+        },
+        {
+          "kind": "adjustment",
+          "name": "quality_confidence_multiplier",
+          "value": 1.0608,
+          "impact": 6.08,
+          "direction": "positive"
+        },
+        {
+          "kind": "family",
+          "name": "quality",
+          "score": 62.15,
+          "weight": 0.25,
+          "evidence": {
+            "signal": "from qualitative score",
+            "final_quality_score": 62.15
+          },
+          "direction": "positive",
+          "weighted_impact": 3.04
+        },
+        {
+          "kind": "family",
+          "name": "balance_sheet",
+          "score": 65.0,
+          "weight": 0.15,
+          "evidence": {
+            "coverage_signal": "missing",
+            "leverage_signal": "net cash",
+            "interest_coverage": null,
+            "data_quality_score": 100.0,
+            "net_debt_to_ebitda": -0.6488811424716069,
+            "data_quality_signal": "ok_or_missing"
+          },
+          "direction": "positive",
+          "weighted_impact": 2.25
+        },
+        {
+          "kind": "family",
+          "name": "news",
+          "score": 53.0,
+          "weight": 0.1,
+          "evidence": {
+            "filing_signal": "recent annual filing",
+            "volume_signal": "neutral_or_missing",
+            "news_volume_7d": 0.0,
+            "sentiment_signal": "missing",
+            "news_sentiment_7d": null,
+            "recent_filing_types": [
+              "10-K",
+              "10-Q"
+            ]
+          },
+          "direction": "positive",
+          "weighted_impact": 0.3
+        },
+        {
+          "kind": "family",
+          "name": "market_regime",
+          "score": 50.0,
+          "weight": 0.1,
+          "evidence": {
+            "momentum_60d": null,
+            "momentum_250d": null,
+            "volatility_90d": null,
+            "momentum_signal": "missing",
+            "volatility_signal": "missing"
+          },
+          "direction": "neutral",
+          "weighted_impact": 0.0
+        },
+        {
+          "kind": "adjustment",
+          "name": "risk_penalty",
+          "value": 0.0,
+          "impact": 0.0,
+          "direction": "neutral"
+        }
+      ],
+      "explanation": "Hold \u2014 shares trade above midpoint fair-value estimate, but wide valuation uncertainty limits conviction.",
+      "freshness_flag": "ok",
+      "price_to_iv_mid": 1.1623044644185385,
+      "price_to_iv_high": 1.045236105307146,
+      "valuation_bucket": "near_fair_value",
+      "strong_sell_confirmation_type": "not_strong_sell",
+      "hold_uncertainty_constrained": true,
+      "stale_input_blocked": true,
+      "valuation_sanity_status": null,
+      "valuation_sanity_reason_codes": null,
+      "valuation_evidence_usable": null,
+      "valuation_display_suppressed": null,
+      "valuation_signal_influence_blocked": null,
+      "valuation_method_coverage": null,
+      "iv_range_ratio_p90_p10": null,
+      "distribution_span_ratio_diagnostics": null,
+      "dcf_multiples_gap_ratio": null,
+      "max_terminal_value_share": null,
+      "terminal_spread": null,
+      "midpoint_price_ratio": null,
+      "statement_age_days": 3087,
+      "latest_statement_year": 2017,
+      "stale_statement_input": true,
+      "has_dcf_component": true,
+      "valuation_partial_flag": false,
+      "multiples_vs_dcf_mid_gap": 51.8145199876822,
+      "dominant_signal_driver": null,
+      "hold_reason": null,
+      "valuation_used_in_signal": null,
+      "risk_override_applied": null,
+      "confidence_limiter_codes": null,
+      "strong_sell_basis": null,
+      "buy_conviction_limited": null,
+      "explanation_quality_warning": null,
+      "recommendation_language_warning": null,
+      "probability_interpretation_note": null,
+      "distribution_min": 20.97114051698199,
+      "distribution_max": 95.71999999999998,
+      "distribution_span_ratio": 4.564367871289019
+    }
+  ]
+}

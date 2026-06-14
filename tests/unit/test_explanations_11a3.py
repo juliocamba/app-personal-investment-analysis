@@ -51,6 +51,8 @@ def _call(
     p_buy_adjusted: float = 0.45,
     p_sell: float = 0.35,
     uncertainty_width: float | None = None,
+    valuation_sanity_status: str | None = None,
+    reasoning_metadata: dict[str, Any] | None = None,
 ) -> str:
     return build_signal_explanation(
         final_signal=final_signal,
@@ -62,6 +64,8 @@ def _call(
         p_buy_adjusted=p_buy_adjusted,
         p_sell=p_sell,
         uncertainty_width=uncertainty_width,
+        valuation_sanity_status=valuation_sanity_status,
+        reasoning_metadata=reasoning_metadata,
     )
 
 
@@ -87,9 +91,13 @@ class TestHoldExplanations:
             final_signal="hold",
             p_buy_adjusted=0.55,
             p_sell=0.55,
+            reasoning_metadata={
+                "hold_reason": "neutral_mixed_hold",
+                "dominant_signal_driver": "neutral_mixed",
+            },
         )
-        assert "mixed signals" in result.lower()
-        assert "buy and sell pressure" in result.lower()
+        assert "mixed evidence" in result.lower()
+        assert "no dominant driver" in result.lower()
 
     def test_just_below_buy_threshold(self):
         """p_buy_adj ≥ 0.55 but p_sell < 0.50 → 'just below threshold'."""
@@ -97,8 +105,9 @@ class TestHoldExplanations:
             final_signal="hold",
             p_buy_adjusted=0.58,
             p_sell=0.30,
+            reasoning_metadata={"hold_reason": "neutral_mixed_hold"},
         )
-        assert "just below threshold" in result.lower()
+        assert "just below the buy threshold" in result.lower()
         assert "0.58" in result
 
     def test_low_confidence_missing_inputs(self):
@@ -108,9 +117,10 @@ class TestHoldExplanations:
             freshness_flag="missing_inputs",
             p_buy_adjusted=0.30,
             p_sell=0.30,
+            reasoning_metadata={"hold_reason": "data_constrained_hold"},
         )
         assert "missing core inputs" in result.lower()
-        assert "low confidence" in result.lower()
+        assert "limited conviction" in result.lower()
 
     def test_low_confidence_stale(self):
         """freshness_flag=stale → 'stale input data'."""
@@ -119,8 +129,19 @@ class TestHoldExplanations:
             freshness_flag="stale",
             p_buy_adjusted=0.30,
             p_sell=0.30,
+            reasoning_metadata={"hold_reason": "data_constrained_hold"},
         )
-        assert "stale input data" in result.lower()
+        assert "stale inputs and readiness limits" in result.lower()
+
+    def test_readiness_and_freshness_limited_when_inputs_are_present_but_not_stale(self):
+        result = _call(
+            final_signal="hold",
+            freshness_flag="limited",
+            p_buy_adjusted=0.30,
+            p_sell=0.30,
+            reasoning_metadata={"hold_reason": "data_constrained_hold"},
+        )
+        assert "readiness and data freshness limits" in result.lower()
 
     def test_insufficient_conviction_mid_range(self):
         """0.40 ≤ p_buy_adj < 0.55 → 'insufficient directional conviction'."""
@@ -141,14 +162,15 @@ class TestHoldExplanations:
         assert "no strong buy or sell case" in result.lower()
 
     def test_limited_evidence_hold(self):
-        """freshness_flag='limited' → 'limited evidence' in explanation."""
+        """freshness_flag='limited' → readiness and freshness wording in explanation."""
         result = _call(
             final_signal="hold",
             freshness_flag="limited",
             p_buy_adjusted=0.30,
             p_sell=0.30,
+            reasoning_metadata={"hold_reason": "data_constrained_hold"},
         )
-        assert "limited evidence" in result.lower()
+        assert "readiness and data freshness limits" in result.lower()
 
     def test_limited_evidence_does_not_override_mixed_signals(self):
         """Mixed-signal condition (both >= 0.50) takes priority over limited."""
@@ -157,9 +179,10 @@ class TestHoldExplanations:
             freshness_flag="limited",
             p_buy_adjusted=0.55,
             p_sell=0.55,
+            reasoning_metadata={"hold_reason": "neutral_mixed_hold"},
         )
-        assert "mixed signals" in result.lower()
-        assert "limited evidence" not in result.lower()
+        assert "mixed evidence" in result.lower()
+        assert "no dominant driver" in result.lower() or "bullish and bearish scores" in result.lower()
 
     def test_limited_evidence_does_not_override_near_buy(self):
         """Near-buy condition (p_buy_adj >= 0.55, p_sell < 0.50) takes priority over limited."""
@@ -168,9 +191,10 @@ class TestHoldExplanations:
             freshness_flag="limited",
             p_buy_adjusted=0.58,
             p_sell=0.30,
+            reasoning_metadata={"hold_reason": "neutral_mixed_hold"},
         )
-        assert "just below threshold" in result.lower()
-        assert "limited evidence" not in result.lower()
+        assert "just below the buy threshold" in result.lower()
+        assert "mixed evidence" not in result.lower()
 
     def test_hold_valuation_warning_high_uncertainty_is_not_neutral(self):
         """HOLD with valuation warnings should acknowledge uncertainty-constrained valuation concern."""
@@ -185,10 +209,11 @@ class TestHoldExplanations:
             p_buy_adjusted=0.20,
             p_sell=0.44,
             uncertainty_width=2.0,
+            reasoning_metadata={"hold_reason": "uncertainty_constrained_hold"},
         )
         assert result.startswith("Hold")
-        assert "above midpoint fair-value estimate" in result.lower()
-        assert "wide valuation uncertainty limits conviction" in result.lower()
+        assert "price sat above midpoint fair value" in result.lower()
+        assert "valuation uncertainty limited conviction" in result.lower()
         assert "no strong buy or sell case" not in result.lower()
 
     def test_hold_midpoint_premium_with_uncertainty_cap(self):
@@ -204,9 +229,10 @@ class TestHoldExplanations:
             p_buy_adjusted=0.30,
             p_sell=0.45,
             uncertainty_width=1.1,
+            reasoning_metadata={"hold_reason": "uncertainty_constrained_hold"},
         )
-        assert "above midpoint fair-value estimate" in result.lower()
-        assert "wide valuation uncertainty limits conviction" in result.lower()
+        assert "price sat above midpoint fair value" in result.lower()
+        assert "valuation uncertainty limited conviction" in result.lower()
 
     def test_neutral_hold_without_valuation_concerns_stays_neutral(self):
         """Neutral HOLD wording remains available when there are no valuation concerns."""
@@ -238,6 +264,7 @@ class TestHoldExplanations:
             p_buy_adjusted=0.20,
             p_sell=0.45,
             uncertainty_width=1.0,
+            reasoning_metadata={"hold_reason": "uncertainty_constrained_hold"},
         )
         sell = _call(
             final_signal="sell",
@@ -248,9 +275,104 @@ class TestHoldExplanations:
             uncertainty_width=0.20,
         )
         assert hold.startswith("Hold")
-        assert "wide valuation uncertainty limits conviction" in hold.lower()
+        assert "valuation uncertainty limited conviction" in hold.lower()
         assert sell.startswith("Sell")
         assert "price above conservative intrinsic value reference" in sell.lower()
+
+    def test_hold_valuation_unreliable_wording(self):
+        result = _call(
+            final_signal="hold",
+            valuation_row={
+                "margin_of_safety_conservative": -0.45,
+                "current_price": 140.0,
+                "iv_p50": 100.0,
+            },
+            red_flags=["valuation_unreliable"],
+            p_buy_adjusted=0.30,
+            p_sell=0.40,
+            valuation_sanity_status="unreliable",
+        )
+        assert "valuation was not relied on" in result.lower()
+        assert "unreliable" in result.lower()
+        assert result.startswith("Hold")
+
+    def test_hold_risk_offset_wording(self):
+        result = _call(
+            final_signal="hold",
+            valuation_row={
+                "margin_of_safety_conservative": 0.12,
+                "current_price": 90.0,
+                "iv_p50": 100.0,
+            },
+            red_flags=["high_leverage"],
+            p_buy_adjusted=0.30,
+            p_sell=0.35,
+            reasoning_metadata={"hold_reason": "risk_offset_hold"},
+        )
+        assert "risk signals offset the valuation case" in result.lower()
+
+    def test_hold_variants_do_not_use_advice_like_language(self):
+        cases = [
+            _call(
+                final_signal="hold",
+                valuation_row={"margin_of_safety_conservative": 0.08, "current_price": 98.0, "iv_p50": 100.0},
+                p_buy_adjusted=0.25,
+                p_sell=0.25,
+                reasoning_metadata={"hold_reason": "near_fair_value_hold"},
+            ),
+            _call(
+                final_signal="hold",
+                valuation_row={"margin_of_safety_conservative": -0.45, "current_price": 140.0, "iv_p50": 100.0},
+                p_buy_adjusted=0.30,
+                p_sell=0.30,
+                valuation_sanity_status="unreliable",
+                reasoning_metadata={"hold_reason": "valuation_unreliable_hold"},
+            ),
+            _call(
+                final_signal="hold",
+                freshness_flag="stale",
+                p_buy_adjusted=0.30,
+                p_sell=0.30,
+                reasoning_metadata={"hold_reason": "data_constrained_hold"},
+            ),
+            _call(
+                final_signal="hold",
+                valuation_row={"margin_of_safety_conservative": -0.65, "current_price": 140.0, "iv_p50": 100.0},
+                p_buy_adjusted=0.20,
+                p_sell=0.44,
+                uncertainty_width=2.0,
+                reasoning_metadata={"hold_reason": "uncertainty_constrained_hold"},
+            ),
+            _call(
+                final_signal="hold",
+                valuation_row={"margin_of_safety_conservative": 0.12, "current_price": 90.0, "iv_p50": 100.0},
+                red_flags=["high_leverage"],
+                p_buy_adjusted=0.30,
+                p_sell=0.35,
+                reasoning_metadata={"hold_reason": "risk_offset_hold"},
+            ),
+            _call(
+                final_signal="hold",
+                p_buy_adjusted=0.55,
+                p_sell=0.55,
+                reasoning_metadata={
+                    "hold_reason": "neutral_mixed_hold",
+                    "dominant_signal_driver": "neutral_mixed",
+                },
+            ),
+        ]
+        forbidden_phrases = [
+            "you should buy",
+            "you should sell",
+            "safe to hold",
+            "good opportunity",
+            "guaranteed",
+            "recommendation",
+        ]
+        for result in cases:
+            lowered = result.lower()
+            for phrase in forbidden_phrases:
+                assert phrase not in lowered
 
 
 # ---------------------------------------------------------------------------
@@ -312,7 +434,21 @@ class TestSellExplanations:
             p_sell=0.62,
             valuation_row=None,
         )
-        assert "elevated sell pressure" in result.lower()
+        assert "bearish internal model score" in result.lower()
+
+    def test_strong_sell_valuation_basis_uses_valuation_wording(self):
+        result = _call(
+            final_signal="strong_sell",
+            valuation_row={
+                "margin_of_safety_conservative": -0.25,
+                "current_price": 140.0,
+                "iv_p50": 100.0,
+            },
+            red_flags=["overvalued_vs_iv_p75"],
+            p_sell=0.70,
+            reasoning_metadata={"strong_sell_basis": "valuation"},
+        )
+        assert "valuation indicates material downside" in result.lower()
 
 
 # ---------------------------------------------------------------------------
@@ -372,7 +508,7 @@ class TestBuyExplanations:
             valuation_row=None,
             p_buy_adjusted=0.65,
         )
-        assert "buy probability" in result.lower()
+        assert "supportive internal model score" in result.lower()
         assert "0.65" in result
 
 

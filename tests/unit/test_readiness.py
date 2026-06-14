@@ -53,6 +53,13 @@ def _valuation(status: str):
     }
 
 
+def _signal(signal_date: str = "2025-01-01"):
+    return {
+        "id": "sig-001",
+        "signal_date": signal_date,
+    }
+
+
 def test_fmp_only_complete_company_is_analysis_ready() -> None:
     result = classify_company_readiness(
         _company(),
@@ -257,6 +264,111 @@ def test_reit_company_type_is_not_unsupported() -> None:
 
     assert result["readiness_status"] != "unsupported_for_analysis"
     assert "unsupported_instrument" not in result["reason_codes"]
+
+
+def test_statement_age_days_at_or_below_540_does_not_trigger_stale_fundamentals() -> None:
+    result = classify_company_readiness(
+        _company(),
+        profile_provider="fmp",
+        latest_price_row=_price("fmp"),
+        statement_rows=[
+            _statement(2024),
+            _statement(2023),
+        ],
+        latest_valuation_row={"valuation_date": "2026-03-24", "assumptions": {}},
+    )
+
+    assert result["statement_age_days"] == 540
+    assert "stale_fundamentals" not in result["reason_codes"]
+    assert result["can_run_valuation"] is True
+    assert result["can_run_signal"] is True
+
+
+def test_statement_age_days_above_540_blocks_valuation_and_signal() -> None:
+    result = classify_company_readiness(
+        _company(),
+        profile_provider="fmp",
+        latest_price_row=_price("fmp"),
+        statement_rows=[
+            _statement(2024),
+            _statement(2023),
+        ],
+        latest_valuation_row={"valuation_date": "2026-03-25", "assumptions": {}},
+        latest_signal_row=_signal("2026-03-25"),
+    )
+
+    assert result["statement_age_days"] == 541
+    assert result["readiness_status"] == "tracking_only"
+    assert result["can_run_valuation"] is False
+    assert result["can_run_signal"] is False
+    assert result["limiting_domain"] == "fundamentals"
+
+
+def test_stale_fundamentals_still_block_with_recent_price_if_signal_is_stale() -> None:
+    result = classify_company_readiness(
+        _company(),
+        profile_provider="fmp",
+        latest_price_row={
+            "provider": "fmp",
+            "price_date": "2025-01-01",
+            "close": 101.0,
+        },
+        statement_rows=[
+            _statement(2024),
+            _statement(2023),
+        ],
+        latest_valuation_row={"valuation_date": "2026-03-25", "assumptions": {}},
+        latest_signal_row=_signal("2026-03-25"),
+    )
+
+    assert result["statement_age_days"] == 541
+    assert result["readiness_status"] == "tracking_only"
+    assert "stale_fundamentals" in result["reason_codes"]
+    assert result["can_run_valuation"] is False
+    assert result["can_run_signal"] is False
+
+
+def test_missing_anchor_dates_keeps_statement_age_none() -> None:
+    result = classify_company_readiness(
+        _company(),
+        profile_provider="fmp",
+        latest_price_row=None,
+        statement_rows=[
+            _statement(2024),
+            _statement(2023),
+        ],
+        latest_valuation_row=None,
+        latest_signal_row=None,
+    )
+
+    assert result["statement_age_days"] is None
+    assert "stale_fundamentals" not in result["reason_codes"]
+
+
+def test_missing_latest_statement_date_keeps_existing_no_statements_behavior() -> None:
+    result = classify_company_readiness(
+        _company(ticker="ASML", name="ASML Holding", country="NL", cik=""),
+        profile_provider="fmp",
+        latest_price_row=_price("fmp"),
+        statement_rows=[],
+        filing_rows=[],
+    )
+
+    assert result["statement_age_days"] is None
+    assert "stale_fundamentals" not in result["reason_codes"]
+    assert result["readiness_status"] == "tracking_only"
+
+
+def test_stale_fundamentals_reason_code_present_when_triggered() -> None:
+    result = classify_company_readiness(
+        _company(),
+        profile_provider="fmp",
+        latest_price_row=_price("fmp"),
+        statement_rows=[_statement(2024), _statement(2023)],
+        latest_signal_row=_signal("2026-03-25"),
+    )
+
+    assert "stale_fundamentals" in result["reason_codes"]
 
 
 def test_utility_company_type_is_not_unsupported() -> None:

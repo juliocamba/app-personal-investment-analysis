@@ -79,6 +79,9 @@ At a high level:
 ### Probabilistic signals
 
 - Phase 6 computes `signal_runs` using valuation and qualitative inputs.
+- `p_buy`, `p_buy_adjusted`, and `p_sell` are internal rule-based scores, not statistically calibrated probabilities.
+- Signal reasoning metadata is persisted additively inside `top_feature_contributors` so the stored `signal_runs` schema remains unchanged while explanations and audit exports can recover the reasoning contract.
+- The reasoning contract includes `dominant_signal_driver`, `hold_reason`, `valuation_used_in_signal`, `risk_override_applied`, `confidence_limiter_codes`, `strong_sell_basis`, `buy_conviction_limited`, `explanation_quality_warning`, `recommendation_language_warning`, and `probability_interpretation_note`.
 
 ### Alerts
 
@@ -86,9 +89,11 @@ At a high level:
 
 ### Data-quality diagnostics
 
-- Phase 12A.5 persists non-blocking diagnostics into `company_data_quality_snapshots`, `pipeline_run_events`, and pipeline metrics.
+- Phase 12A.5 persists diagnostics into `company_data_quality_snapshots`, `pipeline_run_events`, and pipeline metrics.
 - These diagnostics currently include overlapping FMP vs Twelve Data price comparison, latest-annual statement completeness evidence from `statements_norm`, and overlapping annual FMP vs SEC fundamentals comparison when both normalized sources exist.
-- They do not change readiness, valuation, signal generation, or alerts. The dashboard now surfaces them in a separate diagnostic lane only.
+- Most diagnostics remain explanatory only, but stale underlying annual fundamentals older than 540 days now trigger a hard readiness gate: the company is downgraded to the existing non-analytical readiness vocabulary, valuation and signal generation are skipped, and the readiness reason code includes `stale_fundamentals`.
+- Stale-age computation is deterministic and based only on annual normalized statement `period_end_date`, anchored in order by latest signal date, latest valuation date, latest price date, then pipeline `as_of_date`.
+- This hard gate does not change valuation math, signal math, thresholds, or provider behavior. It only suppresses downstream valuation/signal execution when the latest normalized annual fundamentals are too old.
 
 ### Dashboard
 
@@ -103,6 +108,8 @@ At a high level:
 - The same page can also read `backtest_signal_by_readiness`, `backtest_signal_by_data_quality`, `backtest_signal_by_sector`, and `backtest_signal_stability` for descriptive subgroup and transition analysis only.
 - The same page may also read a light subset of `signal_backtest_observations` directly to surface coverage-gap counts and unknown historical-context counts without changing the persisted backtest methodology.
 - The same page can also read `signal_backtest_interpretation_summary` for a top-level dataset-maturity panel based on evidence coverage and history span only.
+- `dashboard_watchlist_latest` now suppresses valuation and signal projection fields when readiness says valuation/signal cannot run (for example stale fundamentals), and also exposes raw-vs-display signal diagnostics so tracking-only rows cannot masquerade as analytical HOLDs in current-state surfaces.
+- `dashboard_watchlist_latest` also exposes `stored_final_signal` and `signal_display_state` so consumers can distinguish analytical signals from readiness-suppressed or missing current-state rows.
 
 ## Pipeline stages in execution order
 
@@ -114,12 +121,13 @@ The live daily pipeline in [scripts/run_daily_pipeline.py](scripts/run_daily_pip
 4. for each active company: FMP profile, prices, statements, SEC data, optional news;
 5. fetch ECB FX rates;
 6. run Phase 12A.5 data-quality diagnostics and persist backend-owned snapshots;
-7. compute Phase 3 ratios and features;
-8. compute Phase 4 valuation outputs;
-9. compute Phase 5 qualitative scores;
-10. compute Phase 6 probabilistic signals;
-11. evaluate Phase 7 alerts if enabled;
-12. finish the pipeline run with metrics and status.
+7. classify readiness, including the stale-fundamentals hard gate for annual fundamentals older than 540 days;
+8. compute Phase 3 ratios and features;
+9. compute Phase 4 valuation outputs when readiness allows it;
+10. compute Phase 5 qualitative scores;
+11. compute Phase 6 probabilistic signals when readiness allows it;
+12. evaluate Phase 7 alerts if enabled;
+13. finish the pipeline run with metrics and status.
 
 Dry-run mode validates configuration and prints the planned pipeline flow without persisting provider-derived outputs.
 
@@ -156,7 +164,7 @@ Dry-run mode validates configuration and prints the planned pipeline flow withou
 | `ratios_factors` | Daily factor and ratio snapshot |
 | `valuation_runs` | Daily valuation model outputs |
 | `qualitative_scores` | Daily qualitative scoring outputs and overrides |
-| `signal_runs` | Daily probabilistic signal outputs |
+| `signal_runs` | Daily signal outputs with internal scores, explanation text, red flags, and auditable contributor metadata |
 | `company_data_quality_snapshots` | Daily persisted diagnostic snapshot for Phase 12A data-quality checks |
 | `signal_backtest_observations` | Persisted historical signal-validation observations for research-only forward-return analysis |
 
@@ -200,6 +208,8 @@ Apply migrations in this order:
 25. `sql/025_signal_backtest_segmentations.sql`
 26. `sql/026_signal_backtest_interpretation_summary.sql`
 27. `sql/027_latest_views_security_invoker.sql`
+28. `sql/028_dashboard_stale_readiness_suppression.sql`
+29. `sql/029_dashboard_valuation_sanity_suppression.sql`
 
 Notes:
 
@@ -223,6 +233,8 @@ Notes:
 - `025_signal_backtest_segmentations.sql` adds read-only segmentation views by readiness, data quality, and sector, plus a read-only signal-stability transition view.
 - `026_signal_backtest_interpretation_summary.sql` adds a read-only interpretation summary view for dataset maturity, overall historical coverage, evaluatable observations, and signal-history span.
 - `027_latest_views_security_invoker.sql` hardens the four legacy `latest_*` analytical views flagged by Supabase Security Advisor by recreating them with `security_invoker = true`, with no output-column or behavior change.
+- `028_dashboard_stale_readiness_suppression.sql` recreates `dashboard_watchlist_latest` so stale/non-analytical readiness states suppress valuation and signal projection fields.
+- `029_dashboard_valuation_sanity_suppression.sql` recreates `dashboard_watchlist_latest` so valuation display fields are suppressed when valuation diagnostics mark output as not display-credible.
 
 ## RLS and grants model
 
@@ -548,7 +560,7 @@ Defined in `readiness.py` and constrained in `company_analysis_readiness.check_r
 | Status | Meaning |
 |---|---|
 | `analysis_ready` | Sufficient data for a full valuation and signal run. |
-| `partial_analysis` | Some data is present but incomplete. A signal may be generated with a demoted buy probability. |
+| `partial_analysis` | Some data is present but incomplete. A signal may be generated with a demoted internal buy score. |
 | `provider_limited` | The provider set does not supply enough data for this company. Signal is suppressed or degraded. |
 | `tracking_only` | Price data is available but fundamental data is not sufficient or not supported. No valuation or signal is generated. |
 | `unsupported_for_analysis` | The company or exchange is not supported by the current provider set. No data or signal is produced. |
@@ -560,6 +572,8 @@ The `dashboard_watchlist_latest` view exposes:
 - `readiness_status` — the classification above.
 - `can_run_valuation` — boolean; false suppresses the valuation diagnostics panel.
 - `can_run_signal` — boolean; false suppresses the signal.
+- `signal_display_state` — diagnostic display classification for the current-state signal projection (`analytical_signal`, `readiness_suppressed`, or `no_signal`).
+- `stored_final_signal` — the raw persisted signal value from the latest signal row, exposed for diagnostics only.
 - `provider_mix` — a coverage classification (`primary_only`, `fallback_mix`, `mixed_sources`, `price_only`, or `insufficient_coverage`).
 
 ### Dashboard data-quality lane
@@ -599,6 +613,8 @@ Current implementation:
 - `scenario_count` records how many DCF method variants contributed;
 - `uncertainty_category` (`low` / `moderate` / `high` / `extreme`) derived from the spread of the scenario range;
 - `distribution_collapsed` flag set when scenarios collapsed to a single point;
+- valuation sanity diagnostics classify economic credibility separately from technical availability using `valuation_sanity_status` (`usable`, `high_uncertainty`, `unreliable`, `model_failure`);
+- valuation sanity diagnostics expose `valuation_sanity_reason_codes`, `valuation_evidence_usable`, `valuation_display_suppressed`, `valuation_signal_influence_blocked`, and `valuation_method_coverage`;
 - method and assumption diagnostics stored in `valuation_runs.assumptions["diagnostics"]` JSON;
 - conservative margin-of-safety outputs surfaced in the dashboard and retained as downside/reference diagnostics.
 
@@ -613,15 +629,17 @@ Migration `013_valuation_diagnostics_in_dashboard_view.sql` adds four diagnostic
 | `uncertainty_category` | `assumptions->'diagnostics'->>'uncertainty_category'` |
 | `distribution_collapsed` | `(assumptions->'diagnostics'->'warnings') @> '["distribution_collapsed"]'` |
 
+Migration `029_dashboard_valuation_sanity_suppression.sql` keeps these columns but suppresses valuation-range and valuation-diagnostic display fields when `assumptions->diagnostics->valuation_display_suppressed = true`.
+
 ## Signal model summary
 
 The signal layer uses model version `signal_rule_v3`.
 
 Persisted outputs:
 
-- `p_buy` — raw buy probability before quality adjustment;
-- `p_buy_adjusted` — buy probability after partial-analysis demotion;
-- `p_sell` — sell pressure probability;
+- `p_buy` — raw internal buy score before quality adjustment;
+- `p_buy_adjusted` — internal buy score after partial-analysis demotion;
+- `p_sell` — internal sell score;
 - `final_signal` — the classified signal.
 
 Allowed `final_signal` values are constrained in SQL (`signal_runs.check_final_signal`):
@@ -643,11 +661,12 @@ Allowed `final_signal` values are constrained in SQL (`signal_runs.check_final_s
 - **Near-fair-value epsilon band**: MoS values within `±0.5%` (i.e. `abs(mos) ≤ 0.005`) are clamped to zero before fallback sell-pressure calculation. This prevents floating-point noise near zero from generating spurious sell signals.
 - **STRONG_SELL confirmation requirement**: A `strong_sell` classification requires elevated sell pressure plus either severe overvaluation versus `iv_p50` after uncertainty adjustment, or an independent hard-risk flag (`high_leverage`, `critical_interest_coverage`, `quality_breakdown`, `negative_direct_fcf`, or `zero_direct_fcf`). Valuation-only warnings such as `negative_margin_of_safety` and `overvalued_vs_iv_p75` remain visible red flags but do not independently confirm `strong_sell`.
 - **Partial-analysis buy demotion**: When `readiness_status = partial_analysis`, `p_buy_adjusted` is reduced from `p_buy` to reflect reduced data confidence.
+- **Valuation sanity interaction**: When valuation diagnostics set `valuation_signal_influence_blocked = true` (or `valuation_sanity_status` is `unreliable` / `model_failure`), valuation-only overvaluation pressure is removed from signal-conviction escalation; independent hard-risk signals still apply.
 - **Tracking-only passthrough**: Companies with `tracking_only` or `unsupported_for_analysis` readiness have `can_run_signal = false`. The signal engine is not invoked and no `signal_runs` row is written for those companies.
 
-The signal output shape is unchanged and still stores red flags, explanation text, top feature contributors, and freshness indicators. Signal rule v3 does not change `valuation_v1`, DCF assumptions, readiness, data-quality diagnostics, providers, backtest methodology, positions, portfolio, alerts, or pipeline stage ordering.
+The signal output shape is unchanged and still stores red flags, explanation text, top feature contributors, and freshness indicators. Slice 3B adds deterministic reasoning metadata inside the existing contributor payload so downstream consumers can inspect HOLD subtype, confidence limiters, valuation usability, and STRONG_SELL basis without altering thresholds or stored top-level columns. Signal rule v3 does not change `valuation_v1`, DCF assumptions, readiness, data-quality diagnostics, providers, backtest methodology, positions, portfolio, alerts, or pipeline stage ordering.
 
-Explanation text is interpretation-only. HOLD explanations may distinguish plain neutral evidence from uncertainty-constrained valuation concerns when valuation warnings exist but wide ranges reduce conviction; this wording refinement does not change probabilities, thresholds, stored labels, or output columns.
+Explanation text is interpretation-only. HOLD explanations may distinguish plain neutral evidence from uncertainty-constrained valuation concerns, valuation-unreliable constraints, risk-offset behavior, and data-constrained neutrality. STRONG_SELL explanations now stay consistent with whether the basis was valuation, risk, or both. These wording refinements do not change thresholds or stored signal labels.
 
 ## Historical signal validation
 
@@ -724,6 +743,19 @@ Operational note:
 - it validates a focused backtest test subset and the Supabase schema before executing `scripts/run_backtest.py`;
 - it is intentionally separate from the daily scheduled pipeline and does not call providers.
 
+## Phase 12G checkpoint
+
+Phase 12G is a completed research-credibility hardening checkpoint, not a new phase. Completed slices:
+
+- Slice 1B: deterministic stale fundamentals gating and stale analytical suppression;
+- Slice 2B: valuation sanity layer and valuation sanity suppression;
+- Slice 3B: signal reasoning metadata and explanation discipline;
+- Slice 4B: canonical `export_model_audit.py` implementation;
+- Slice 5A: tracking-only signal representation cleanup;
+- Slice 5B: HOLD explanation quality.
+
+The next planned slice after credits reset is Data Quality / Readiness Gating Matrix. That slice should classify data-quality warning codes as informational, confidence-limiting, or blocking while keeping diagnostics separate from signal labels and avoiding threshold tuning or new signal categories.
+
 ## Model interpretation and limitations
 
 - Outputs are rule-based analytical signals, not statistically calibrated probabilities.
@@ -732,6 +764,11 @@ Operational note:
 - The `uncertainty_category` field gives a qualitative sense of model confidence, but even a `low` uncertainty category does not imply accuracy.
 - Non-US companies may have degraded or missing fundamental data, which can result in `tracking_only` or `provider_limited` states regardless of company quality.
 - Do not treat any output as a recommendation. Use outputs as a starting point for further research.
+- `valuation_status` is technical availability; `valuation_sanity_status` is the economic-credibility layer that can suppress display or signal influence when outputs are not credible enough to use.
+- `signal_display_state` is the current-state signal contract; consumers that read only `final_signal` may miss readiness suppression or missing-signal semantics.
+- The model audit export is a read-only current-state research artifact. Local CSV/JSON outputs should not be committed unless intentionally archived.
+- High uncertainty remains common in current valuations, so wide ranges should be treated as a limitation of the snapshot rather than evidence of confidence.
+- No ML model, recommendation engine, prediction service, or strategy simulation was added in Phase 12G.
 
 ## Frontend architecture
 
@@ -796,6 +833,50 @@ Target settings:
 - frontend environment variables: `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`
 
 ## Operational runbook
+
+### Model audit export
+
+Use the separate current-state audit export when you want to inspect whether
+today's valuations and signals are grounded in recent, sufficiently complete,
+and internally coherent company data. This is a read-only research tool. It
+does not change providers, readiness, valuation logic, signal thresholds, or
+pipeline behavior.
+
+Run it locally with backend environment variables configured:
+
+```powershell
+.\.venv\Scripts\python scripts\export_model_audit.py
+```
+
+Outputs are written to `exports/audit/`:
+
+- timestamped CSV for spreadsheet-style review;
+- timestamped JSON preserving nested assumptions, contributors, and data-quality evidence.
+
+The export includes current-state raw fields plus derived audit fields such as:
+
+- `price_to_iv_mid`, `price_to_iv_high`;
+- `valuation_bucket` using current `signal_rule_v3` midpoint/uncertainty semantics;
+- `strong_sell_confirmation_type`;
+- `hold_uncertainty_constrained`;
+- `statement_age_days`, `latest_statement_year`, `stale_statement_input`;
+- `has_dcf_component`, `valuation_partial_flag`;
+- `distribution_min`, `distribution_max`, `distribution_span_ratio`;
+- `multiples_vs_dcf_mid_gap` when both values are available.
+- `valuation_sanity_status`, `valuation_sanity_reason_codes`, `valuation_evidence_usable`, `valuation_display_suppressed`, `valuation_signal_influence_blocked`, `valuation_method_coverage`;
+- `stored_final_signal` and `signal_display_state` for current-state signal display semantics;
+- `dominant_signal_driver`, `hold_reason`, `valuation_used_in_signal`, `risk_override_applied`, `confidence_limiter_codes`, `strong_sell_basis`, `buy_conviction_limited`, `explanation_quality_warning`, `recommendation_language_warning`, and `probability_interpretation_note` from the reasoning contract.
+
+Suggested review checklist:
+
+- filter `final_signal = strong_sell` and inspect `strong_sell_confirmation_type`;
+- filter `hold_uncertainty_constrained = true` to separate uncertainty-capped HOLDs from more neutral HOLDs;
+- filter `stale_statement_input = true`;
+- sort by `statement_age_days` descending;
+- sort by `distribution_span_ratio` descending;
+- sort by `uncertainty_width` descending;
+- inspect `provider_mix` and `data_quality_warning_codes` together;
+- inspect `valuation_assumptions_json.diagnostics` and `aggregation.distribution` for outliers such as extreme spread or scaling anomalies.
 
 ### First setup
 

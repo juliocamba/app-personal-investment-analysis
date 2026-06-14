@@ -36,6 +36,8 @@ export interface WatchlistRow {
   p_buy_adjusted: number | null;
   p_sell: number | null;
   final_signal: string | null;
+  stored_final_signal: string | null;
+  signal_display_state: string | null;
   red_flags: string[] | null;
   explanation: string | null;
   freshness_flag: string | null;

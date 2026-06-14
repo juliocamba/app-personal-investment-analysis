@@ -6,6 +6,7 @@ profile provider.
 """
 from __future__ import annotations
 
+from datetime import date
 from typing import Any
 
 READINESS_ANALYSIS_READY = "analysis_ready"
@@ -56,6 +57,8 @@ REASON_PROVIDER_LIMITED = "provider_limited"
 REASON_UNSUPPORTED_INSTRUMENT = "unsupported_instrument"
 REASON_VALUATION_PARTIAL = "valuation_partial"
 REASON_VALUATION_READY = "valuation_ready"
+REASON_STALE_FUNDAMENTALS = "stale_fundamentals"
+STALE_FUNDAMENTALS_DAYS = 540
 
 REASON_CODES: tuple[str, ...] = (
     REASON_MISSING_PRICE,
@@ -70,6 +73,7 @@ REASON_CODES: tuple[str, ...] = (
     REASON_UNSUPPORTED_INSTRUMENT,
     REASON_VALUATION_PARTIAL,
     REASON_VALUATION_READY,
+    REASON_STALE_FUNDAMENTALS,
 )
 
 _PRIMARY_PROVIDER_BY_DOMAIN = {
@@ -191,6 +195,73 @@ def _valuation_diagnostics(latest_valuation_row: dict[str, Any] | None) -> dict[
     return diagnostics if isinstance(diagnostics, dict) else {}
 
 
+def _parse_date(value: Any) -> date | None:
+    if value is None:
+        return None
+    if isinstance(value, date):
+        return value
+    if not isinstance(value, str):
+        return None
+    text = value.strip()
+    if not text:
+        return None
+    try:
+        return date.fromisoformat(text[:10])
+    except ValueError:
+        return None
+
+
+def _latest_statement_date(statement_rows: list[dict[str, Any]]) -> date | None:
+    latest: date | None = None
+    for row in _annual_statements(statement_rows):
+        candidate = _parse_date(row.get("period_end_date"))
+        if candidate is None:
+            continue
+        if latest is None or candidate > latest:
+            latest = candidate
+    return latest
+
+
+def _statement_age_days(
+    statement_rows: list[dict[str, Any]],
+    *,
+    as_of_date: str | None = None,
+    latest_price_row: dict[str, Any] | None = None,
+    latest_valuation_row: dict[str, Any] | None = None,
+    latest_signal_row: dict[str, Any] | None = None,
+) -> int | None:
+    """Return age in days of the latest annual normalized statement input.
+
+    Source date used for fundamentals recency:
+    - ``statements_norm.period_end_date`` from annual rows only.
+
+    Anchor precedence (first available):
+    1. latest signal date
+    2. latest valuation date
+    3. latest price date
+    4. caller-provided as_of_date
+
+    The helper is intentionally deterministic and returns ``None`` when no
+    anchor is available; it never falls back to wall-clock time.
+    """
+    latest_statement = _latest_statement_date(statement_rows)
+    if latest_statement is None:
+        return None
+
+    anchor = None
+    if latest_signal_row:
+        anchor = _parse_date(latest_signal_row.get("signal_date"))
+    if anchor is None and latest_valuation_row:
+        anchor = _parse_date(latest_valuation_row.get("valuation_date"))
+    if anchor is None and latest_price_row:
+        anchor = _parse_date(latest_price_row.get("price_date"))
+    if anchor is None and as_of_date:
+        anchor = _parse_date(as_of_date)
+    if anchor is None:
+        return None
+    return (anchor - latest_statement).days
+
+
 def detect_provider_mix(provider_map: dict[str, str | None]) -> str:
     """Return a deterministic provider-mix label for the current coverage."""
     price_provider = provider_map.get("price")
@@ -230,6 +301,7 @@ def detect_provider_mix(provider_map: dict[str, str | None]) -> str:
 def classify_company_readiness(
     company: dict[str, Any],
     *,
+    as_of_date: str | None = None,
     profile_provider: str | None = None,
     latest_price_row: dict[str, Any] | None = None,
     statement_rows: list[dict[str, Any]] | None = None,
@@ -297,6 +369,16 @@ def classify_company_readiness(
     has_filings = bool(filing_rows)
     has_recent_valuation = latest_valuation_row is not None
     has_recent_signal = latest_signal_row is not None
+    statement_age_days = _statement_age_days(
+        statement_rows,
+        as_of_date=as_of_date,
+        latest_price_row=latest_price_row,
+        latest_valuation_row=latest_valuation_row,
+        latest_signal_row=latest_signal_row,
+    )
+    has_stale_fundamentals = (
+        statement_age_days is not None and statement_age_days > STALE_FUNDAMENTALS_DAYS
+    )
 
     country = str(company.get("country") or "").strip().upper()
     cik = str(company.get("cik") or "").strip()
@@ -319,6 +401,7 @@ def classify_company_readiness(
         REASON_UNSUPPORTED_INSTRUMENT: not supported_instrument,
         REASON_VALUATION_PARTIAL: valuation_status == "partial",
         REASON_VALUATION_READY: valuation_status == "ok",
+        REASON_STALE_FUNDAMENTALS: has_stale_fundamentals,
     }
 
     has_core_analysis_inputs = (
@@ -331,6 +414,8 @@ def classify_company_readiness(
 
     if not supported_instrument:
         readiness_status = READINESS_UNSUPPORTED
+    elif has_stale_fundamentals:
+        readiness_status = READINESS_TRACKING_ONLY
     elif has_recent_price and not fundamentals_path_supported:
         readiness_status = READINESS_TRACKING_ONLY if has_profile else READINESS_PROVIDER_LIMITED
     elif has_core_analysis_inputs and valuation_status not in {"partial", "blocked"}:
@@ -353,7 +438,8 @@ def classify_company_readiness(
     elif reason_flags[REASON_MISSING_PRICE]:
         limiting_domain = "price"
     elif (
-        reason_flags[REASON_MISSING_SUPPORTED_FUNDAMENTALS]
+        reason_flags[REASON_STALE_FUNDAMENTALS]
+        or reason_flags[REASON_MISSING_SUPPORTED_FUNDAMENTALS]
         or reason_flags[REASON_MISSING_MIN_HISTORY]
         or reason_flags[REASON_MISSING_DILUTED_SHARES]
         or reason_flags[REASON_MISSING_FCF_PATH]
@@ -382,6 +468,7 @@ def classify_company_readiness(
         "has_filings": has_filings,
         "has_recent_valuation": has_recent_valuation,
         "has_recent_signal": has_recent_signal,
+        "statement_age_days": statement_age_days,
         "limiting_domain": limiting_domain,
         "last_evaluated_at": None,
     }

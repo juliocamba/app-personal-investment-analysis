@@ -22,6 +22,14 @@ from investment_app.scoring.rule_based import (
 	sigmoid,
 )
 
+_RECOMMENDATION_LIKE_PHRASES: tuple[str, ...] = (
+	"you should buy",
+	"you should sell",
+	"safe to hold",
+	"good opportunity",
+	"guaranteed",
+)
+
 MODEL_VERSION = "signal_rule_v3"
 
 _FAIR_VALUE_MOS_EPSILON: float = 0.005
@@ -175,18 +183,28 @@ def _build_red_flags(
 	"""Build deterministic red flags from existing evidence."""
 	flags: list[str] = []
 
+	valuation_diagnostics = ((valuation_row or {}).get("assumptions") or {}).get("diagnostics") or {}
+	valuation_sanity_status = str(
+		valuation_diagnostics.get("valuation_sanity_status") or "usable"
+	).strip().lower()
+	valuation_sanity_blocks_influence = bool(
+		valuation_diagnostics.get("valuation_signal_influence_blocked")
+	) or valuation_sanity_status in {"unreliable", "model_failure"}
+
 	if valuation_row is None:
 		flags.append("missing_valuation")
 	else:
 		mos = _safe(valuation_row.get("margin_of_safety_conservative"))
 		current_price = _safe(valuation_row.get("current_price"))
 		iv_p75 = _safe(valuation_row.get("iv_p75"))
-		if mos is not None and mos < -0.15:
-			flags.append("negative_margin_of_safety")
-		if current_price is not None and iv_p75 is not None and current_price > iv_p75:
-			flags.append("overvalued_vs_iv_p75")
-		diagnostics = ((valuation_row.get("assumptions") or {}).get("diagnostics") or {})
-		for blocker in diagnostics.get("blockers", []):
+		if valuation_sanity_blocks_influence:
+			flags.append("valuation_unreliable")
+		else:
+			if mos is not None and mos < -0.15:
+				flags.append("negative_margin_of_safety")
+			if current_price is not None and iv_p75 is not None and current_price > iv_p75:
+				flags.append("overvalued_vs_iv_p75")
+		for blocker in valuation_diagnostics.get("blockers", []):
 			if blocker in {"negative_direct_fcf", "zero_direct_fcf"}:
 				flags.append(blocker)
 
@@ -268,13 +286,27 @@ def _sell_probability(
 	"""Compute a conservative sell probability."""
 	pressure = 35.0
 	mos = _normalized_mos_for_signal(_safe((valuation_row or {}).get("margin_of_safety_conservative")))
-	position_bucket = _valuation_position_bucket(valuation_row)
+	valuation_diagnostics = ((valuation_row or {}).get("assumptions") or {}).get("diagnostics") or {}
+	valuation_sanity_status = str(
+		valuation_diagnostics.get("valuation_sanity_status") or "usable"
+	).strip().lower()
+	valuation_signal_influence_blocked = bool(
+		valuation_diagnostics.get("valuation_signal_influence_blocked")
+	) or valuation_sanity_status in {"unreliable", "model_failure"}
+
+	position_bucket = (
+		"unknown" if valuation_signal_influence_blocked else _valuation_position_bucket(valuation_row)
+	)
 
 	if position_bucket == "severely_overvalued":
 		pressure += 22.0
 	elif position_bucket == "modestly_overvalued":
 		pressure += 12.0
-	elif position_bucket == "unknown" and mos is not None:
+	elif (
+		position_bucket == "unknown"
+		and mos is not None
+		and not valuation_signal_influence_blocked
+	):
 		# Fallback only when midpoint fair value is unavailable. This keeps the
 		# conservative MoS useful without stacking it on top of midpoint evidence.
 		if mos < -0.20:
@@ -328,6 +360,220 @@ _STRONG_SELL_CONFIRMING_FLAGS: frozenset[str] = frozenset({
 })
 
 
+def _valuation_diagnostics(valuation_row: dict[str, Any] | None) -> dict[str, Any]:
+	return ((valuation_row or {}).get("assumptions") or {}).get("diagnostics") or {}
+
+
+def _valuation_sanity_status(valuation_row: dict[str, Any] | None) -> str:
+	return str(
+		_valuation_diagnostics(valuation_row).get("valuation_sanity_status") or "usable"
+	).strip().lower()
+
+
+def _valuation_used_in_signal(valuation_row: dict[str, Any] | None) -> bool:
+	if valuation_row is None:
+		return False
+	diagnostics = _valuation_diagnostics(valuation_row)
+	if bool(diagnostics.get("valuation_signal_influence_blocked")):
+		return False
+	return _valuation_sanity_status(valuation_row) not in {"unreliable", "model_failure"}
+
+
+def _hard_risk_flags(red_flags: list[str]) -> list[str]:
+	return [flag for flag in red_flags if flag in _STRONG_SELL_CONFIRMING_FLAGS]
+
+
+def _confidence_limiter_codes(
+	*,
+	readiness_status: str,
+	freshness_flag: str,
+	valuation_row: dict[str, Any] | None,
+	red_flags: list[str],
+) -> list[str]:
+	limiters: list[str] = []
+	if readiness_status == "partial_analysis":
+		limiters.append("partial_analysis")
+	if freshness_flag in {"limited", "stale", "missing_inputs"}:
+		limiters.append(f"freshness_{freshness_flag}")
+	valuation_sanity_status = _valuation_sanity_status(valuation_row)
+	if valuation_sanity_status == "high_uncertainty":
+		limiters.append("valuation_high_uncertainty")
+	elif valuation_sanity_status in {"unreliable", "model_failure"}:
+		limiters.append("valuation_unreliable")
+	if valuation_row is None:
+		limiters.append("valuation_missing")
+	elif not _valuation_used_in_signal(valuation_row):
+		limiters.append("valuation_not_used_in_signal")
+	if "missing_qualitative_score" in red_flags:
+		limiters.append("missing_qualitative_score")
+	if "missing_ratio_factors" in red_flags:
+		limiters.append("missing_ratio_factors")
+	return list(dict.fromkeys(limiters))
+
+
+def _strong_sell_basis(
+	*,
+	final_signal: str,
+	valuation_row: dict[str, Any] | None,
+	red_flags: list[str],
+) -> str | None:
+	if final_signal != "strong_sell":
+		return None
+	has_risk = bool(_hard_risk_flags(red_flags))
+	has_valuation = _valuation_used_in_signal(valuation_row) and _has_valuation_only_strong_sell_confirmation(
+		valuation_row
+	)
+	if has_risk and has_valuation:
+		return "combined"
+	if has_risk:
+		return "risk"
+	if has_valuation:
+		return "valuation"
+	return None
+
+
+def _hold_reason(
+	*,
+	valuation_row: dict[str, Any] | None,
+	red_flags: list[str],
+	freshness_flag: str,
+	readiness_status: str,
+	p_buy_adjusted: float,
+	p_sell: float,
+) -> str:
+	if freshness_flag in {"limited", "stale", "missing_inputs"} or readiness_status == "partial_analysis":
+		return "data_constrained_hold"
+	if _valuation_sanity_status(valuation_row) in {"unreliable", "model_failure"}:
+		return "valuation_unreliable_hold"
+	if _hard_risk_flags(red_flags) and _valuation_used_in_signal(valuation_row):
+		position_bucket = _valuation_position_bucket(valuation_row)
+		if position_bucket == "below_fair_value":
+			return "risk_offset_hold"
+	if _valuation_used_in_signal(valuation_row):
+		position_bucket = _valuation_position_bucket(valuation_row)
+		uncertainty_width = _safe((valuation_row or {}).get("uncertainty_width"))
+		if position_bucket in {"modestly_overvalued", "below_fair_value"} and uncertainty_width is not None and uncertainty_width > 0.50:
+			return "uncertainty_constrained_hold"
+		if position_bucket == "near_fair_value":
+			return "near_fair_value_hold"
+	if p_buy_adjusted >= 0.50 and p_sell >= 0.50:
+		return "neutral_mixed_hold"
+	return "neutral_mixed_hold"
+
+
+def _dominant_signal_driver(
+	*,
+	final_signal: str,
+	valuation_row: dict[str, Any] | None,
+	red_flags: list[str],
+	freshness_flag: str,
+	readiness_status: str,
+	p_buy_adjusted: float,
+	p_sell: float,
+	hold_reason: str | None,
+) -> str:
+	if final_signal == "insufficient_data":
+		return "data_unavailable"
+	if readiness_status != "analysis_ready":
+		if readiness_status == "partial_analysis":
+			return "data_constrained"
+		return "data_unavailable"
+	if hold_reason == "data_constrained_hold":
+		return "data_constrained"
+	if hold_reason == "valuation_unreliable_hold":
+		return "valuation_unreliable"
+	if hold_reason == "uncertainty_constrained_hold":
+		return "uncertainty_constrained"
+	if hold_reason == "risk_offset_hold":
+		return "risk_override"
+	if final_signal in {"sell", "strong_sell"}:
+		if _hard_risk_flags(red_flags):
+			return "risk_override"
+		if _valuation_used_in_signal(valuation_row):
+			return "valuation_downside"
+		if _valuation_sanity_status(valuation_row) in {"unreliable", "model_failure"}:
+			return "valuation_unreliable"
+		return "neutral_mixed"
+	if final_signal in {"buy", "strong_buy"}:
+		if _valuation_sanity_status(valuation_row) in {"unreliable", "model_failure"}:
+			return "valuation_unreliable"
+		if _valuation_used_in_signal(valuation_row):
+			return "valuation_upside"
+		return "quality_support"
+	return "neutral_mixed"
+
+
+def _reasoning_metadata(
+	*,
+	final_signal: str,
+	valuation_row: dict[str, Any] | None,
+	red_flags: list[str],
+	freshness_flag: str,
+	readiness_status: str,
+	p_buy_adjusted: float,
+	p_sell: float,
+	explanation: str | None = None,
+) -> dict[str, Any]:
+	hold_reason = (
+		_hold_reason(
+			valuation_row=valuation_row,
+			red_flags=red_flags,
+			freshness_flag=freshness_flag,
+			readiness_status=readiness_status,
+			p_buy_adjusted=p_buy_adjusted,
+			p_sell=p_sell,
+		)
+		if final_signal == "hold"
+		else None
+	)
+	valuation_used_in_signal = _valuation_used_in_signal(valuation_row)
+	risk_override_applied = bool(_hard_risk_flags(red_flags)) and final_signal in {"hold", "sell", "strong_sell"}
+	confidence_limiter_codes = _confidence_limiter_codes(
+		readiness_status=readiness_status,
+		freshness_flag=freshness_flag,
+		valuation_row=valuation_row,
+		red_flags=red_flags,
+	)
+	strong_sell_basis = _strong_sell_basis(
+		final_signal=final_signal,
+		valuation_row=valuation_row,
+		red_flags=red_flags,
+	)
+	buy_conviction_limited = final_signal in {"buy", "strong_buy"} and bool(confidence_limiter_codes)
+	dominant_signal_driver = _dominant_signal_driver(
+		final_signal=final_signal,
+		valuation_row=valuation_row,
+		red_flags=red_flags,
+		freshness_flag=freshness_flag,
+		readiness_status=readiness_status,
+		p_buy_adjusted=p_buy_adjusted,
+		p_sell=p_sell,
+		hold_reason=hold_reason,
+	)
+	recommendation_language_warning = None
+	if explanation:
+		lowered = explanation.lower()
+		if any(phrase in lowered for phrase in _RECOMMENDATION_LIKE_PHRASES):
+			recommendation_language_warning = "recommendation_like_language"
+	explanation_quality_warning = None
+	if final_signal in {"buy", "strong_buy"} and dominant_signal_driver == "valuation_unreliable":
+		explanation_quality_warning = "buy_with_unreliable_valuation"
+	elif final_signal == "strong_sell" and strong_sell_basis is None:
+		explanation_quality_warning = "missing_strong_sell_basis"
+	return {
+		"dominant_signal_driver": dominant_signal_driver,
+		"hold_reason": hold_reason,
+		"valuation_used_in_signal": valuation_used_in_signal,
+		"risk_override_applied": risk_override_applied,
+		"confidence_limiter_codes": confidence_limiter_codes,
+		"strong_sell_basis": strong_sell_basis,
+		"buy_conviction_limited": buy_conviction_limited,
+		"explanation_quality_warning": explanation_quality_warning,
+		"recommendation_language_warning": recommendation_language_warning,
+		"probability_interpretation_note": "Internal rule-based model scores; not calibrated probabilities or investment recommendations.",
+	}
+
+
 def _classify_signal(
 	*,
 	p_buy_adjusted: float,
@@ -355,9 +601,16 @@ def _classify_signal(
 	)
 	has_hard_red_flag = any(flag in red_flags for flag in _STRONG_SELL_CONFIRMING_FLAGS)
 	has_confirming_bearish = any(f in red_flags for f in _STRONG_SELL_CONFIRMING_FLAGS)
+	valuation_diagnostics = ((valuation_row or {}).get("assumptions") or {}).get("diagnostics") or {}
+	valuation_sanity_status = str(
+		valuation_diagnostics.get("valuation_sanity_status") or "usable"
+	).strip().lower()
+	valuation_signal_influence_blocked = bool(
+		valuation_diagnostics.get("valuation_signal_influence_blocked")
+	) or valuation_sanity_status in {"unreliable", "model_failure"}
 	has_severe_valuation_confirmation = _has_valuation_only_strong_sell_confirmation(
 		valuation_row
-	)
+	) if not valuation_signal_influence_blocked else False
 
 	if has_insufficient_core_inputs:
 		return "insufficient_data"
@@ -499,6 +752,15 @@ def compute_signal_run(
 		risk_penalty=risk_penalty,
 		uncertainty_penalty=uncertainty_penalty,
 	)
+	reasoning_metadata = _reasoning_metadata(
+		final_signal=final_signal,
+		valuation_row=valuation_row,
+		red_flags=red_flags,
+		freshness_flag=freshness_flag,
+		readiness_status=readiness_status,
+		p_buy_adjusted=p_buy_adjusted,
+		p_sell=p_sell,
+	)
 	explanation = build_signal_explanation(
 		final_signal=final_signal,
 		valuation_row=valuation_row,
@@ -509,6 +771,27 @@ def compute_signal_run(
 		p_buy_adjusted=p_buy_adjusted,
 		p_sell=p_sell,
 		uncertainty_width=uncertainty_width or None,
+		valuation_sanity_status=str(
+			((((valuation_row or {}).get("assumptions") or {}).get("diagnostics") or {}).get(
+				"valuation_sanity_status"
+			) or "usable")
+		),
+		reasoning_metadata=reasoning_metadata,
+	)
+	reasoning_metadata = {
+		**reasoning_metadata,
+		"recommendation_language_warning": (
+			"recommendation_like_language"
+			if any(phrase in explanation.lower() for phrase in _RECOMMENDATION_LIKE_PHRASES)
+			else reasoning_metadata.get("recommendation_language_warning")
+		),
+	}
+	top_feature_contributors = build_top_feature_contributors(
+		family_scores=family_scores,
+		quality_multiplier=quality_multiplier,
+		risk_penalty=risk_penalty,
+		uncertainty_penalty=uncertainty_penalty,
+		reasoning_metadata=reasoning_metadata,
 	)
 
 	return {

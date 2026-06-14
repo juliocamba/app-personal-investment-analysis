@@ -255,6 +255,25 @@ def test_tracking_only_skips_valuation_and_signal() -> None:
     assert should_skip_signal(result)
 
 
+def test_stale_fundamentals_skips_valuation_and_signal_downstream() -> None:
+    repo = _FakeRepo(
+        price_rows=[_price_row()],
+        statement_rows=[_statement_row(2024), _statement_row(2023)],
+        signal_rows=[{"signal_date": "2026-03-25"}],
+    )
+    metrics = _metrics()
+    result = classify_company_for_pipeline(
+        _company(), _COMPANY_ID,
+        repo_module=repo, run_id=_RUN_ID, factor_date=_FACTOR_DATE, metrics=metrics,
+    )
+
+    assert result is not None
+    assert result["readiness_status"] == "tracking_only"
+    assert "stale_fundamentals" in result["reason_codes"]
+    assert should_skip_valuation(result)
+    assert should_skip_signal(result)
+
+
 # ---------------------------------------------------------------------------
 # 4. provider_limited — skip valuation and signal
 # ---------------------------------------------------------------------------

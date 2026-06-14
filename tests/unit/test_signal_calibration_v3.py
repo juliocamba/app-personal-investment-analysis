@@ -202,3 +202,31 @@ def test_output_shape_remains_unchanged():
         "explanation",
         "freshness_flag",
     }
+
+
+def test_top_feature_contributors_include_reasoning_metadata_without_schema_change():
+    from tests.unit.test_probabilistic_signal import (
+        _COMPANY_ID,
+        _FILING_10K,
+        _PRICE_GOOD,
+        _QUAL_GOOD,
+        _RATIO_GOOD,
+        _SIGNAL_DATE,
+        _VALUATION_GOOD,
+        _FakeSignalRepo,
+    )
+    from investment_app.scoring.probabilistic import compute_signal_run
+
+    repo = _FakeSignalRepo(
+        valuation=_VALUATION_GOOD,
+        qualitative=_QUAL_GOOD,
+        ratios=[_RATIO_GOOD],
+        prices=[_PRICE_GOOD],
+        filings=[_FILING_10K],
+    )
+    result = compute_signal_run(_COMPANY_ID, repo, _SIGNAL_DATE)
+    metadata_items = [
+        item for item in result["top_feature_contributors"] if item.get("name") == "signal_reasoning_metadata"
+    ]
+    assert len(metadata_items) == 1
+    assert metadata_items[0]["kind"] == "metadata"

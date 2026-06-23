@@ -64,6 +64,13 @@ At a high level:
 - Filing metadata is normalized into `filings_index`.
 - News payloads are normalized into `news_events` when news ingestion is enabled.
 
+SEC EDGAR companyfacts annual normalization now discovers fiscal years from the
+union of relevant revenue, income, cash-flow, balance-sheet, and share-count
+concepts before selecting recent usable annual rows. This avoids a stale first
+concept, such as legacy `Revenues`, masking fresher years available under other
+SEC concepts. The normalizer still skips years without meaningful fundamentals
+and keeps missing fields visible in diagnostics.
+
 ### Ratios and features
 
 - Phase 3 computes feature and ratio snapshots into `ratios_factors`.
@@ -755,6 +762,17 @@ Phase 12G is a completed research-credibility hardening checkpoint, not a new ph
 - Slice 5B: HOLD explanation quality.
 
 The next planned slice after credits reset is Data Quality / Readiness Gating Matrix. That slice should classify data-quality warning codes as informational, confidence-limiting, or blocking while keeping diagnostics separate from signal labels and avoiding threshold tuning or new signal categories.
+
+## Post-12G SEC normalization freshness fix
+
+The first post-12G slice fixed SEC annual fiscal-year discovery in
+`normalize_sec_companyfacts.py`. Previously `_discover_fiscal_years` stopped as
+soon as the first probe concept returned any years, which could select stale
+annual coverage and ignore recent facts present under other concepts. It now
+unions fiscal years across the concepts used by the normalizer and then emits
+up to the configured number of recent usable annual rows. This is a
+normalization-only change: no provider, readiness, valuation, signal, or stale
+fundamentals threshold changed.
 
 ## Model interpretation and limitations
 

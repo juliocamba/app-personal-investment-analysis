@@ -83,6 +83,17 @@ _DA_CONCEPTS = [
     "DepreciationDepletionAndAmortization",
     "DepreciationAmortizationAndAccretionNet",
 ]
+_FISCAL_YEAR_DISCOVERY_CONCEPTS = (
+    _REVENUE_CONCEPTS
+    + _NET_INCOME_CONCEPTS
+    + _CFO_CONCEPTS
+    + _CAPEX_CONCEPTS
+    + _ASSETS_CONCEPTS
+    + _LIABILITIES_CONCEPTS
+    + _EQUITY_CONCEPTS
+    + _DILUTED_SHARES_CONCEPTS
+    + _DILUTED_SHARES_WEAK_CONCEPTS
+)
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -217,11 +228,15 @@ def _discover_fiscal_years(
 ) -> list[int]:
     """Return sorted list of distinct annual fiscal years found in the payload.
 
-    Probes a small set of common concepts to enumerate available years.
-    Falls back to a broader scan if no probe hits.
+    Probes the concepts used by the normalizer and returns the union of their
+    annual fiscal years. SEC companyfacts payloads can have stale coverage for
+    one concept and fresh coverage for another, so stopping after the first hit
+    can silently ignore recent annual statements.
+
+    Falls back to a broader scan if no normalizer concept exposes years.
     """
     if probe_concepts is None:
-        probe_concepts = _REVENUE_CONCEPTS + _NET_INCOME_CONCEPTS + _ASSETS_CONCEPTS
+        probe_concepts = list(dict.fromkeys(_FISCAL_YEAR_DISCOVERY_CONCEPTS))
 
     years: set[int] = set()
     for concept in probe_concepts:
@@ -232,9 +247,6 @@ def _discover_fiscal_years(
             for f in facts:
                 if _is_annual_fact(f) and isinstance(f.get("fy"), int):
                     years.add(f["fy"])
-        if years:
-            break  # enough — probe hit
-
     if not years:
         # Broader scan: iterate all concepts
         for concept_data in us_gaap_facts.values():
@@ -340,7 +352,7 @@ def normalize_sec_companyfacts_annual(
         diagnostics["missing_fields"] = ["all"]
         return [], diagnostics
 
-    fiscal_years = _discover_fiscal_years(us_gaap_facts)[:max_years]
+    fiscal_years = _discover_fiscal_years(us_gaap_facts)
     if not fiscal_years:
         logger.warning(
             "SEC companyfacts: no annual fiscal years found for %s", ticker
@@ -534,6 +546,9 @@ def normalize_sec_companyfacts_annual(
         for field in weak:
             if field not in diagnostics["weak_fallbacks"]:
                 diagnostics["weak_fallbacks"].append(field)
+
+        if len(rows) >= max_years:
+            break
 
     diagnostics["rows_normalized"] = len(rows)
     logger.debug(

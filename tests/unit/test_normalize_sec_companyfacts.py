@@ -98,6 +98,116 @@ def _make_companyfacts(
     return {"facts": {"us-gaap": us_gaap}}
 
 
+def _append_fact(
+    us_gaap: dict[str, Any],
+    concept: str,
+    unit: str,
+    fy: int,
+    val: float,
+    *,
+    form: str = "10-K",
+) -> None:
+    concept_payload = us_gaap.setdefault(concept, {"units": {}})
+    unit_facts = concept_payload.setdefault("units", {}).setdefault(unit, [])
+    unit_facts.append(
+        _annual_fact(
+            fy,
+            val,
+            filed=f"{fy + 1}-02-15",
+            end=f"{fy}-12-31",
+            form=form,
+            accn=f"sec-{fy}-{concept}",
+        )
+    )
+
+
+def _stale_revenues_fresh_core_payload(
+    years: tuple[int, ...] = (2025, 2024),
+    *,
+    omit_fields: set[str] | None = None,
+) -> dict[str, Any]:
+    """Build a SEC payload where Revenues is stale but other core facts are fresh."""
+    omit_fields = omit_fields or set()
+    us_gaap: dict[str, Any] = {
+        "Revenues": {
+            "units": {
+                "USD": [
+                    _annual_fact(
+                        2018,
+                        30_000_000_000,
+                        filed="2019-02-15",
+                        end="2018-12-31",
+                        accn="sec-2018-stale-revenue",
+                    )
+                ]
+            }
+        }
+    }
+    for idx, fy in enumerate(years):
+        scale = float(idx + 1)
+        if "revenue" not in omit_fields:
+            _append_fact(
+                us_gaap,
+                "RevenueFromContractWithCustomerExcludingAssessedTax",
+                "USD",
+                fy,
+                40_000_000_000 - scale,
+            )
+        if "gross_profit" not in omit_fields:
+            _append_fact(us_gaap, "GrossProfit", "USD", fy, 12_000_000_000 - scale)
+        if "operating_income" not in omit_fields:
+            _append_fact(us_gaap, "OperatingIncomeLoss", "USD", fy, 5_000_000_000 - scale)
+        if "net_income" not in omit_fields:
+            _append_fact(us_gaap, "NetIncomeLoss", "USD", fy, 4_000_000_000 - scale)
+        if "cfo" not in omit_fields:
+            _append_fact(
+                us_gaap,
+                "NetCashProvidedByUsedInOperatingActivities",
+                "USD",
+                fy,
+                6_000_000_000 - scale,
+            )
+        if "capex" not in omit_fields:
+            _append_fact(
+                us_gaap,
+                "PaymentsToAcquirePropertyPlantAndEquipment",
+                "USD",
+                fy,
+                1_500_000_000 + scale,
+            )
+        if "cash_and_equivalents" not in omit_fields:
+            _append_fact(
+                us_gaap,
+                "CashAndCashEquivalentsAtCarryingValue",
+                "USD",
+                fy,
+                2_000_000_000,
+            )
+        if "total_debt" not in omit_fields:
+            _append_fact(
+                us_gaap,
+                "DebtLongtermAndShorttermCombinedAmount",
+                "USD",
+                fy,
+                8_000_000_000,
+            )
+        if "total_assets" not in omit_fields:
+            _append_fact(us_gaap, "Assets", "USD", fy, 60_000_000_000 + scale)
+        if "total_liabilities" not in omit_fields:
+            _append_fact(us_gaap, "Liabilities", "USD", fy, 25_000_000_000 + scale)
+        if "total_equity" not in omit_fields:
+            _append_fact(us_gaap, "StockholdersEquity", "USD", fy, 35_000_000_000 + scale)
+        if "diluted_shares" not in omit_fields:
+            _append_fact(
+                us_gaap,
+                "WeightedAverageNumberOfDilutedSharesOutstanding",
+                "shares",
+                fy,
+                1_000_000_000 + scale,
+            )
+    return {"facts": {"us-gaap": us_gaap}}
+
+
 # ---------------------------------------------------------------------------
 # _fact_rank_key
 # ---------------------------------------------------------------------------
@@ -308,6 +418,13 @@ def test_discover_fiscal_years_returns_sorted_descending():
     }
     years = _discover_fiscal_years(us_gaap)
     assert years == [2023, 2022, 2021]
+
+
+def test_discover_fiscal_years_unions_stale_revenue_and_fresh_core_concepts():
+    payload = _stale_revenues_fresh_core_payload(years=(2025, 2024, 2023))
+    us_gaap = payload["facts"]["us-gaap"]
+    years = _discover_fiscal_years(us_gaap)
+    assert years[:4] == [2025, 2024, 2023, 2018]
 
 
 # ---------------------------------------------------------------------------
@@ -596,6 +713,75 @@ def test_normalizer_respects_max_years():
         payload, COMPANY_ID, TICKER, CIK, max_years=2
     )
     assert len(rows) <= 2
+
+
+def test_normalizer_mu_like_payload_uses_recent_years_from_union_discovery():
+    payload = _stale_revenues_fresh_core_payload(years=(2025, 2024, 2023))
+    rows, diag = normalize_sec_companyfacts_annual(
+        payload,
+        COMPANY_ID,
+        "MU",
+        CIK,
+        fallback_reason="fmp_402",
+        max_years=2,
+    )
+
+    assert [row["fiscal_year"] for row in rows] == [2025, 2024]
+    assert rows[0]["period_end_date"] == "2025-12-31"
+    assert rows[0]["revenue"] == pytest.approx(39_999_999_999.0)
+    assert diag["rows_normalized"] == 2
+
+
+def test_normalizer_vrtx_like_payload_does_not_stop_at_stale_revenues():
+    payload = _stale_revenues_fresh_core_payload(years=(2025, 2024, 2023, 2022, 2021))
+    rows, diag = normalize_sec_companyfacts_annual(
+        payload,
+        COMPANY_ID,
+        "VRTX",
+        CIK,
+        fallback_reason="fmp_402",
+    )
+
+    assert [row["fiscal_year"] for row in rows] == [2025, 2024, 2023, 2022, 2021]
+    assert rows[0]["source"] == "sec_edgar"
+    assert rows[0]["free_cash_flow"] is not None
+    assert diag["rows_normalized"] == 5
+
+
+def test_normalizer_wldn_like_payload_keeps_recent_rows_and_missing_field_diagnostics():
+    payload = _stale_revenues_fresh_core_payload(
+        years=(2025, 2024),
+        omit_fields={"gross_profit", "net_income", "cash_and_equivalents"},
+    )
+    rows, diag = normalize_sec_companyfacts_annual(
+        payload,
+        COMPANY_ID,
+        "WLDN",
+        CIK,
+        fallback_reason="fmp_402",
+    )
+
+    assert [row["fiscal_year"] for row in rows[:2]] == [2025, 2024]
+    assert rows[0]["net_income"] is None
+    assert rows[0]["revenue"] is not None
+    assert rows[0]["total_assets"] is not None
+    assert "net_income" in diag["missing_fields"]
+    assert "gross_profit" in diag["missing_fields"]
+    assert "cash_and_equivalents" in diag["missing_fields"]
+
+
+def test_normalizer_mfc_like_no_us_gaap_remains_unsupported():
+    rows, diag = normalize_sec_companyfacts_annual(
+        {"facts": {"ifrs-full": {"Revenue": {"units": {"USD": []}}}}},
+        COMPANY_ID,
+        "MFC",
+        "0001086888",
+        fallback_reason="fmp_402",
+    )
+
+    assert rows == []
+    assert diag["rows_normalized"] == 0
+    assert diag["missing_fields"] == ["all"]
 
 
 # ---------------------------------------------------------------------------

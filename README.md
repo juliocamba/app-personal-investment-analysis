@@ -39,6 +39,17 @@ Phase 12G hardens research credibility without changing signal labels, signal th
 
 Before relying on outputs, verify data freshness, readiness status, provider mix, red flags, and valuation uncertainty. If a row is `tracking_only`, or if valuation sanity says the output is unreliable, treat the dashboard as a research surface rather than a current analytical signal.
 
+## SEC normalization freshness fix
+
+After Phase 12G, the SEC companyfacts normalizer was tightened so annual
+fiscal-year discovery uses the union of relevant SEC concepts rather than
+stopping at the first concept with data. This prevents stale concept coverage
+from hiding fresher annual facts available under other revenue, cash-flow,
+balance-sheet, or share-count concepts. The change does not alter readiness
+thresholds, valuation thresholds, signal thresholds, providers, or
+stale-fundamentals gating; it only improves which usable SEC annual statement
+years are normalized when the raw facts already exist.
+
 ## Current capabilities
 
 - Authenticated React dashboard (Supabase Auth).

@@ -182,6 +182,90 @@ def _compute_net_debt(statement: dict[str, Any] | None) -> float | None:
     return debt - (cash or 0.0)
 
 
+def _ratio_statement_period_end(row: dict[str, Any]) -> str | None:
+    metadata = row.get("metadata")
+    if not isinstance(metadata, dict):
+        return None
+    value = metadata.get("statement_period_end_date")
+    return str(value) if value else None
+
+
+def _filter_ratio_rows_for_statement_vintage(
+    ratio_rows: list[dict[str, Any]],
+    current_stmt: dict[str, Any] | None,
+) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    """Keep ratio rows aligned to the latest statement vintage when known.
+
+    Older factor snapshots are preserved in ``ratios_factors`` for auditability,
+    but valuation should not silently combine a fresh annual statement with
+    ratio rows computed from an older statement vintage.
+    """
+    latest_period_end = str(current_stmt.get("period_end_date") or "") if current_stmt else ""
+    diagnostics: dict[str, Any] = {
+        "latest_statement_period_end_date": latest_period_end or None,
+        "ratio_rows_available": len(ratio_rows),
+        "ratio_rows_used": len(ratio_rows),
+        "ratio_rows_excluded": 0,
+        "status": "ok",
+        "reason_codes": [],
+    }
+    if not ratio_rows or not latest_period_end:
+        return ratio_rows, diagnostics
+
+    matching: list[dict[str, Any]] = []
+    mismatched = 0
+    missing_vintage = 0
+    for row in ratio_rows:
+        row_period_end = _ratio_statement_period_end(row)
+        if row_period_end is None:
+            missing_vintage += 1
+        elif row_period_end == latest_period_end:
+            matching.append(row)
+        else:
+            mismatched += 1
+
+    reason_codes: list[str] = []
+    if mismatched:
+        reason_codes.append("ratio_history_statement_vintage_mismatch")
+    if missing_vintage:
+        reason_codes.append("ratio_history_missing_statement_vintage")
+
+    if matching:
+        excluded = len(ratio_rows) - len(matching)
+        diagnostics.update(
+            {
+                "ratio_rows_used": len(matching),
+                "ratio_rows_excluded": excluded,
+                "status": "filtered" if excluded else "ok",
+                "reason_codes": reason_codes,
+            }
+        )
+        if excluded:
+            reason_codes.append("stale_ratio_history")
+            reason_codes.append("ratio_history_filtered_for_statement_vintage")
+        return matching, diagnostics
+
+    if mismatched:
+        reason_codes.append("stale_ratio_history")
+        diagnostics.update(
+            {
+                "ratio_rows_used": 0,
+                "ratio_rows_excluded": len(ratio_rows),
+                "status": "blocked",
+                "reason_codes": reason_codes,
+            }
+        )
+        return [], diagnostics
+
+    diagnostics.update(
+        {
+            "status": "unknown",
+            "reason_codes": reason_codes,
+        }
+    )
+    return ratio_rows, diagnostics
+
+
 def _weighted_percentiles(
     distribution: list[dict[str, Any]],
 ) -> dict[str, float | None]:
@@ -311,6 +395,7 @@ def _build_diagnostics(
     iv_p90: float | None = None,
     method_estimates: dict[str, float] | None = None,
     dcf_output: dict[str, Any] | None = None,
+    ratio_history_diagnostics: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Build a compact, safe diagnostics payload for assumptions JSON."""
     blockers: list[str] = []
@@ -330,6 +415,19 @@ def _build_diagnostics(
 
     if not ratio_rows:
         blockers.append("missing_ratio_factor_history")
+        warnings.append("multiples_unavailable")
+
+    ratio_history_diagnostics = ratio_history_diagnostics or {}
+    ratio_history_status = ratio_history_diagnostics.get("status")
+    ratio_history_codes = [
+        str(code)
+        for code in (ratio_history_diagnostics.get("reason_codes") or [])
+        if code
+    ]
+    if ratio_history_status in {"filtered", "blocked", "unknown"}:
+        warnings.extend(ratio_history_codes)
+    if ratio_history_status == "blocked":
+        blockers.append("stale_ratio_history")
         warnings.append("multiples_unavailable")
 
     if terminal_growth >= wacc:
@@ -510,6 +608,11 @@ def _build_diagnostics(
     if fcf_data is not None and fcf_data.get("direct_fcf_status") in {"negative", "zero"} and distribution:
         _escalate(_SANITY_UNRELIABLE, "negative_or_zero_fcf_path")
 
+    if ratio_history_status == "blocked":
+        _escalate(_SANITY_UNRELIABLE, "stale_ratio_history")
+    elif "stale_ratio_history" in ratio_history_codes:
+        _escalate(_SANITY_HIGH_UNCERTAINTY, "stale_ratio_history")
+
     valuation_evidence_usable = sanity_status in {_SANITY_USABLE, _SANITY_HIGH_UNCERTAINTY}
     valuation_display_suppressed = sanity_status in {_SANITY_UNRELIABLE, _SANITY_MODEL_FAILURE}
     valuation_signal_influence_blocked = sanity_status in {_SANITY_UNRELIABLE, _SANITY_MODEL_FAILURE}
@@ -535,6 +638,14 @@ def _build_diagnostics(
         "max_terminal_value_share": max_terminal_value_share,
         "terminal_spread": terminal_spread,
         "midpoint_price_ratio": midpoint_price_ratio,
+        "ratio_history_status": ratio_history_status,
+        "ratio_history_reason_codes": ratio_history_codes,
+        "ratio_rows_available": ratio_history_diagnostics.get("ratio_rows_available"),
+        "ratio_rows_used": ratio_history_diagnostics.get("ratio_rows_used"),
+        "ratio_rows_excluded": ratio_history_diagnostics.get("ratio_rows_excluded"),
+        "latest_statement_period_end_date": ratio_history_diagnostics.get(
+            "latest_statement_period_end_date"
+        ),
     }
 
 
@@ -752,6 +863,9 @@ def compute_valuation_run(
 
     # Most recent annual statement.
     current_stmt: dict[str, Any] | None = annual_statements[0] if annual_statements else None
+    ratio_rows_for_valuation, ratio_history_diagnostics = (
+        _filter_ratio_rows_for_statement_vintage(ratio_rows, current_stmt)
+    )
 
     diluted_shares: float | None = None
     if current_stmt:
@@ -804,8 +918,8 @@ def compute_valuation_run(
         # Financial sector: P/B + ROE / Ke spread.
         roe_val: float | None = None
         bvps: float | None = None
-        if ratio_rows:
-            roe_val = _get(ratio_rows[0], "roe")
+        if ratio_rows_for_valuation:
+            roe_val = _get(ratio_rows_for_valuation[0], "roe")
         if current_stmt and diluted_shares and diluted_shares > 0.0:
             eq = _get(current_stmt, "total_equity")
             if eq is not None:
@@ -869,7 +983,7 @@ def compute_valuation_run(
             statement=current_stmt,
             net_debt=net_debt,
             diluted_shares=diluted_shares,
-            ratio_rows=ratio_rows,
+            ratio_rows=ratio_rows_for_valuation,
         )
         mult_blended = mult_result.get("blended_value")
         if mult_blended is not None:
@@ -922,7 +1036,7 @@ def compute_valuation_run(
 
     diagnostics = _build_diagnostics(
         annual_statements=annual_statements,
-        ratio_rows=ratio_rows,
+        ratio_rows=ratio_rows_for_valuation,
         current_price=current_price,
         diluted_shares=diluted_shares,
         fcf_data=fcf_data,
@@ -937,7 +1051,9 @@ def compute_valuation_run(
         iv_p90=iv_p90,
         method_estimates=method_estimates,
         dcf_output=dcf_output,
+        ratio_history_diagnostics=ratio_history_diagnostics,
     )
+    assumptions["ratio_history"] = ratio_history_diagnostics
     assumptions["aggregation"] = {
         "distribution_method": "weighted_step_percentiles",
         "method_weights_used": method_weights_used,

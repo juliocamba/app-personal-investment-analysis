@@ -74,10 +74,22 @@ and keeps missing fields visible in diagnostics.
 ### Ratios and features
 
 - Phase 3 computes feature and ratio snapshots into `ratios_factors`.
+- New ratio snapshots include metadata identifying the normalized annual
+  statement period, statement source/created timestamp, and price snapshot used
+  to compute the factor row. This lets downstream valuation distinguish fresh
+  derived ratios from rows computed before a statement normalization refresh.
 
 ### Valuation
 
 - Phase 4 computes valuation outputs into `valuation_runs`.
+- Valuation filters multiples input rows to the latest statement vintage when
+  ratio metadata is available. If stale or mismatched derived ratio history is
+  excluded, diagnostics record `stale_ratio_history`,
+  `ratio_history_statement_vintage_mismatch`,
+  `ratio_history_missing_statement_vintage`, and row counts for available,
+  used, and excluded ratio rows. If all metadata-aware ratio history is tied to
+  an older statement period, the valuation sanity layer treats that as
+  unreliable input consistency rather than using stale multiples evidence.
 
 ### Qualitative scoring
 
@@ -622,6 +634,9 @@ Current implementation:
 - `distribution_collapsed` flag set when scenarios collapsed to a single point;
 - valuation sanity diagnostics classify economic credibility separately from technical availability using `valuation_sanity_status` (`usable`, `high_uncertainty`, `unreliable`, `model_failure`);
 - valuation sanity diagnostics expose `valuation_sanity_reason_codes`, `valuation_evidence_usable`, `valuation_display_suppressed`, `valuation_signal_influence_blocked`, and `valuation_method_coverage`;
+- valuation input-consistency diagnostics expose `ratio_history_status`,
+  `ratio_history_reason_codes`, `ratio_rows_available`, `ratio_rows_used`, and
+  `ratio_rows_excluded` so stale derived ratio history is auditable;
 - method and assumption diagnostics stored in `valuation_runs.assumptions["diagnostics"]` JSON;
 - conservative margin-of-safety outputs surfaced in the dashboard and retained as downside/reference diagnostics.
 
@@ -895,6 +910,9 @@ Suggested review checklist:
 - sort by `uncertainty_width` descending;
 - inspect `provider_mix` and `data_quality_warning_codes` together;
 - inspect `valuation_assumptions_json.diagnostics` and `aggregation.distribution` for outliers such as extreme spread or scaling anomalies.
+- inspect `ratio_history_status`, `ratio_history_reason_codes`, and
+  `ratio_rows_excluded` when valuation sanity is `unreliable` or multiples and
+  DCF diverge sharply.
 
 ### First setup
 

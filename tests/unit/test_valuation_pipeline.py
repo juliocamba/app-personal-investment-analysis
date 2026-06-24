@@ -106,6 +106,35 @@ _RATIOS = [
 ]
 
 
+def _stmt_with_period(period_end: str = "2025-12-31") -> dict[str, Any]:
+    return {
+        **_STMT,
+        "fiscal_year": int(period_end[:4]),
+        "fiscal_period": "annual",
+        "period_end_date": period_end,
+        "source": "sec_edgar",
+    }
+
+
+def _ratio_with_vintage(
+    *,
+    period_end: str,
+    pe_ratio: float = 15.0,
+    ev_to_ebitda: float | None = 8.0,
+    price_to_sales: float = 1.5,
+    price_to_book: float = 1.8,
+) -> dict[str, Any]:
+    return {
+        "factor_date": "2026-06-24",
+        "pe_ratio": pe_ratio,
+        "ev_to_ebitda": ev_to_ebitda,
+        "price_to_sales": price_to_sales,
+        "price_to_book": price_to_book,
+        "roe": 0.15,
+        "metadata": {"statement_period_end_date": period_end},
+    }
+
+
 # ---------------------------------------------------------------------------
 # Happy path
 # ---------------------------------------------------------------------------
@@ -159,6 +188,118 @@ def test_compute_valuation_run_current_price_set():
     result = compute_valuation_run(_COMPANY_ID, repo, _VALUATION_DATE)
     assert result is not None
     assert result["current_price"] == pytest.approx(12.0)
+
+
+def test_compute_valuation_run_filters_stale_ratio_history_before_multiples():
+    current = _stmt_with_period("2025-12-31")
+    prior = {**_stmt_with_period("2024-12-31"), "revenue": 900_000.0}
+    matching = _ratio_with_vintage(period_end="2025-12-31", pe_ratio=16.0)
+    stale = _ratio_with_vintage(
+        period_end="2017-12-31",
+        pe_ratio=400.0,
+        ev_to_ebitda=None,
+        price_to_sales=45.0,
+        price_to_book=55.0,
+    )
+    repo = _FakeValuationRepo(
+        statements=[current, prior],
+        prices=[_PRICE],
+        ratios=[matching, stale],
+    )
+
+    result = compute_valuation_run(_COMPANY_ID, repo, _VALUATION_DATE)
+
+    assert result is not None
+    assumptions = result["assumptions"]
+    diagnostics = assumptions["diagnostics"]
+    assert assumptions["ratio_history"]["status"] == "filtered"
+    assert diagnostics["ratio_rows_available"] == 2
+    assert diagnostics["ratio_rows_used"] == 1
+    assert diagnostics["ratio_rows_excluded"] == 1
+    assert "stale_ratio_history" in diagnostics["warnings"]
+    assert "stale_ratio_history" in diagnostics["valuation_sanity_reason_codes"]
+    assert assumptions["multiples"]["blended_value"] is not None
+    assert assumptions["multiples"]["blended_value"] < 200.0
+
+
+def test_compute_valuation_run_blocks_all_mismatched_ratio_history():
+    current = _stmt_with_period("2025-12-31")
+    prior = {**_stmt_with_period("2024-12-31"), "revenue": 900_000.0}
+    stale = _ratio_with_vintage(
+        period_end="2017-12-31",
+        pe_ratio=400.0,
+        ev_to_ebitda=None,
+        price_to_sales=45.0,
+        price_to_book=55.0,
+    )
+    repo = _FakeValuationRepo(
+        statements=[current, prior],
+        prices=[_PRICE],
+        ratios=[stale],
+    )
+
+    result = compute_valuation_run(_COMPANY_ID, repo, _VALUATION_DATE)
+
+    assert result is not None
+    diagnostics = result["assumptions"]["diagnostics"]
+    assert diagnostics["ratio_history_status"] == "blocked"
+    assert diagnostics["ratio_rows_used"] == 0
+    assert diagnostics["valuation_sanity_status"] == "unreliable"
+    assert diagnostics["valuation_display_suppressed"] is True
+    assert "stale_ratio_history" in diagnostics["valuation_sanity_reason_codes"]
+    assert result["assumptions"]["multiples"]["blended_value"] is None
+
+
+def test_compute_valuation_run_suspicious_price_remains_unreliable_with_clean_ratios():
+    current = _stmt_with_period("2025-12-31")
+    prior = {**_stmt_with_period("2024-12-31"), "revenue": 900_000.0}
+    repo = _FakeValuationRepo(
+        statements=[current, prior],
+        prices=[{"close": 10_000.0}],
+        ratios=[_ratio_with_vintage(period_end="2025-12-31", pe_ratio=16.0)],
+    )
+
+    result = compute_valuation_run(_COMPANY_ID, repo, _VALUATION_DATE)
+
+    assert result is not None
+    diagnostics = result["assumptions"]["diagnostics"]
+    assert diagnostics["ratio_history_status"] == "ok"
+    assert diagnostics["valuation_sanity_status"] == "unreliable"
+    assert "severe_midpoint_price_implausibility" in diagnostics["valuation_sanity_reason_codes"]
+
+
+def test_compute_valuation_run_coherent_wide_case_remains_usable_evidence():
+    current = _stmt_with_period("2025-12-31")
+    prior = {**_stmt_with_period("2024-12-31"), "revenue": 900_000.0}
+    repo = _FakeValuationRepo(
+        statements=[current, prior],
+        prices=[{"close": 20.0}],
+        ratios=[
+            _ratio_with_vintage(
+                period_end="2025-12-31",
+                pe_ratio=15.0,
+                ev_to_ebitda=8.0,
+                price_to_sales=1.5,
+                price_to_book=1.8,
+            ),
+            _ratio_with_vintage(
+                period_end="2025-12-31",
+                pe_ratio=16.0,
+                ev_to_ebitda=9.0,
+                price_to_sales=1.6,
+                price_to_book=1.9,
+            ),
+        ],
+    )
+
+    result = compute_valuation_run(_COMPANY_ID, repo, _VALUATION_DATE)
+
+    assert result is not None
+    diagnostics = result["assumptions"]["diagnostics"]
+    assert diagnostics["ratio_history_status"] == "ok"
+    assert "stale_ratio_history" not in diagnostics["valuation_sanity_reason_codes"]
+    assert diagnostics["valuation_sanity_status"] in {"usable", "high_uncertainty"}
+    assert diagnostics["valuation_evidence_usable"] is True
 
 
 def test_compute_valuation_run_margin_of_safety_is_numeric_or_none():

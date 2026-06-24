@@ -335,6 +335,11 @@ def build_derived_fields(
         "max_terminal_value_share": diagnostics.get("max_terminal_value_share"),
         "terminal_spread": diagnostics.get("terminal_spread"),
         "midpoint_price_ratio": diagnostics.get("midpoint_price_ratio"),
+        "ratio_history_status": diagnostics.get("ratio_history_status"),
+        "ratio_history_reason_codes": diagnostics.get("ratio_history_reason_codes"),
+        "ratio_rows_available": diagnostics.get("ratio_rows_available"),
+        "ratio_rows_used": diagnostics.get("ratio_rows_used"),
+        "ratio_rows_excluded": diagnostics.get("ratio_rows_excluded"),
         "statement_age_days": statement_age_days,
         "latest_statement_year": _latest_statement_year(row),
         "stale_statement_input": (

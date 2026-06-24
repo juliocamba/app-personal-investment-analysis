@@ -174,6 +174,11 @@ _DERIVED_FIELD_ORDER = [
     "max_terminal_value_share",
     "terminal_spread",
     "midpoint_price_ratio",
+    "ratio_history_status",
+    "ratio_history_reason_codes",
+    "ratio_rows_available",
+    "ratio_rows_used",
+    "ratio_rows_excluded",
     "statement_age_days",
     "latest_statement_year",
     "stale_statement_input",
@@ -536,6 +541,11 @@ def test_live_build_derived_fields_surfaces_valuation_sanity_fields() -> None:
                 "max_terminal_value_share": 0.9,
                 "terminal_spread": 0.02,
                 "midpoint_price_ratio": 1.0,
+                "ratio_history_status": "filtered",
+                "ratio_history_reason_codes": ["stale_ratio_history"],
+                "ratio_rows_available": 12,
+                "ratio_rows_used": 1,
+                "ratio_rows_excluded": 11,
             }
         },
         "latest_statement_date": "2025-01-01",
@@ -551,6 +561,11 @@ def test_live_build_derived_fields_surfaces_valuation_sanity_fields() -> None:
     assert derived["valuation_sanity_reason_codes"] == ["sparse_scenario_count"]
     assert derived["valuation_method_coverage"] == "dcf_only"
     assert derived["iv_range_ratio_p90_p10"] == 3.2
+    assert derived["ratio_history_status"] == "filtered"
+    assert derived["ratio_history_reason_codes"] == ["stale_ratio_history"]
+    assert derived["ratio_rows_available"] == 12
+    assert derived["ratio_rows_used"] == 1
+    assert derived["ratio_rows_excluded"] == 11
 
 
 def test_live_build_derived_fields_extracts_signal_reasoning_metadata() -> None:

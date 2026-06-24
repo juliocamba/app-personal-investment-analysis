@@ -50,6 +50,18 @@ thresholds, valuation thresholds, signal thresholds, providers, or
 stale-fundamentals gating; it only improves which usable SEC annual statement
 years are normalized when the raw facts already exist.
 
+## Derived ratio freshness guard
+
+Post-SEC-refresh valuation now checks that historical `ratios_factors` rows used
+for multiples were computed from the same latest normalized annual statement
+period as the DCF input. New ratio snapshots persist statement and price vintage
+metadata. When valuation sees older or mismatched ratio history, it excludes
+those rows from the multiples estimate and records diagnostics such as
+`stale_ratio_history` and `ratio_history_statement_vintage_mismatch` rather
+than silently blending stale derived factors with fresh statements. This does
+not change readiness thresholds, valuation sanity thresholds, signal thresholds,
+providers, or signal labels.
+
 ## Current capabilities
 
 - Authenticated React dashboard (Supabase Auth).
@@ -75,6 +87,7 @@ years are normalized when the raw facts already exist.
 - Phase 12A.5 dashboard data-quality lane: persisted price-validation, statement-completeness, and FMP-vs-SEC annual diagnostics now surface as a separate dashboard lane. Most diagnostics remain explanatory only, but stale annual fundamentals older than 540 days now gate valuation and signal generation through the existing `tracking_only` path with the `stale_fundamentals` readiness reason code.
 - Dashboard stale-output suppression: when readiness blocks valuation or signal (including stale fundamentals), `dashboard_watchlist_latest` returns those analytical fields as null so old analytical rows are not displayed as current state.
 - Dashboard valuation-sanity suppression: when valuation diagnostics mark valuation output as not display-credible (`unreliable` or `model_failure`), `dashboard_watchlist_latest` suppresses valuation display fields to avoid presenting non-credible valuation precision.
+- Valuation input-consistency diagnostics: valuation assumptions and audit exports surface stale or mismatched derived ratio history so multiples evidence cannot quietly rely on factor rows computed from an older statement vintage.
 - Alerts present but disabled by default.
 - Cloudflare Pages deployment is planned but not yet live.
 

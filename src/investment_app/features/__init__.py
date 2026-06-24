@@ -7,7 +7,7 @@ row ready for persistence.
 """
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, datetime, timezone
 from typing import Any
 
 from investment_app.features.market_features import compute_market_features
@@ -137,11 +137,22 @@ def compute_all_features(
         has_required_fields=bool(annual) and bool(price_rows),
     )
 
+    latest_annual = annual[0] if annual else {}
+    latest_price_metadata = latest_price or {}
+
     row: dict[str, Any] = {
         "company_id": company_id,
         "factor_date": factor_date,
         "data_quality_score": quality,
-        "metadata": {},
+        "metadata": {
+            "statement_period_end_date": latest_annual.get("period_end_date"),
+            "statement_fiscal_year": latest_annual.get("fiscal_year"),
+            "statement_source": latest_annual.get("source"),
+            "statement_created_at": latest_annual.get("created_at"),
+            "price_date": latest_price_metadata.get("price_date"),
+            "price_provider": latest_price_metadata.get("provider"),
+            "generated_at": datetime.now(timezone.utc).isoformat(),
+        },
         **ratios,
         **market,
         "news_sentiment_7d": news.get("news_sentiment_7d"),

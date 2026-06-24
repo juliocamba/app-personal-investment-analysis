@@ -340,6 +340,12 @@ class TestBuildDiagnosticsStatus:
             "max_terminal_value_share",
             "terminal_spread",
             "midpoint_price_ratio",
+            "ratio_history_status",
+            "ratio_history_reason_codes",
+            "ratio_rows_available",
+            "ratio_rows_used",
+            "ratio_rows_excluded",
+            "latest_statement_period_end_date",
         }
 
     def test_blockers_list_is_sorted(self):

@@ -146,6 +146,27 @@ def test_compute_all_features_returns_row_with_required_keys():
     assert "data_quality_score" in row
 
 
+def test_compute_all_features_records_statement_and_price_vintage_metadata():
+    stmt = {
+        **_ANNUAL_STMT,
+        "source": "sec_edgar",
+        "created_at": "2026-06-23T19:40:00+00:00",
+    }
+    price = {**_PRICE_ROW, "provider": "twelve_data"}
+    repo = _FakeRepo(statements=[stmt], prices=[price])
+
+    row = compute_all_features("company-1", repo, "2026-06-24")
+
+    assert row is not None
+    assert row["metadata"]["statement_period_end_date"] == "2023-12-31"
+    assert row["metadata"]["statement_fiscal_year"] == 2023
+    assert row["metadata"]["statement_source"] == "sec_edgar"
+    assert row["metadata"]["statement_created_at"] == "2026-06-23T19:40:00+00:00"
+    assert row["metadata"]["price_date"] == "2024-01-02"
+    assert row["metadata"]["price_provider"] == "twelve_data"
+    assert row["metadata"]["generated_at"]
+
+
 def test_compute_all_features_no_data_returns_none():
     repo = _FakeRepo(statements=[], prices=[], news=[])
     row = compute_all_features("company-1", repo, "2024-01-02")

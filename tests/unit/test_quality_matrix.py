@@ -100,3 +100,121 @@ def test_quality_matrix_summary_aggregates_blocking_domains_and_codes() -> None:
     assert "data_quality_warning:price_not_comparable" in summary[
         "codes_by_severity"
     ][SEVERITY_CONFIDENCE_LIMITED]
+
+
+def test_quality_matrix_keeps_missing_fcf_as_component_limiter_when_valuation_is_usable() -> None:
+    summary = build_quality_matrix_summary(
+        readiness_status="partial_analysis",
+        readiness_reason_codes=["missing_fcf_path", "valuation_partial"],
+        valuation_sanity_status="high_uncertainty",
+        valuation_sanity_reason_codes=["missing_dcf_component", "sparse_scenario_count"],
+        valuation_blockers=["missing_fcf"],
+        valuation_warnings=["dcf_unavailable"],
+        can_run_valuation=True,
+        can_run_signal=True,
+    )
+
+    assert summary["max_severity"] == SEVERITY_CONFIDENCE_LIMITED
+    assert summary["blocking_domains"] == []
+    assert "readiness_reason:missing_fcf_path" in summary["codes_by_severity"][
+        SEVERITY_CONFIDENCE_LIMITED
+    ]
+    assert "valuation_blocker:missing_fcf" in summary["codes_by_severity"][
+        SEVERITY_CONFIDENCE_LIMITED
+    ]
+
+
+def test_quality_matrix_keeps_partial_multiples_only_case_from_blocking_valuation() -> None:
+    summary = build_quality_matrix_summary(
+        readiness_status="partial_analysis",
+        readiness_reason_codes=["missing_fcf_path", "valuation_partial"],
+        valuation_sanity_status="high_uncertainty",
+        valuation_sanity_reason_codes=["missing_dcf_component"],
+        valuation_blockers=["missing_fcf"],
+        valuation_warnings=["dcf_unavailable", "multiples_unavailable"],
+        can_run_valuation=True,
+        can_run_signal=True,
+    )
+
+    assert summary["max_severity"] == SEVERITY_CONFIDENCE_LIMITED
+    assert summary["blocking_domains"] == []
+
+
+def test_quality_matrix_unreliable_negative_fcf_still_blocks_through_sanity() -> None:
+    summary = build_quality_matrix_summary(
+        readiness_status="partial_analysis",
+        readiness_reason_codes=["non_viable_fcf", "valuation_partial"],
+        valuation_sanity_status="unreliable",
+        valuation_sanity_reason_codes=["negative_or_zero_fcf_path"],
+        valuation_blockers=["negative_direct_fcf"],
+        valuation_warnings=["dcf_unavailable"],
+        can_run_valuation=True,
+        can_run_signal=True,
+    )
+
+    assert summary["max_severity"] == SEVERITY_BLOCKS_VALUATION
+    assert summary["blocking_domains"] == ["valuation"]
+    assert summary["codes_by_severity"][SEVERITY_BLOCKS_VALUATION] == [
+        "valuation_sanity_reason:negative_or_zero_fcf_path",
+        "valuation_sanity_status:unreliable",
+    ]
+    assert "valuation_blocker:negative_direct_fcf" in summary["codes_by_severity"][
+        SEVERITY_CONFIDENCE_LIMITED
+    ]
+
+
+def test_quality_matrix_stale_ratio_history_filtered_remains_confidence_limited() -> None:
+    summary = build_quality_matrix_summary(
+        valuation_sanity_status="high_uncertainty",
+        valuation_sanity_reason_codes=["stale_ratio_history"],
+        valuation_warnings=["stale_ratio_history"],
+        ratio_history_reason_codes=["stale_ratio_history"],
+        ratio_history_status="filtered",
+        can_run_valuation=True,
+        can_run_signal=True,
+    )
+
+    assert summary["max_severity"] == SEVERITY_CONFIDENCE_LIMITED
+    assert summary["blocking_domains"] == []
+
+
+def test_quality_matrix_stale_ratio_history_blocked_blocks_valuation() -> None:
+    summary = build_quality_matrix_summary(
+        valuation_sanity_status="unreliable",
+        valuation_sanity_reason_codes=["stale_ratio_history"],
+        valuation_blockers=["stale_ratio_history"],
+        valuation_warnings=["stale_ratio_history", "multiples_unavailable"],
+        ratio_history_reason_codes=["stale_ratio_history"],
+        ratio_history_status="blocked",
+        can_run_valuation=True,
+        can_run_signal=True,
+    )
+
+    assert summary["max_severity"] == SEVERITY_BLOCKS_VALUATION
+    assert summary["blocking_domains"] == ["valuation"]
+    assert summary["codes_by_severity"][SEVERITY_BLOCKS_VALUATION] == [
+        "ratio_history_reason:stale_ratio_history",
+        "valuation_blocker:stale_ratio_history",
+        "valuation_sanity_reason:stale_ratio_history",
+        "valuation_sanity_status:unreliable",
+        "valuation_warning:stale_ratio_history",
+    ]
+
+
+def test_quality_matrix_primary_codes_are_deduplicated_and_deterministic() -> None:
+    summary = build_quality_matrix_summary(
+        valuation_sanity_status="unreliable",
+        valuation_sanity_reason_codes=[
+            "price_scale_anomaly",
+            "severe_dcf_multiples_divergence",
+        ],
+        signal_confidence_limiter_codes=["valuation_unreliable"],
+        signal_red_flags=["valuation_unreliable"],
+        can_run_valuation=True,
+        can_run_signal=True,
+    )
+
+    assert summary["primary_codes"] == [
+        "price_scale_anomaly",
+        "severe_dcf_multiples_divergence",
+    ]

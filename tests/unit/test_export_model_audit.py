@@ -212,6 +212,7 @@ _DERIVED_FIELD_ORDER = [
     "quality_matrix_max_severity",
     "quality_matrix_blocking_domains",
     "quality_matrix_confidence_limited",
+    "quality_matrix_primary_codes",
     "quality_matrix_codes_by_severity",
     "quality_matrix_entries",
     "distribution_min",
@@ -606,6 +607,10 @@ def test_live_build_derived_fields_surfaces_valuation_sanity_fields() -> None:
     assert derived["quality_matrix_max_severity"] == "confidence_limited"
     assert derived["quality_matrix_blocking_domains"] == []
     assert derived["quality_matrix_confidence_limited"] is True
+    assert derived["quality_matrix_primary_codes"] == [
+        "sparse_scenario_count",
+        "stale_ratio_history",
+    ]
     assert derived["quality_matrix_codes_by_severity"] == {
         "confidence_limited": [
             "ratio_history_reason:stale_ratio_history",
@@ -693,6 +698,7 @@ def test_live_build_derived_fields_adds_quality_matrix_for_unreliable_valuation(
     assert derived["quality_matrix_max_severity"] == "blocks_valuation"
     assert derived["quality_matrix_blocking_domains"] == ["valuation"]
     assert derived["quality_matrix_confidence_limited"] is True
+    assert derived["quality_matrix_primary_codes"] == ["price_scale_anomaly"]
     assert derived["quality_matrix_codes_by_severity"]["blocks_valuation"] == [
         "valuation_sanity_reason:price_scale_anomaly",
         "valuation_sanity_status:unreliable",

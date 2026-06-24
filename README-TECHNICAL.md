@@ -917,7 +917,7 @@ The export includes current-state raw fields plus derived audit fields such as:
 - `valuation_sanity_status`, `valuation_sanity_reason_codes`, `valuation_evidence_usable`, `valuation_display_suppressed`, `valuation_signal_influence_blocked`, `valuation_method_coverage`;
 - `stored_final_signal` and `signal_display_state` for current-state signal display semantics;
 - `dominant_signal_driver`, `hold_reason`, `valuation_used_in_signal`, `risk_override_applied`, `confidence_limiter_codes`, `strong_sell_basis`, `buy_conviction_limited`, `explanation_quality_warning`, `recommendation_language_warning`, and `probability_interpretation_note` from the reasoning contract.
-- `quality_matrix_max_severity`, `quality_matrix_blocking_domains`, `quality_matrix_confidence_limited`, `quality_matrix_codes_by_severity`, and `quality_matrix_entries` for deterministic audit classification of existing diagnostics.
+- `quality_matrix_max_severity`, `quality_matrix_blocking_domains`, `quality_matrix_confidence_limited`, `quality_matrix_primary_codes`, `quality_matrix_codes_by_severity`, and `quality_matrix_entries` for deterministic audit classification of existing diagnostics.
 
 The audit severity matrix is implemented in `investment_app.quality_matrix` and
 classifies existing reason/warning/diagnostic codes as `informational`,
@@ -927,6 +927,14 @@ state, change readiness gates, tune thresholds, alter valuation/signal logic,
 add providers, or add signal labels. Context-sensitive codes such as
 `provider_limited` are resolved from the current readiness gate booleans when
 available, and otherwise remain confidence-limiting rather than hard-blocking.
+FCF/DCF-path codes such as `missing_fcf`, `missing_fcf_path`,
+`non_viable_fcf`, and `negative_direct_fcf` are component-level confidence
+limiters by default so multiples-only/high-uncertainty valuations are not
+overstated as fully blocked. `stale_ratio_history` is also context-sensitive:
+filtered stale history is confidence-limiting, while fully blocked ratio
+history is valuation-blocking. `quality_matrix_primary_codes` gives a deduped,
+deterministic short list of the highest-severity non-status codes for later
+review or frontend grouping.
 
 Suggested review checklist:
 

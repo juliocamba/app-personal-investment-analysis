@@ -39,6 +39,20 @@ _BLOCKING_DOMAINS = {
     SEVERITY_BLOCKS_BOTH: ("valuation", "signal"),
 }
 
+_PRIMARY_CODE_LIMIT = 5
+_PRIMARY_SOURCE_RANK = {
+    "valuation_sanity_reason": 0,
+    "valuation_blocker": 1,
+    "readiness_reason": 2,
+    "data_quality_warning": 3,
+    "ratio_history_reason": 4,
+    "valuation_warning": 5,
+    "signal_confidence_limiter": 6,
+    "signal_red_flag": 7,
+    "valuation_sanity_status": 8,
+    "readiness_status": 9,
+}
+
 
 @dataclass(frozen=True)
 class QualityClassification:
@@ -81,8 +95,8 @@ _READINESS_CODES = {
     "non_us_fundamentals_not_supported": SEVERITY_BLOCKS_BOTH,
     "missing_min_statement_history": SEVERITY_CONFIDENCE_LIMITED,
     "missing_diluted_shares": SEVERITY_BLOCKS_VALUATION,
-    "missing_fcf_path": SEVERITY_BLOCKS_VALUATION,
-    "non_viable_fcf": SEVERITY_BLOCKS_VALUATION,
+    "missing_fcf_path": SEVERITY_CONFIDENCE_LIMITED,
+    "non_viable_fcf": SEVERITY_CONFIDENCE_LIMITED,
     "valuation_blocked": SEVERITY_BLOCKS_VALUATION,
     "unsupported_instrument": SEVERITY_BLOCKS_BOTH,
     "valuation_partial": SEVERITY_CONFIDENCE_LIMITED,
@@ -111,9 +125,6 @@ _VALUATION_BLOCKERS = {
     "missing_latest_price",
     "missing_ratio_factor_history",
     "invalid_terminal_growth_gte_discount_rate",
-    "negative_direct_fcf",
-    "zero_direct_fcf",
-    "missing_fcf",
     "missing_finite_percentiles",
     "non_monotonic_percentiles",
     "no_usable_distribution",
@@ -138,6 +149,9 @@ _VALUATION_LIMITERS = {
     "multiples_unavailable",
     "dcf_unavailable",
     "dcf_uses_synthetic_fcff",
+    "negative_direct_fcf",
+    "zero_direct_fcf",
+    "missing_fcf",
     "stale_ratio_history",
     "distribution_collapsed",
     "missing_dcf_component",
@@ -235,6 +249,29 @@ def _provider_limited_classification(
     )
 
 
+def _stale_ratio_history_classification(
+    *,
+    source: str,
+    context: dict[str, Any] | None,
+) -> QualityClassification:
+    context = context or {}
+    ratio_history_status = str(context.get("ratio_history_status") or "").strip().lower()
+    if source == "valuation_blocker" or ratio_history_status == "blocked":
+        severity = SEVERITY_BLOCKS_VALUATION
+        note = "stale_ratio_history fully blocks usable ratio history"
+    else:
+        severity = SEVERITY_CONFIDENCE_LIMITED
+        note = "stale_ratio_history was filtered or warning-only"
+    return QualityClassification(
+        source=source,
+        code="stale_ratio_history",
+        severity=severity,
+        blocking_domains=_blocking_domains(severity),
+        requires_context=True,
+        note=note,
+    )
+
+
 def classify_quality_code(
     code: str,
     *,
@@ -257,6 +294,13 @@ def classify_quality_code(
         "readiness_status",
     }:
         return _provider_limited_classification(source=source, context=context)
+    if normalized == "stale_ratio_history" and source in {
+        "valuation_sanity_reason",
+        "valuation_blocker",
+        "valuation_warning",
+        "ratio_history_reason",
+    }:
+        return _stale_ratio_history_classification(source=source, context=context)
 
     severity: str
     if source == "data_quality_warning":
@@ -317,6 +361,7 @@ def build_quality_matrix_summary(
     valuation_blockers: Iterable[Any] | None = None,
     valuation_warnings: Iterable[Any] | None = None,
     ratio_history_reason_codes: Iterable[Any] | None = None,
+    ratio_history_status: str | None = None,
     signal_confidence_limiter_codes: Iterable[Any] | None = None,
     signal_red_flags: Iterable[Any] | None = None,
     can_run_valuation: bool | str | None = None,
@@ -330,6 +375,7 @@ def build_quality_matrix_summary(
         "can_run_signal": can_run_signal,
         "limiting_domain": limiting_domain,
         "readiness_status": readiness_status,
+        "ratio_history_status": ratio_history_status,
     }
     entries: list[QualityClassification] = []
 
@@ -406,12 +452,15 @@ def build_quality_matrix_summary(
         if _SEVERITY_RANK[entry.severity] > _SEVERITY_RANK[max_severity]:
             max_severity = entry.severity
 
+    primary_codes = _primary_codes(entries, max_severity=max_severity)
+
     return {
         "max_severity": max_severity,
         "blocking_domains": sorted(blocking_domains),
         "confidence_limited": any(
             entry.severity == SEVERITY_CONFIDENCE_LIMITED for entry in entries
         ),
+        "primary_codes": primary_codes,
         "codes_by_severity": {
             severity: sorted(codes)
             for severity, codes in codes_by_severity.items()
@@ -419,3 +468,31 @@ def build_quality_matrix_summary(
         },
         "entries": [entry.as_dict() for entry in entries],
     }
+
+
+def _primary_codes(
+    entries: list[QualityClassification],
+    *,
+    max_severity: str,
+) -> list[str]:
+    severity_entries = [entry for entry in entries if entry.severity == max_severity]
+    non_status_entries = [
+        entry
+        for entry in severity_entries
+        if entry.source not in {"readiness_status", "valuation_sanity_status"}
+    ]
+    candidates = non_status_entries or severity_entries
+
+    seen: set[str] = set()
+    primary: list[str] = []
+    for entry in sorted(
+        candidates,
+        key=lambda item: (_PRIMARY_SOURCE_RANK.get(item.source, 99), item.code),
+    ):
+        if entry.code in seen:
+            continue
+        seen.add(entry.code)
+        primary.append(entry.code)
+        if len(primary) >= _PRIMARY_CODE_LIMIT:
+            break
+    return primary

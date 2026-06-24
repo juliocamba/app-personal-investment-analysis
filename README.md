@@ -173,7 +173,7 @@ Each persisted signal also carries deterministic reasoning metadata inside its a
 
 > **Note on data-quality warnings:** The dashboard now shows a separate data-quality lane inside the expanded company panel. These warnings are diagnostic evidence only. They are not signal labels, not readiness states, and not investment advice.
 
-> **Note on the audit severity matrix:** Current-state audit exports classify existing readiness, data-quality, valuation, and signal diagnostic codes into `informational`, `confidence_limited`, `blocks_valuation`, `blocks_signal`, or `blocks_both`. This is explanatory metadata for review; it does not change readiness gates, valuation thresholds, signal thresholds, providers, signal labels, or dashboard suppression behavior.
+> **Note on the audit severity matrix:** Current-state audit exports classify existing readiness, data-quality, valuation, and signal diagnostic codes into `informational`, `confidence_limited`, `blocks_valuation`, `blocks_signal`, or `blocks_both`. FCF/DCF-path gaps are treated as component-level confidence limiters unless valuation sanity itself blocks valuation, and fully blocked ratio history is separated from filtered stale ratio history. This is explanatory metadata for review; it does not change readiness gates, valuation thresholds, signal thresholds, providers, signal labels, or dashboard suppression behavior.
 
 HOLD can include uncertainty-constrained valuation concern, valuation-unreliable constraint, risk-offset behavior, or data-constrained neutrality, not only a plain neutral read. If valuation warnings are visible but the valuation range is wide, the explanation text should describe the stretched valuation evidence and the reduced conviction without changing the model outcome.
 

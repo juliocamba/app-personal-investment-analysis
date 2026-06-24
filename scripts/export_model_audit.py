@@ -325,6 +325,7 @@ def build_derived_fields(
         valuation_blockers=diagnostics.get("blockers"),
         valuation_warnings=diagnostics.get("warnings"),
         ratio_history_reason_codes=diagnostics.get("ratio_history_reason_codes"),
+        ratio_history_status=diagnostics.get("ratio_history_status"),
         signal_confidence_limiter_codes=reasoning.get("confidence_limiter_codes"),
         signal_red_flags=row.get("red_flags"),
         can_run_valuation=row.get("can_run_valuation"),
@@ -401,6 +402,7 @@ def build_derived_fields(
         "quality_matrix_max_severity": quality_matrix["max_severity"],
         "quality_matrix_blocking_domains": quality_matrix["blocking_domains"],
         "quality_matrix_confidence_limited": quality_matrix["confidence_limited"],
+        "quality_matrix_primary_codes": quality_matrix["primary_codes"],
         "quality_matrix_codes_by_severity": quality_matrix["codes_by_severity"],
         "quality_matrix_entries": quality_matrix["entries"],
     }

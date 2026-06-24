@@ -99,6 +99,7 @@ signal labels.
 - Phase 12A.5 dashboard data-quality lane: persisted price-validation, statement-completeness, and FMP-vs-SEC annual diagnostics now surface as a separate dashboard lane. Most diagnostics remain explanatory only, but stale annual fundamentals older than 540 days now gate valuation and signal generation through the existing `tracking_only` path with the `stale_fundamentals` readiness reason code.
 - Dashboard stale-output suppression: when readiness blocks valuation or signal (including stale fundamentals), `dashboard_watchlist_latest` returns those analytical fields as null so old analytical rows are not displayed as current state.
 - Dashboard valuation-sanity suppression: when valuation diagnostics mark valuation output as not display-credible (`unreliable` or `model_failure`), `dashboard_watchlist_latest` suppresses valuation display fields to avoid presenting non-credible valuation precision.
+- Dashboard research-quality badge: a read-only grouping badge shows whether the current row is fully blocked, valuation blocked, confidence limited, or available for analysis. It uses compact diagnostic codes and does not change signal, readiness, valuation, or suppression behavior.
 - Valuation input-consistency diagnostics: valuation assumptions and audit exports surface stale or mismatched derived ratio history so multiples evidence cannot quietly rely on factor rows computed from an older statement vintage.
 - Alerts present but disabled by default.
 - Cloudflare Pages deployment is planned but not yet live.
@@ -143,6 +144,7 @@ Each row in the dashboard represents one company. The columns mean:
 | **Readiness status** | Data availability classification: `analysis_ready`, `partial_analysis`, `provider_limited`, `tracking_only`, or `unsupported_for_analysis`. |
 | **Provider coverage** | A coverage classification showing whether data came from primary sources only, a fallback mix, or price-only coverage. |
 | **Data quality** | A separate diagnostic lane in the expanded row showing validation health, warning codes, statement completeness evidence, and FMP-vs-SEC comparison summaries. It is explanatory only. |
+| **Research quality** | A read-only diagnostic grouping derived from readiness, data-quality, and valuation-sanity evidence. It can show fully blocked, valuation blocked, confidence limited, or analysis available. |
 | **Red flags** | Specific bearish concerns detected: high debt, declining revenue, margin compression, etc. |
 | **Valuation uncertainty** | Low / moderate / high / extreme — reflects how spread the DCF scenario range is. |
 | **DCF scenarios** | How many DCF method variants contributed to the intrinsic value estimate (out of 3 possible). |
@@ -378,6 +380,11 @@ Apply the SQL files in order in the Supabase SQL editor:
 24. `sql/024_signal_backtest_observations.sql`
 25. `sql/025_signal_backtest_segmentations.sql`
 26. `sql/026_signal_backtest_interpretation_summary.sql`
+27. `sql/027_latest_views_security_invoker.sql`
+28. `sql/028_dashboard_stale_readiness_suppression.sql`
+29. `sql/029_dashboard_valuation_sanity_suppression.sql`
+30. `sql/030_dashboard_signal_display_state.sql`
+31. `sql/031_dashboard_quality_matrix_fields.sql`
 
 Before using the optional seed file, replace any placeholder email with your own test or operator email in a local copy or directly in the SQL editor. Do not commit personal addresses.
 

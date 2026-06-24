@@ -64,6 +64,9 @@ function makeRow(overrides: Partial<WatchlistRow>): WatchlistRow {
     statement_completeness_summary: null,
     fundamentals_provider_comparison_status: null,
     fundamentals_provider_comparison_summary: null,
+    quality_matrix_max_severity: null,
+    quality_matrix_blocking_domains: null,
+    quality_matrix_primary_codes: null,
     ...overrides,
   };
 }

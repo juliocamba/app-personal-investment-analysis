@@ -62,6 +62,9 @@ function makeRow(overrides: Partial<WatchlistRow> = {}): WatchlistRow {
     statement_completeness_summary: null,
     fundamentals_provider_comparison_status: null,
     fundamentals_provider_comparison_summary: null,
+    quality_matrix_max_severity: null,
+    quality_matrix_blocking_domains: null,
+    quality_matrix_primary_codes: null,
     ...overrides,
   };
 }
@@ -204,6 +207,77 @@ describe("CompanyRow - data quality lane", () => {
 
     expect(screen.getByTestId("signal-badge")).toBeInTheDocument();
     expect(screen.queryByTestId("readiness-badge")).not.toBeInTheDocument();
+  });
+});
+
+describe("CompanyRow - research quality grouping", () => {
+  it.each([
+    ["blocks_both", "Fully blocked"],
+    ["blocks_valuation", "Valuation blocked"],
+    ["confidence_limited", "Confidence limited"],
+    ["informational", "Analysis available"],
+    [null, "Analysis available"],
+  ] as Array<[string | null, string]>)(
+    "renders %s as %s",
+    (severity, label) => {
+      renderRow(
+        makeRow({
+          quality_matrix_max_severity: severity,
+          quality_matrix_primary_codes: ["price_scale_anomaly"],
+        }),
+      );
+
+      expect(screen.getByTestId("research-quality-badge")).toHaveTextContent(label);
+    },
+  );
+
+  it("shows primary codes as diagnostic text in the expanded panel", () => {
+    renderRow(
+      makeRow({
+        quality_matrix_max_severity: "blocks_valuation",
+        quality_matrix_primary_codes: ["price_scale_anomaly", "severe_dcf_multiples_divergence"],
+      }),
+    );
+
+    fireEvent.click(screen.getByRole("button"));
+    expect(screen.getByTestId("research-quality-section")).toHaveTextContent(
+      "price scale anomaly, severe dcf multiples divergence",
+    );
+    expect(screen.getByTestId("research-quality-section")).toHaveTextContent(
+      "Read-only grouping of current data and model diagnostics",
+    );
+  });
+
+  it("keeps tracking-only readiness display unchanged", () => {
+    renderRow(
+      makeRow({
+        ...trackingRow,
+        quality_matrix_max_severity: "blocks_both",
+        quality_matrix_primary_codes: ["provider_limited"],
+      }),
+    );
+
+    expect(screen.getByTestId("readiness-badge")).toHaveTextContent("Tracking only");
+    expect(screen.queryByTestId("signal-badge")).not.toBeInTheDocument();
+    expect(screen.getByTestId("research-quality-badge")).toHaveTextContent(
+      "Fully blocked",
+    );
+  });
+
+  it("does not alter final signal display when valuation is blocked", () => {
+    renderRow(
+      makeRow({
+        final_signal: "HOLD",
+        can_run_signal: true,
+        quality_matrix_max_severity: "blocks_valuation",
+        quality_matrix_primary_codes: ["share_count_unit_anomaly"],
+      }),
+    );
+
+    expect(screen.getByTestId("signal-badge")).toHaveTextContent("HOLD");
+    expect(screen.getByTestId("research-quality-badge")).toHaveTextContent(
+      "Valuation blocked",
+    );
   });
 });
 

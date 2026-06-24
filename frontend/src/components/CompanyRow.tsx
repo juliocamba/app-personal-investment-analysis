@@ -4,6 +4,11 @@ import { SignalBadge } from "./SignalBadge";
 import { ReadinessBadge } from "./ReadinessBadge";
 import { FreshnessTag } from "./FreshnessTag";
 import { RedFlagList } from "./RedFlagList";
+import {
+  formatQualityCode,
+  ResearchQualityBadge,
+  researchQualityLabel,
+} from "./ResearchQualityBadge";
 import { formatReasonCode, readinessLabel } from "../utils/readiness";
 import {
   formatPrice,
@@ -119,6 +124,10 @@ export function CompanyRow({ row, onRemove, isRemoving = false }: Props) {
         <td className="company-row__name">
           <span className="company-name">{row.name}</span>
           {row.sector && <span className="company-sector">{row.sector}</span>}
+          <ResearchQualityBadge
+            severity={row.quality_matrix_max_severity}
+            primaryCodes={row.quality_matrix_primary_codes}
+          />
         </td>
 
         <td className="company-row__signal">
@@ -319,6 +328,36 @@ export function CompanyRow({ row, onRemove, isRemoving = false }: Props) {
                       {row.fundamentals_provider_comparison_status != null
                         ? `${formatSubStatus(row.fundamentals_provider_comparison_status)}: ${row.fundamentals_provider_comparison_summary ?? "Review diagnostics"}`
                         : "-"}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="detail-section" data-testid="research-quality-section">
+                <div className="detail-section__header">
+                  <h4 className="detail-section__title">Research quality</h4>
+                  <ResearchQualityBadge
+                    severity={row.quality_matrix_max_severity}
+                    primaryCodes={row.quality_matrix_primary_codes}
+                  />
+                </div>
+                <p className="detail-section__text">
+                  Read-only grouping of current data and model diagnostics. It does not
+                  change readiness, valuation, or signal labels.
+                </p>
+                <div className="detail-grid">
+                  <div className="detail-grid__item">
+                    <span className="detail-grid__label">Quality state</span>
+                    <span className="detail-grid__value">
+                      {researchQualityLabel(row.quality_matrix_max_severity)}
+                    </span>
+                  </div>
+                  <div className="detail-grid__item">
+                    <span className="detail-grid__label">Diagnostic codes</span>
+                    <span className="detail-grid__value">
+                      {row.quality_matrix_primary_codes && row.quality_matrix_primary_codes.length > 0
+                        ? row.quality_matrix_primary_codes.map(formatQualityCode).join(", ")
+                        : "None"}
                     </span>
                   </div>
                 </div>

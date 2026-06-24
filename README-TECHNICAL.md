@@ -242,6 +242,8 @@ Apply migrations in this order:
 27. `sql/027_latest_views_security_invoker.sql`
 28. `sql/028_dashboard_stale_readiness_suppression.sql`
 29. `sql/029_dashboard_valuation_sanity_suppression.sql`
+30. `sql/030_dashboard_signal_display_state.sql`
+31. `sql/031_dashboard_quality_matrix_fields.sql`
 
 Notes:
 
@@ -267,6 +269,8 @@ Notes:
 - `027_latest_views_security_invoker.sql` hardens the four legacy `latest_*` analytical views flagged by Supabase Security Advisor by recreating them with `security_invoker = true`, with no output-column or behavior change.
 - `028_dashboard_stale_readiness_suppression.sql` recreates `dashboard_watchlist_latest` so stale/non-analytical readiness states suppress valuation and signal projection fields.
 - `029_dashboard_valuation_sanity_suppression.sql` recreates `dashboard_watchlist_latest` so valuation display fields are suppressed when valuation diagnostics mark output as not display-credible.
+- `030_dashboard_signal_display_state.sql` appends `stored_final_signal` and `signal_display_state` so consumers can distinguish analytical, readiness-suppressed, and missing current-state signal rows.
+- `031_dashboard_quality_matrix_fields.sql` appends read-only quality matrix summary fields for frontend research-quality grouping without changing analytical behavior.
 
 ## RLS and grants model
 
@@ -625,6 +629,22 @@ These fields are read-only diagnostic summaries. They are intentionally separate
 - persisted signal labels in `signal_runs.final_signal`;
 - readiness snapshots in `company_analysis_readiness.readiness_status`;
 - frontend display substitutions such as the tracking-only readiness badge.
+
+### Dashboard research-quality grouping
+
+Migration `031_dashboard_quality_matrix_fields.sql` appends three compact,
+read-only fields to `dashboard_watchlist_latest` for frontend display:
+
+- `quality_matrix_max_severity` — `blocks_both`, `blocks_valuation`,
+  `blocks_signal`, `confidence_limited`, or `informational`;
+- `quality_matrix_blocking_domains` — compact text array such as
+  `{valuation}` or `{signal,valuation}`;
+- `quality_matrix_primary_codes` — capped, deduped diagnostic-code list for
+  display or grouping.
+
+The frontend renders these as a research-quality badge and diagnostic detail
+line. The fields are projection-only; they do not change readiness, valuation
+suppression, signal labels, signal confidence, thresholds, or providers.
 
 ### Tracking-only behavior
 

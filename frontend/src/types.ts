@@ -60,6 +60,10 @@ export interface WatchlistRow {
   statement_completeness_summary: string | null;
   fundamentals_provider_comparison_status: string | null;
   fundamentals_provider_comparison_summary: string | null;
+  // Read-only research-quality grouping from dashboard quality matrix projection
+  quality_matrix_max_severity: string | null;
+  quality_matrix_blocking_domains: string[] | null;
+  quality_matrix_primary_codes: string[] | null;
 }
 
 // ---------------------------------------------------------------------------

@@ -159,3 +159,130 @@ def compute_all_features(
         "news_volume_7d": news.get("news_volume_7d"),
     }
     return row
+
+
+def recompute_ratio_history_with_metadata(
+    company_id: str,
+    repo_module: Any,
+    as_of_date: str,
+    *,
+    company_currency: str = "USD",
+    limit: int = 12,
+) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    """Recompute recent ratio history using point-in-time inputs.
+
+    Existing ratio snapshots created before the statement/price vintage
+    metadata was introduced are intentionally preserved.  This helper rebuilds
+    the latest historical factor dates from already stored normalized
+    statements and prices so valuation can use coherent multiples history
+    instead of excluding otherwise usable rows.
+    """
+    existing_rows: list[dict[str, Any]] = repo_module.get_ratios_for_company(
+        company_id,
+        as_of_date=as_of_date,
+        limit=limit,
+    )
+    diagnostics: dict[str, Any] = {
+        "company_id": company_id,
+        "as_of_date": as_of_date,
+        "rows_available": len(existing_rows),
+        "rows_requested": 0,
+        "rows_recomputed": 0,
+        "rows_skipped": 0,
+        "skip_reasons": {},
+        "status": "skipped",
+    }
+
+    factor_dates: list[str] = []
+    seen_dates: set[str] = set()
+    for row in existing_rows:
+        raw_factor_date = row.get("factor_date")
+        if not raw_factor_date:
+            _record_backfill_skip(diagnostics, "missing_factor_date")
+            continue
+        factor_date = str(raw_factor_date)
+        if factor_date in seen_dates:
+            continue
+        seen_dates.add(factor_date)
+        factor_dates.append(factor_date)
+
+    diagnostics["rows_requested"] = len(factor_dates)
+    if not factor_dates:
+        return [], diagnostics
+
+    backfilled_at = datetime.now(timezone.utc).isoformat()
+    recomputed_rows: list[dict[str, Any]] = []
+    for factor_date in factor_dates:
+        try:
+            row = compute_all_features(
+                company_id,
+                repo_module,
+                factor_date,
+                company_currency=company_currency,
+            )
+        except Exception as exc:  # noqa: BLE001
+            _record_backfill_skip(
+                diagnostics,
+                "recompute_error",
+                {"factor_date": factor_date, "error_type": type(exc).__name__},
+            )
+            continue
+
+        if row is None:
+            _record_backfill_skip(
+                diagnostics,
+                "insufficient_data",
+                {"factor_date": factor_date},
+            )
+            continue
+
+        metadata = row.get("metadata")
+        if not isinstance(metadata, dict):
+            metadata = {}
+            row["metadata"] = metadata
+        if not metadata.get("statement_period_end_date"):
+            _record_backfill_skip(
+                diagnostics,
+                "missing_statement_vintage",
+                {"factor_date": factor_date},
+            )
+            continue
+        if not metadata.get("price_date"):
+            _record_backfill_skip(
+                diagnostics,
+                "missing_price_vintage",
+                {"factor_date": factor_date},
+            )
+            continue
+
+        metadata.update(
+            {
+                "ratio_history_backfilled": True,
+                "ratio_history_point_in_time_safe": True,
+                "backfilled_at": backfilled_at,
+                "backfill_as_of_date": as_of_date,
+            }
+        )
+        recomputed_rows.append(row)
+
+    diagnostics["rows_recomputed"] = len(recomputed_rows)
+    diagnostics["rows_skipped"] = (
+        diagnostics["rows_requested"] - diagnostics["rows_recomputed"]
+    )
+    if recomputed_rows and diagnostics["rows_skipped"]:
+        diagnostics["status"] = "partial"
+    elif recomputed_rows:
+        diagnostics["status"] = "ok"
+    return recomputed_rows, diagnostics
+
+
+def _record_backfill_skip(
+    diagnostics: dict[str, Any],
+    reason: str,
+    detail: dict[str, Any] | None = None,
+) -> None:
+    skip_reasons = diagnostics.setdefault("skip_reasons", {})
+    skip_reasons[reason] = int(skip_reasons.get(reason, 0)) + 1
+    if detail is not None:
+        details = diagnostics.setdefault("skip_details", [])
+        details.append({"reason": reason, **detail})

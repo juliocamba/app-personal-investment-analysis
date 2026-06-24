@@ -179,6 +179,19 @@ _DERIVED_FIELD_ORDER = [
     "ratio_rows_available",
     "ratio_rows_used",
     "ratio_rows_excluded",
+    "price_provider_diagnostics",
+    "implied_market_cap_from_price_shares",
+    "price_to_sales_implied",
+    "price_to_book_implied",
+    "price_to_earnings_implied",
+    "market_cap_to_fcf",
+    "dcf_price_ratio",
+    "market_cap_share_mismatch_ratio",
+    "price_row_share_mismatch_ratio",
+    "price_scale_anomaly",
+    "price_provider_scale_mismatch",
+    "share_count_unit_anomaly",
+    "share_count_market_cap_mismatch",
     "statement_age_days",
     "latest_statement_year",
     "stale_statement_input",
@@ -546,6 +559,19 @@ def test_live_build_derived_fields_surfaces_valuation_sanity_fields() -> None:
                 "ratio_rows_available": 12,
                 "ratio_rows_used": 1,
                 "ratio_rows_excluded": 11,
+                "price_provider": "twelve_data",
+                "implied_market_cap_from_price_shares": 1_183_241_272_500.0,
+                "price_to_sales_implied": 31.7,
+                "price_to_book_implied": 21.8,
+                "price_to_earnings_implied": 138.6,
+                "market_cap_to_fcf": 709.4,
+                "dcf_price_ratio": 0.0619,
+                "market_cap_share_mismatch_ratio": None,
+                "price_row_share_mismatch_ratio": None,
+                "price_scale_anomaly": True,
+                "price_provider_scale_mismatch": True,
+                "share_count_unit_anomaly": False,
+                "share_count_market_cap_mismatch": False,
             }
         },
         "latest_statement_date": "2025-01-01",
@@ -566,6 +592,12 @@ def test_live_build_derived_fields_surfaces_valuation_sanity_fields() -> None:
     assert derived["ratio_rows_available"] == 12
     assert derived["ratio_rows_used"] == 1
     assert derived["ratio_rows_excluded"] == 11
+    assert derived["price_provider_diagnostics"] == "twelve_data"
+    assert derived["price_to_sales_implied"] == 31.7
+    assert derived["price_to_book_implied"] == 21.8
+    assert derived["price_scale_anomaly"] is True
+    assert derived["price_provider_scale_mismatch"] is True
+    assert derived["share_count_unit_anomaly"] is False
 
 
 def test_live_build_derived_fields_extracts_signal_reasoning_metadata() -> None:

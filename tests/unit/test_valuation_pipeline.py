@@ -268,6 +268,163 @@ def test_compute_valuation_run_suspicious_price_remains_unreliable_with_clean_ra
     assert "severe_midpoint_price_implausibility" in diagnostics["valuation_sanity_reason_codes"]
 
 
+def test_compute_valuation_run_flags_mu_like_price_scale_anomaly():
+    current = {
+        **_stmt_with_period("2025-08-28"),
+        "revenue": 37_378_000_000.0,
+        "net_income": 8_539_000_000.0,
+        "free_cash_flow": 1_668_000_000.0,
+        "total_equity": 54_165_000_000.0,
+        "diluted_shares": 1_125_000_000.0,
+    }
+    prior = {
+        **_stmt_with_period("2024-08-29"),
+        "revenue": 25_111_000_000.0,
+        "net_income": 778_000_000.0,
+        "free_cash_flow": 121_000_000.0,
+        "total_equity": 45_131_000_000.0,
+        "diluted_shares": 1_118_000_000.0,
+    }
+    ratios = [
+        _ratio_with_vintage(
+            period_end="2025-08-28",
+            pe_ratio=138.6,
+            ev_to_ebitda=None,
+            price_to_sales=31.7,
+            price_to_book=21.8,
+        )
+        for _ in range(12)
+    ]
+    repo = _FakeValuationRepo(
+        statements=[current, prior],
+        prices=[{"close": 1051.77, "provider": "twelve_data"}],
+        ratios=ratios,
+    )
+
+    result = compute_valuation_run(_COMPANY_ID, repo, _VALUATION_DATE)
+
+    assert result is not None
+    diagnostics = result["assumptions"]["diagnostics"]
+    assert diagnostics["valuation_sanity_status"] == "unreliable"
+    assert diagnostics["price_scale_anomaly"] is True
+    assert diagnostics["price_provider_scale_mismatch"] is True
+    assert diagnostics["price_to_sales_implied"] > 25.0
+    assert "price_scale_anomaly" in diagnostics["valuation_sanity_reason_codes"]
+    assert "price_provider_scale_mismatch" in diagnostics["valuation_sanity_reason_codes"]
+
+
+def test_compute_valuation_run_flags_four_like_share_count_unit_anomaly():
+    current = {
+        **_stmt_with_period("2025-12-31"),
+        "revenue": 4_180_000_000.0,
+        "net_income": 119_000_000.0,
+        "free_cash_flow": 624_000_000.0,
+        "total_equity": 1_442_000_000.0,
+        "diluted_shares": 1_333_686.0,
+    }
+    prior = {
+        **_stmt_with_period("2024-12-31"),
+        "revenue": 3_330_600_000.0,
+        "net_income": 229_600_000.0,
+        "free_cash_flow": 493_200_000.0,
+        "total_equity": 806_600_000.0,
+        "diluted_shares": 1_668_826.0,
+    }
+    ratios = [
+        _ratio_with_vintage(
+            period_end="2025-12-31",
+            pe_ratio=0.43,
+            ev_to_ebitda=None,
+            price_to_sales=0.012,
+            price_to_book=0.036,
+        )
+        for _ in range(12)
+    ]
+    repo = _FakeValuationRepo(
+        statements=[current, prior],
+        prices=[{"close": 38.67, "provider": "twelve_data"}],
+        ratios=ratios,
+    )
+
+    result = compute_valuation_run(_COMPANY_ID, repo, _VALUATION_DATE)
+
+    assert result is not None
+    diagnostics = result["assumptions"]["diagnostics"]
+    assert diagnostics["valuation_sanity_status"] == "unreliable"
+    assert diagnostics["share_count_unit_anomaly"] is True
+    assert diagnostics["price_scale_anomaly"] is False
+    assert diagnostics["price_to_sales_implied"] < 0.05
+    assert diagnostics["market_cap_to_fcf"] < 0.25
+    assert "share_count_unit_anomaly" in diagnostics["valuation_sanity_reason_codes"]
+
+
+def test_compute_valuation_run_normal_case_has_no_scale_anomaly():
+    current = _stmt_with_period("2025-12-31")
+    prior = {**_stmt_with_period("2024-12-31"), "revenue": 900_000.0}
+    repo = _FakeValuationRepo(
+        statements=[current, prior],
+        prices=[{"close": 20.0, "provider": "fmp"}],
+        ratios=[
+            _ratio_with_vintage(period_end="2025-12-31", pe_ratio=15.0),
+            _ratio_with_vintage(period_end="2025-12-31", pe_ratio=16.0),
+        ],
+    )
+
+    result = compute_valuation_run(_COMPANY_ID, repo, _VALUATION_DATE)
+
+    assert result is not None
+    diagnostics = result["assumptions"]["diagnostics"]
+    assert diagnostics["price_scale_anomaly"] is False
+    assert diagnostics["price_provider_scale_mismatch"] is False
+    assert diagnostics["share_count_unit_anomaly"] is False
+    assert diagnostics["share_count_market_cap_mismatch"] is False
+
+
+def test_compute_valuation_run_aapl_like_divergence_does_not_false_flag_scale():
+    current = {
+        **_stmt_with_period("2025-09-27"),
+        "revenue": 416_161_000_000.0,
+        "net_income": 112_010_000_000.0,
+        "free_cash_flow": 98_767_000_000.0,
+        "total_equity": 73_733_000_000.0,
+        "diluted_shares": 15_004_697_000.0,
+    }
+    prior = {
+        **_stmt_with_period("2024-09-28"),
+        "revenue": 391_035_000_000.0,
+        "net_income": 93_736_000_000.0,
+        "free_cash_flow": 108_807_000_000.0,
+        "total_equity": 56_950_000_000.0,
+        "diluted_shares": 15_408_095_000.0,
+    }
+    repo = _FakeValuationRepo(
+        statements=[current, prior],
+        prices=[{"close": 294.30, "provider": "fmp"}],
+        ratios=[
+            _ratio_with_vintage(
+                period_end="2025-09-27",
+                pe_ratio=39.4,
+                ev_to_ebitda=None,
+                price_to_sales=10.6,
+                price_to_book=59.9,
+            )
+            for _ in range(12)
+        ],
+    )
+
+    result = compute_valuation_run(_COMPANY_ID, repo, _VALUATION_DATE)
+
+    assert result is not None
+    diagnostics = result["assumptions"]["diagnostics"]
+    assert diagnostics["valuation_sanity_status"] in {"high_uncertainty", "unreliable"}
+    assert diagnostics["dcf_multiples_gap_ratio"] is not None
+    assert diagnostics["price_scale_anomaly"] is False
+    assert diagnostics["price_provider_scale_mismatch"] is False
+    assert diagnostics["share_count_unit_anomaly"] is False
+    assert "price_scale_anomaly" not in diagnostics["valuation_sanity_reason_codes"]
+    assert "share_count_unit_anomaly" not in diagnostics["valuation_sanity_reason_codes"]
+
+
 def test_compute_valuation_run_coherent_wide_case_remains_usable_evidence():
     current = _stmt_with_period("2025-12-31")
     prior = {**_stmt_with_period("2024-12-31"), "revenue": 900_000.0}
@@ -300,6 +457,44 @@ def test_compute_valuation_run_coherent_wide_case_remains_usable_evidence():
     assert "stale_ratio_history" not in diagnostics["valuation_sanity_reason_codes"]
     assert diagnostics["valuation_sanity_status"] in {"usable", "high_uncertainty"}
     assert diagnostics["valuation_evidence_usable"] is True
+
+
+def test_compute_valuation_run_uses_full_backfilled_matching_ratio_history():
+    current = _stmt_with_period("2025-12-31")
+    prior = {**_stmt_with_period("2024-12-31"), "revenue": 900_000.0}
+    ratios = [
+        {
+            **_ratio_with_vintage(
+                period_end="2025-12-31",
+                pe_ratio=14.0 + i,
+                ev_to_ebitda=8.0,
+                price_to_sales=1.5,
+                price_to_book=1.8,
+            ),
+            "factor_date": f"2026-{6 + (i // 4):02d}-{1 + (i % 4):02d}",
+            "metadata": {
+                "statement_period_end_date": "2025-12-31",
+                "price_date": f"2026-{6 + (i // 4):02d}-{1 + (i % 4):02d}",
+                "ratio_history_backfilled": i > 0,
+            },
+        }
+        for i in range(12)
+    ]
+    repo = _FakeValuationRepo(
+        statements=[current, prior],
+        prices=[{"close": 20.0}],
+        ratios=ratios,
+    )
+
+    result = compute_valuation_run(_COMPANY_ID, repo, _VALUATION_DATE)
+
+    assert result is not None
+    diagnostics = result["assumptions"]["diagnostics"]
+    assert diagnostics["ratio_history_status"] == "ok"
+    assert diagnostics["ratio_rows_available"] == 12
+    assert diagnostics["ratio_rows_used"] == 12
+    assert diagnostics["ratio_rows_excluded"] == 0
+    assert "stale_ratio_history" not in diagnostics["valuation_sanity_reason_codes"]
 
 
 def test_compute_valuation_run_margin_of_safety_is_numeric_or_none():

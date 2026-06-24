@@ -340,6 +340,29 @@ def build_derived_fields(
         "ratio_rows_available": diagnostics.get("ratio_rows_available"),
         "ratio_rows_used": diagnostics.get("ratio_rows_used"),
         "ratio_rows_excluded": diagnostics.get("ratio_rows_excluded"),
+        "price_provider_diagnostics": diagnostics.get("price_provider"),
+        "implied_market_cap_from_price_shares": diagnostics.get(
+            "implied_market_cap_from_price_shares"
+        ),
+        "price_to_sales_implied": diagnostics.get("price_to_sales_implied"),
+        "price_to_book_implied": diagnostics.get("price_to_book_implied"),
+        "price_to_earnings_implied": diagnostics.get("price_to_earnings_implied"),
+        "market_cap_to_fcf": diagnostics.get("market_cap_to_fcf"),
+        "dcf_price_ratio": diagnostics.get("dcf_price_ratio"),
+        "market_cap_share_mismatch_ratio": diagnostics.get(
+            "market_cap_share_mismatch_ratio"
+        ),
+        "price_row_share_mismatch_ratio": diagnostics.get(
+            "price_row_share_mismatch_ratio"
+        ),
+        "price_scale_anomaly": diagnostics.get("price_scale_anomaly"),
+        "price_provider_scale_mismatch": diagnostics.get(
+            "price_provider_scale_mismatch"
+        ),
+        "share_count_unit_anomaly": diagnostics.get("share_count_unit_anomaly"),
+        "share_count_market_cap_mismatch": diagnostics.get(
+            "share_count_market_cap_mismatch"
+        ),
         "statement_age_days": statement_age_days,
         "latest_statement_year": _latest_statement_year(row),
         "stale_statement_input": (

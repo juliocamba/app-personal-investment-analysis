@@ -1149,6 +1149,7 @@ def _run_live_pipeline(
     normalize_statements_fn: Any,
     normalize_news_fn: Any,
     compute_features_fn: Any | None = None,
+    recompute_ratio_history_fn: Any | None = None,
     compute_valuation_fn: Any | None = None,
     compute_qualitative_fn: Any | None = None,
     compute_signal_fn: Any | None = None,
@@ -1168,6 +1169,8 @@ def _run_live_pipeline(
         "fx_rates_upserted": 0,
         "news_upserted": 0,
         "ratios_upserted": 0,
+        "ratio_history_backfilled": 0,
+        "ratio_history_backfill_skipped": 0,
         "valuation_runs_upserted": 0,
         "qualitative_scores_upserted": 0,
         "signal_runs_upserted": 0,
@@ -1499,6 +1502,27 @@ def _run_live_pipeline(
                                 f"Skipped ratios for {ticker}: "
                                 "insufficient data."
                             ),
+                        )
+                    if recompute_ratio_history_fn is not None:
+                        backfill_rows, backfill_diag = recompute_ratio_history_fn(
+                            company_id,
+                            repo_module,
+                            factor_date,
+                            company_currency=currency,
+                            limit=12,
+                        )
+                        if backfill_rows:
+                            backfilled = repo_module.upsert_ratios_factors(backfill_rows)
+                            metrics["ratio_history_backfilled"] += backfilled
+                        skipped = int(backfill_diag.get("rows_skipped") or 0)
+                        metrics["ratio_history_backfill_skipped"] += skipped
+                        repo_module.log_pipeline_event(
+                            run_id,
+                            stage="features",
+                            level="warning" if skipped else "info",
+                            company_id=company_id,
+                            message=f"Ratio history backfill checked for {ticker}.",
+                            details=backfill_diag,
                         )
                 except Exception as exc:  # noqa: BLE001
                     logger.error(
@@ -1942,7 +1966,10 @@ def main(
     from investment_app.etl.normalize_prices import normalize_fmp_prices
     from investment_app.etl.normalize_statements import normalize_fmp_statements
     from investment_app.etl.raw_store import store_raw_response
-    from investment_app.features import compute_all_features
+    from investment_app.features import (
+        compute_all_features,
+        recompute_ratio_history_with_metadata,
+    )
     from investment_app.scoring.probabilistic import compute_signal_run
     from investment_app.scoring.qualitative import compute_qualitative_score
     from investment_app.valuation import compute_valuation_run
@@ -2002,6 +2029,7 @@ def main(
         normalize_statements_fn=normalize_fmp_statements,
         normalize_news_fn=normalize_gdelt_news,
         compute_features_fn=compute_all_features,
+        recompute_ratio_history_fn=recompute_ratio_history_with_metadata,
         compute_valuation_fn=compute_valuation_run,
         compute_qualitative_fn=compute_qualitative_score,
         compute_signal_fn=compute_signal_run,

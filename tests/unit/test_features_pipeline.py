@@ -15,7 +15,10 @@ from pathlib import Path
 
 import pytest
 
-from investment_app.features import compute_all_features
+from investment_app.features import (
+    compute_all_features,
+    recompute_ratio_history_with_metadata,
+)
 
 
 SCRIPT = str(Path(__file__).parent.parent.parent / "scripts" / "run_daily_pipeline.py")
@@ -35,11 +38,13 @@ class _FakeRepo:
         prices: list[dict] | None = None,
         news: list[dict] | None = None,
         filings: list[dict] | None = None,
+        ratios: list[dict] | None = None,
     ) -> None:
         self._statements = statements or []
         self._prices = prices or []
         self._news = news or []
         self._filings = filings or []
+        self._ratios = ratios or []
 
     def get_statements_for_company(self, company_id: str, **kwargs) -> list[dict]:
         return list(self._statements)
@@ -67,11 +72,13 @@ class _FilteringFakeRepo:
         prices: list[dict] | None = None,
         news: list[dict] | None = None,
         filings: list[dict] | None = None,
+        ratios: list[dict] | None = None,
     ) -> None:
         self._statements = statements or []
         self._prices = prices or []
         self._news = news or []
         self._filings = filings or []
+        self._ratios = ratios or []
 
     def get_statements_for_company(
         self, company_id: str, *, as_of_date: str | None = None, **kwargs
@@ -104,6 +111,15 @@ class _FilteringFakeRepo:
         if as_of_date:
             rows = [r for r in rows if (r.get("filing_date") or "") <= as_of_date]
         return sorted(rows, key=lambda r: r.get("filing_date") or "", reverse=True)
+
+    def get_ratios_for_company(
+        self, company_id: str, *, as_of_date: str | None = None, limit: int = 12
+    ) -> list[dict]:
+        rows = self._ratios
+        if as_of_date:
+            rows = [r for r in rows if (r.get("factor_date") or "") <= as_of_date]
+        rows = sorted(rows, key=lambda r: r.get("factor_date") or "", reverse=True)
+        return rows[:limit]
 
 
 _ANNUAL_STMT = {
@@ -357,6 +373,71 @@ def test_pipeline_calls_compute_features_fn():
     assert len(repo.upserted_ratios) == 1
 
 
+def test_pipeline_calls_ratio_history_backfill_after_current_ratios():
+    mod = _load_pipeline_module()
+    repo = _PipelineFakeRepo()
+    backfill_calls: list[tuple[str, str]] = []
+
+    def fake_compute(company_id, repo_module, factor_date, **kwargs):
+        return {
+            "company_id": company_id,
+            "factor_date": factor_date,
+            "gross_margin": 0.6,
+            "data_quality_score": 60.0,
+        }
+
+    def fake_backfill(company_id, repo_module, as_of_date, **kwargs):
+        backfill_calls.append((company_id, as_of_date))
+        return (
+            [
+                {
+                    "company_id": company_id,
+                    "factor_date": "2026-06-23",
+                    "gross_margin": 0.5,
+                    "data_quality_score": 60.0,
+                    "metadata": {
+                        "statement_period_end_date": "2025-12-31",
+                        "ratio_history_backfilled": True,
+                    },
+                }
+            ],
+            {
+                "status": "ok",
+                "rows_available": 1,
+                "rows_requested": 1,
+                "rows_recomputed": 1,
+                "rows_skipped": 0,
+                "skip_reasons": {},
+            },
+        )
+
+    metrics = mod._run_live_pipeline(
+        repo_module=repo,
+        providers_config={"providers": {"gdelt": {"enabled": False}, "ecb": {"enabled": False}}},
+        fmp=None,
+        sec=None,
+        ecb=None,
+        gdelt=None,
+        store_raw_response_fn=_noop_store,
+        normalize_prices_fn=_noop_fn,
+        normalize_statements_fn=_noop_fn,
+        normalize_news_fn=_noop_fn,
+        compute_features_fn=fake_compute,
+        recompute_ratio_history_fn=fake_backfill,
+    )
+
+    assert len(backfill_calls) == 1
+    assert metrics["ratios_upserted"] == 1
+    assert metrics["ratio_history_backfilled"] == 1
+    assert metrics["ratio_history_backfill_skipped"] == 0
+    assert len(repo.upserted_ratios) == 2
+    assert any(
+        e.get("stage") == "features"
+        and e.get("details", {}).get("rows_recomputed") == 1
+        for e in repo.logged_events
+    )
+
+
 def test_pipeline_without_compute_features_fn_skips_ratios():
     mod = _load_pipeline_module()
     repo = _PipelineFakeRepo()
@@ -591,6 +672,116 @@ def test_compute_all_features_excludes_future_prices():
     assert row is not None
     # pe_ratio must be based on the past price row (market_cap=5000).
     assert row["pe_ratio"] == pytest.approx(5000.0 / 150.0)
+
+
+# ---------------------------------------------------------------------------
+# Ratio history metadata backfill
+# ---------------------------------------------------------------------------
+
+
+def test_recompute_ratio_history_backfills_recent_statement_vintage_metadata():
+    """VRTX-like history: stale old rows are recomputed against fresh SEC data."""
+    stale_stmt = {
+        **_ANNUAL_STMT,
+        "fiscal_year": 2017,
+        "period_end_date": "2017-12-31",
+        "revenue": 700.0,
+        "source": "sec_edgar",
+    }
+    fresh_stmt = {
+        **_ANNUAL_STMT,
+        "fiscal_year": 2025,
+        "period_end_date": "2025-12-31",
+        "revenue": 2_000.0,
+        "net_income": 200.0,
+        "source": "sec_edgar",
+        "created_at": "2026-06-23T20:00:00+00:00",
+    }
+    prices = [
+        {"price_date": "2026-06-24", "close": 55.0, "market_cap": 11_000.0, "provider": "twelve_data"},
+        {"price_date": "2026-06-23", "close": 54.0, "market_cap": 10_800.0, "provider": "twelve_data"},
+    ]
+    ratios = [
+        {"factor_date": "2026-06-24", "metadata": {"statement_period_end_date": "2025-12-31"}},
+        {"factor_date": "2026-06-23", "metadata": {}},
+    ]
+    repo = _FilteringFakeRepo(
+        statements=[stale_stmt, fresh_stmt],
+        prices=prices,
+        ratios=ratios,
+    )
+
+    rows, diagnostics = recompute_ratio_history_with_metadata(
+        "company-1",
+        repo,
+        "2026-06-24",
+        limit=12,
+    )
+
+    assert diagnostics["status"] == "ok"
+    assert diagnostics["rows_recomputed"] == 2
+    assert {r["factor_date"] for r in rows} == {"2026-06-24", "2026-06-23"}
+    for row in rows:
+        metadata = row["metadata"]
+        assert metadata["statement_period_end_date"] == "2025-12-31"
+        assert metadata["statement_fiscal_year"] == 2025
+        assert metadata["statement_source"] == "sec_edgar"
+        assert metadata["price_date"] <= row["factor_date"]
+        assert metadata["ratio_history_backfilled"] is True
+        assert metadata["ratio_history_point_in_time_safe"] is True
+        assert row["pe_ratio"] is not None
+
+
+def test_recompute_ratio_history_uses_statement_available_by_factor_date():
+    """Backfill must not leak a future statement into an older factor date."""
+    past_stmt = {
+        **_ANNUAL_STMT,
+        "fiscal_year": 2023,
+        "period_end_date": "2023-12-31",
+        "revenue": 1_000.0,
+    }
+    future_stmt = {
+        **_ANNUAL_STMT,
+        "fiscal_year": 2025,
+        "period_end_date": "2025-12-31",
+        "revenue": 9_999.0,
+    }
+    repo = _FilteringFakeRepo(
+        statements=[past_stmt, future_stmt],
+        prices=[{"price_date": "2024-06-01", "close": 50.0, "market_cap": 5_000.0}],
+        ratios=[{"factor_date": "2024-06-01", "metadata": {}}],
+    )
+
+    rows, diagnostics = recompute_ratio_history_with_metadata(
+        "company-1",
+        repo,
+        "2024-06-01",
+    )
+
+    assert diagnostics["status"] == "ok"
+    assert len(rows) == 1
+    assert rows[0]["metadata"]["statement_period_end_date"] == "2023-12-31"
+    assert rows[0]["gross_margin"] == pytest.approx(600.0 / 1_000.0)
+
+
+def test_recompute_ratio_history_skips_no_statement_rows_with_diagnostics():
+    """MFC-like coverage remains unsupported when no normalized statement exists."""
+    repo = _FilteringFakeRepo(
+        statements=[],
+        prices=[{"price_date": "2026-06-24", "close": 50.0, "market_cap": 5_000.0}],
+        ratios=[{"factor_date": "2026-06-24", "metadata": {}}],
+    )
+
+    rows, diagnostics = recompute_ratio_history_with_metadata(
+        "company-1",
+        repo,
+        "2026-06-24",
+    )
+
+    assert rows == []
+    assert diagnostics["status"] == "skipped"
+    assert diagnostics["rows_skipped"] == 1
+    assert diagnostics["skip_reasons"] == {"missing_statement_vintage": 1}
 
 
 # ---------------------------------------------------------------------------

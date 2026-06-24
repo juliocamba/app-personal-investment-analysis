@@ -346,6 +346,19 @@ class TestBuildDiagnosticsStatus:
             "ratio_rows_used",
             "ratio_rows_excluded",
             "latest_statement_period_end_date",
+            "price_provider",
+            "implied_market_cap_from_price_shares",
+            "price_to_sales_implied",
+            "price_to_book_implied",
+            "price_to_earnings_implied",
+            "market_cap_to_fcf",
+            "dcf_price_ratio",
+            "market_cap_share_mismatch_ratio",
+            "price_row_share_mismatch_ratio",
+            "price_scale_anomaly",
+            "price_provider_scale_mismatch",
+            "share_count_unit_anomaly",
+            "share_count_market_cap_mismatch",
         }
 
     def test_blockers_list_is_sorted(self):

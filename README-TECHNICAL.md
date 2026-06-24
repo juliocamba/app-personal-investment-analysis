@@ -78,6 +78,12 @@ and keeps missing fields visible in diagnostics.
   statement period, statement source/created timestamp, and price snapshot used
   to compute the factor row. This lets downstream valuation distinguish fresh
   derived ratios from rows computed before a statement normalization refresh.
+- After the current-day snapshot is written, the daily pipeline attempts to
+  recompute the latest stored ratio history from existing `statements_norm` and
+  `price_eod` rows as of each historical `factor_date`. Successfully rebuilt
+  rows are upserted with `ratio_history_backfilled` and vintage metadata; rows
+  without a usable statement or price vintage are skipped and remain visible
+  through valuation input-consistency diagnostics.
 
 ### Valuation
 
@@ -90,6 +96,13 @@ and keeps missing fields visible in diagnostics.
   used, and excluded ratio rows. If all metadata-aware ratio history is tied to
   an older statement period, the valuation sanity layer treats that as
   unreliable input consistency rather than using stale multiples evidence.
+- Valuation also emits conservative input-scale diagnostics when price,
+  provider, share-count, and fundamentals imply internally inconsistent
+  per-share economics. `price_scale_anomaly`,
+  `price_provider_scale_mismatch`, `share_count_unit_anomaly`, and
+  `share_count_market_cap_mismatch` are valuation-sanity reason codes and audit
+  fields only; they do not change readiness classification, signal thresholds,
+  valuation thresholds, providers, or final signal labels.
 
 ### Qualitative scoring
 
@@ -637,6 +650,11 @@ Current implementation:
 - valuation input-consistency diagnostics expose `ratio_history_status`,
   `ratio_history_reason_codes`, `ratio_rows_available`, `ratio_rows_used`, and
   `ratio_rows_excluded` so stale derived ratio history is auditable;
+- recent ratio history is recomputed during the daily pipeline when existing
+  normalized statements and prices can support a point-in-time-safe rebuild;
+- valuation input-scale diagnostics expose price/share-count plausibility fields
+  such as implied market cap from price and diluted shares, implied P/S, implied
+  P/B, market-cap-to-FCF, DCF-to-price ratio, and explicit scale anomaly flags;
 - method and assumption diagnostics stored in `valuation_runs.assumptions["diagnostics"]` JSON;
 - conservative margin-of-safety outputs surfaced in the dashboard and retained as downside/reference diagnostics.
 

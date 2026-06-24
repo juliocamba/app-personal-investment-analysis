@@ -62,6 +62,18 @@ than silently blending stale derived factors with fresh statements. This does
 not change readiness thresholds, valuation sanity thresholds, signal thresholds,
 providers, or signal labels.
 
+The daily pipeline also recomputes the latest stored ratio history when possible
+from already normalized statements and stored prices as of each factor date. This
+backfills statement/price vintage metadata for recent historical rows while
+leaving unsupported rows excluded and diagnosable.
+
+Valuation diagnostics also flag conservative input-scale anomalies when price,
+share count, and fundamentals are internally inconsistent. Codes such as
+`price_scale_anomaly`, `price_provider_scale_mismatch`, and
+`share_count_unit_anomaly` explain suppressed valuations without changing
+readiness thresholds, signal thresholds, valuation thresholds, providers, or
+signal labels.
+
 ## Current capabilities
 
 - Authenticated React dashboard (Supabase Auth).

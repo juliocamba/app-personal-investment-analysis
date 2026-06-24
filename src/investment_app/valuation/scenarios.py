@@ -102,6 +102,145 @@ def _max_terminal_value_share(dcf_output: dict[str, Any] | None) -> float | None
     return max(shares) if shares else None
 
 
+def _extract_price_provider(price_row: dict[str, Any] | None) -> str | None:
+    if not price_row:
+        return None
+    provider = str(price_row.get("provider") or "").strip()
+    return provider or None
+
+
+def _build_scale_diagnostics(
+    *,
+    current_stmt: dict[str, Any] | None,
+    latest_price_row: dict[str, Any] | None,
+    current_price: float | None,
+    diluted_shares: float | None,
+    method_estimates: dict[str, float],
+    dcf_multiples_gap_ratio: float | None,
+    midpoint_price_ratio: float | None,
+) -> dict[str, Any]:
+    """Detect conservative price/share-count scale anomalies.
+
+    These diagnostics are intentionally multi-condition checks. They should
+    explain extreme valuation failures without flagging ordinary expensive
+    companies or intentionally changing the valuation model output.
+    """
+    provider = _extract_price_provider(latest_price_row)
+    revenue = _get(current_stmt or {}, "revenue")
+    net_income = _get(current_stmt or {}, "net_income")
+    free_cash_flow = _get(current_stmt or {}, "free_cash_flow")
+    total_equity = _get(current_stmt or {}, "total_equity")
+    reported_market_cap = _get(latest_price_row or {}, "market_cap")
+    reported_shares_outstanding = _get(latest_price_row or {}, "shares_outstanding")
+
+    implied_market_cap = None
+    if (
+        current_price is not None
+        and current_price > 0.0
+        and diluted_shares is not None
+        and diluted_shares > 0.0
+    ):
+        implied_market_cap = current_price * diluted_shares
+
+    price_to_sales_implied = _safe_ratio(implied_market_cap, revenue)
+    price_to_book_implied = _safe_ratio(implied_market_cap, total_equity)
+    price_to_earnings_implied = _safe_ratio(implied_market_cap, net_income)
+    market_cap_to_fcf = _safe_ratio(implied_market_cap, free_cash_flow)
+
+    dcf_mid = method_estimates.get("dcf")
+    dcf_price_ratio = _safe_ratio(
+        float(dcf_mid) if _is_finite_number(dcf_mid) else None,
+        current_price,
+    )
+
+    market_cap_share_mismatch_ratio = None
+    if (
+        reported_market_cap is not None
+        and reported_market_cap > 0.0
+        and current_price is not None
+        and current_price > 0.0
+        and diluted_shares is not None
+        and diluted_shares > 0.0
+    ):
+        reported_implied_shares = reported_market_cap / current_price
+        high = max(reported_implied_shares, diluted_shares)
+        low = min(reported_implied_shares, diluted_shares)
+        market_cap_share_mismatch_ratio = _safe_ratio(high, low)
+
+    price_row_share_mismatch_ratio = None
+    if (
+        reported_shares_outstanding is not None
+        and reported_shares_outstanding > 0.0
+        and diluted_shares is not None
+        and diluted_shares > 0.0
+    ):
+        high = max(reported_shares_outstanding, diluted_shares)
+        low = min(reported_shares_outstanding, diluted_shares)
+        price_row_share_mismatch_ratio = _safe_ratio(high, low)
+
+    price_provider_scale_mismatch = (
+        provider not in {None, "", "fmp"}
+        and price_to_sales_implied is not None
+        and price_to_sales_implied > 25.0
+        and price_to_book_implied is not None
+        and price_to_book_implied > 15.0
+        and (
+            (midpoint_price_ratio is not None and midpoint_price_ratio < 0.25)
+            or (
+                dcf_multiples_gap_ratio is not None
+                and dcf_multiples_gap_ratio > 3.5
+            )
+        )
+    )
+
+    price_scale_anomaly = price_provider_scale_mismatch or (
+        price_to_sales_implied is not None
+        and price_to_sales_implied > 40.0
+        and price_to_book_implied is not None
+        and price_to_book_implied > 20.0
+        and midpoint_price_ratio is not None
+        and midpoint_price_ratio < 0.25
+    )
+
+    share_count_unit_anomaly = (
+        implied_market_cap is not None
+        and revenue is not None
+        and revenue > 0.0
+        and free_cash_flow is not None
+        and free_cash_flow > 0.0
+        and price_to_sales_implied is not None
+        and price_to_sales_implied < 0.05
+        and market_cap_to_fcf is not None
+        and market_cap_to_fcf < 0.25
+        and dcf_price_ratio is not None
+        and dcf_price_ratio > 50.0
+    )
+
+    share_count_market_cap_mismatch = (
+        market_cap_share_mismatch_ratio is not None
+        and market_cap_share_mismatch_ratio > 5.0
+    ) or (
+        price_row_share_mismatch_ratio is not None
+        and price_row_share_mismatch_ratio > 5.0
+    )
+
+    return {
+        "price_provider": provider,
+        "implied_market_cap_from_price_shares": implied_market_cap,
+        "price_to_sales_implied": price_to_sales_implied,
+        "price_to_book_implied": price_to_book_implied,
+        "price_to_earnings_implied": price_to_earnings_implied,
+        "market_cap_to_fcf": market_cap_to_fcf,
+        "dcf_price_ratio": dcf_price_ratio,
+        "market_cap_share_mismatch_ratio": market_cap_share_mismatch_ratio,
+        "price_row_share_mismatch_ratio": price_row_share_mismatch_ratio,
+        "price_scale_anomaly": price_scale_anomaly,
+        "price_provider_scale_mismatch": price_provider_scale_mismatch,
+        "share_count_unit_anomaly": share_count_unit_anomaly,
+        "share_count_market_cap_mismatch": share_count_market_cap_mismatch,
+    }
+
+
 # ---------------------------------------------------------------------------
 # Internal helpers
 # ---------------------------------------------------------------------------
@@ -396,6 +535,8 @@ def _build_diagnostics(
     method_estimates: dict[str, float] | None = None,
     dcf_output: dict[str, Any] | None = None,
     ratio_history_diagnostics: dict[str, Any] | None = None,
+    current_stmt: dict[str, Any] | None = None,
+    latest_price_row: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Build a compact, safe diagnostics payload for assumptions JSON."""
     blockers: list[str] = []
@@ -527,6 +668,15 @@ def _build_diagnostics(
 
     terminal_spread = wacc - terminal_growth
     max_terminal_value_share = _max_terminal_value_share(dcf_output)
+    scale_diagnostics = _build_scale_diagnostics(
+        current_stmt=current_stmt,
+        latest_price_row=latest_price_row,
+        current_price=current_price,
+        diluted_shares=diluted_shares,
+        method_estimates=method_estimates,
+        dcf_multiples_gap_ratio=dcf_multiples_gap_ratio,
+        midpoint_price_ratio=midpoint_price_ratio,
+    )
 
     sanity_reason_codes: set[str] = set()
     sanity_status = _SANITY_USABLE
@@ -608,6 +758,15 @@ def _build_diagnostics(
     if fcf_data is not None and fcf_data.get("direct_fcf_status") in {"negative", "zero"} and distribution:
         _escalate(_SANITY_UNRELIABLE, "negative_or_zero_fcf_path")
 
+    if scale_diagnostics["price_scale_anomaly"]:
+        _escalate(_SANITY_UNRELIABLE, "price_scale_anomaly")
+    if scale_diagnostics["price_provider_scale_mismatch"]:
+        _escalate(_SANITY_UNRELIABLE, "price_provider_scale_mismatch")
+    if scale_diagnostics["share_count_unit_anomaly"]:
+        _escalate(_SANITY_UNRELIABLE, "share_count_unit_anomaly")
+    if scale_diagnostics["share_count_market_cap_mismatch"]:
+        _escalate(_SANITY_UNRELIABLE, "share_count_market_cap_mismatch")
+
     if ratio_history_status == "blocked":
         _escalate(_SANITY_UNRELIABLE, "stale_ratio_history")
     elif "stale_ratio_history" in ratio_history_codes:
@@ -646,6 +805,29 @@ def _build_diagnostics(
         "latest_statement_period_end_date": ratio_history_diagnostics.get(
             "latest_statement_period_end_date"
         ),
+        "price_provider": scale_diagnostics["price_provider"],
+        "implied_market_cap_from_price_shares": scale_diagnostics[
+            "implied_market_cap_from_price_shares"
+        ],
+        "price_to_sales_implied": scale_diagnostics["price_to_sales_implied"],
+        "price_to_book_implied": scale_diagnostics["price_to_book_implied"],
+        "price_to_earnings_implied": scale_diagnostics["price_to_earnings_implied"],
+        "market_cap_to_fcf": scale_diagnostics["market_cap_to_fcf"],
+        "dcf_price_ratio": scale_diagnostics["dcf_price_ratio"],
+        "market_cap_share_mismatch_ratio": scale_diagnostics[
+            "market_cap_share_mismatch_ratio"
+        ],
+        "price_row_share_mismatch_ratio": scale_diagnostics[
+            "price_row_share_mismatch_ratio"
+        ],
+        "price_scale_anomaly": scale_diagnostics["price_scale_anomaly"],
+        "price_provider_scale_mismatch": scale_diagnostics[
+            "price_provider_scale_mismatch"
+        ],
+        "share_count_unit_anomaly": scale_diagnostics["share_count_unit_anomaly"],
+        "share_count_market_cap_mismatch": scale_diagnostics[
+            "share_count_market_cap_mismatch"
+        ],
     }
 
 
@@ -1052,6 +1234,8 @@ def compute_valuation_run(
         method_estimates=method_estimates,
         dcf_output=dcf_output,
         ratio_history_diagnostics=ratio_history_diagnostics,
+        current_stmt=current_stmt,
+        latest_price_row=price_rows[0] if price_rows else None,
     )
     assumptions["ratio_history"] = ratio_history_diagnostics
     assumptions["aggregation"] = {

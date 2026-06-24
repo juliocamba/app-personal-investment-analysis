@@ -794,7 +794,7 @@ Phase 12G is a completed research-credibility hardening checkpoint, not a new ph
 - Slice 5A: tracking-only signal representation cleanup;
 - Slice 5B: HOLD explanation quality.
 
-The next planned slice after credits reset is Data Quality / Readiness Gating Matrix. That slice should classify data-quality warning codes as informational, confidence-limiting, or blocking while keeping diagnostics separate from signal labels and avoiding threshold tuning or new signal categories.
+The audit-first Data Quality / Readiness Gating Matrix now classifies existing diagnostics in `export_model_audit.py` without changing gates or thresholds. A later slice can use those fields for frontend grouping or policy review if needed.
 
 ## Post-12G SEC normalization freshness fix
 
@@ -917,6 +917,16 @@ The export includes current-state raw fields plus derived audit fields such as:
 - `valuation_sanity_status`, `valuation_sanity_reason_codes`, `valuation_evidence_usable`, `valuation_display_suppressed`, `valuation_signal_influence_blocked`, `valuation_method_coverage`;
 - `stored_final_signal` and `signal_display_state` for current-state signal display semantics;
 - `dominant_signal_driver`, `hold_reason`, `valuation_used_in_signal`, `risk_override_applied`, `confidence_limiter_codes`, `strong_sell_basis`, `buy_conviction_limited`, `explanation_quality_warning`, `recommendation_language_warning`, and `probability_interpretation_note` from the reasoning contract.
+- `quality_matrix_max_severity`, `quality_matrix_blocking_domains`, `quality_matrix_confidence_limited`, `quality_matrix_codes_by_severity`, and `quality_matrix_entries` for deterministic audit classification of existing diagnostics.
+
+The audit severity matrix is implemented in `investment_app.quality_matrix` and
+classifies existing reason/warning/diagnostic codes as `informational`,
+`confidence_limited`, `blocks_valuation`, `blocks_signal`, or `blocks_both`.
+It is an export-only interpretation layer: it does not persist new database
+state, change readiness gates, tune thresholds, alter valuation/signal logic,
+add providers, or add signal labels. Context-sensitive codes such as
+`provider_limited` are resolved from the current readiness gate booleans when
+available, and otherwise remain confidence-limiting rather than hard-blocking.
 
 Suggested review checklist:
 

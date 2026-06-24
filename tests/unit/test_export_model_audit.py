@@ -209,6 +209,11 @@ _DERIVED_FIELD_ORDER = [
     "recommendation_language_warning",
     "probability_interpretation_note",
     "signal_display_state",
+    "quality_matrix_max_severity",
+    "quality_matrix_blocking_domains",
+    "quality_matrix_confidence_limited",
+    "quality_matrix_codes_by_severity",
+    "quality_matrix_entries",
     "distribution_min",
     "distribution_max",
     "distribution_span_ratio",
@@ -598,6 +603,16 @@ def test_live_build_derived_fields_surfaces_valuation_sanity_fields() -> None:
     assert derived["price_scale_anomaly"] is True
     assert derived["price_provider_scale_mismatch"] is True
     assert derived["share_count_unit_anomaly"] is False
+    assert derived["quality_matrix_max_severity"] == "confidence_limited"
+    assert derived["quality_matrix_blocking_domains"] == []
+    assert derived["quality_matrix_confidence_limited"] is True
+    assert derived["quality_matrix_codes_by_severity"] == {
+        "confidence_limited": [
+            "ratio_history_reason:stale_ratio_history",
+            "valuation_sanity_reason:sparse_scenario_count",
+            "valuation_sanity_status:high_uncertainty",
+        ]
+    }
 
 
 def test_live_build_derived_fields_extracts_signal_reasoning_metadata() -> None:
@@ -629,6 +644,62 @@ def test_live_build_derived_fields_extracts_signal_reasoning_metadata() -> None:
     assert derived["confidence_limiter_codes"] == ["freshness_ok"]
     assert derived["probability_interpretation_note"].startswith("Internal rule-based model scores")
     assert derived["signal_display_state"] == "analytical_signal"
+
+
+def test_live_build_derived_fields_adds_quality_matrix_for_unreliable_valuation() -> None:
+    row = {
+        "latest_price": 100.0,
+        "iv_p50": 1.0,
+        "iv_p90": 2.0,
+        "valuation_run_id": "val-1",
+        "valuation_current_price": 100.0,
+        "iv_p75": 1.5,
+        "uncertainty_width": 0.4,
+        "margin_of_safety_conservative": -0.99,
+        "final_signal": "hold",
+        "red_flags": ["valuation_unreliable"],
+        "scenario_count": 3,
+        "valuation_assumptions_json": {
+            "diagnostics": {
+                "valuation_sanity_status": "unreliable",
+                "valuation_sanity_reason_codes": ["price_scale_anomaly"],
+                "blockers": [],
+                "warnings": [],
+                "ratio_history_reason_codes": [],
+            }
+        },
+        "latest_statement_date": "2025-01-01",
+        "valuation_date": "2026-01-02",
+        "signal_date": "2026-01-02",
+        "fiscal_year": 2025,
+        "readiness_status": "analysis_ready",
+        "readiness_reason_codes": [],
+        "can_run_valuation": True,
+        "can_run_signal": True,
+        "top_feature_contributors": [
+            {
+                "name": "signal_reasoning_metadata",
+                "kind": "metadata",
+                "value": {
+                    "confidence_limiter_codes": ["valuation_unreliable"],
+                    "valuation_used_in_signal": False,
+                },
+            }
+        ],
+    }
+
+    derived = audit.build_derived_fields(row, export_date=date(2026, 6, 12))
+
+    assert derived["quality_matrix_max_severity"] == "blocks_valuation"
+    assert derived["quality_matrix_blocking_domains"] == ["valuation"]
+    assert derived["quality_matrix_confidence_limited"] is True
+    assert derived["quality_matrix_codes_by_severity"]["blocks_valuation"] == [
+        "valuation_sanity_reason:price_scale_anomaly",
+        "valuation_sanity_status:unreliable",
+    ]
+    assert "signal_confidence_limiter:valuation_unreliable" in derived[
+        "quality_matrix_codes_by_severity"
+    ]["confidence_limited"]
 
 
 def test_live_build_derived_fields_marks_tracking_only_suppressed_hold() -> None:

@@ -173,6 +173,8 @@ Each persisted signal also carries deterministic reasoning metadata inside its a
 
 > **Note on data-quality warnings:** The dashboard now shows a separate data-quality lane inside the expanded company panel. These warnings are diagnostic evidence only. They are not signal labels, not readiness states, and not investment advice.
 
+> **Note on the audit severity matrix:** Current-state audit exports classify existing readiness, data-quality, valuation, and signal diagnostic codes into `informational`, `confidence_limited`, `blocks_valuation`, `blocks_signal`, or `blocks_both`. This is explanatory metadata for review; it does not change readiness gates, valuation thresholds, signal thresholds, providers, signal labels, or dashboard suppression behavior.
+
 HOLD can include uncertainty-constrained valuation concern, valuation-unreliable constraint, risk-offset behavior, or data-constrained neutrality, not only a plain neutral read. If valuation warnings are visible but the valuation range is wide, the explanation text should describe the stretched valuation evidence and the reduced conviction without changing the model outcome.
 
 ### Signal calibration note
@@ -559,7 +561,7 @@ Do not put `SUPABASE_SERVICE_ROLE_KEY` into Cloudflare Pages.
 
 ## Next planned slice
 
-After the current Phase 12G checkpoint, the next planned work is the Data Quality / Readiness Gating Matrix. That slice should classify data-quality warning codes as informational, confidence-limiting, or blocking, while keeping diagnostics separate from signal labels and avoiding threshold tuning or new signal categories.
+After the current audit-first Data Quality / Readiness Gating Matrix slice, the next planned work should use the new matrix export to decide whether any frontend grouping, backfill, or gating-policy changes are justified. Threshold tuning, provider additions, and new signal categories remain out of scope unless explicitly approved.
 
 ## Phase status
 

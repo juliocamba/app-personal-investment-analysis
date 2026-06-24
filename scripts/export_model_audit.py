@@ -24,6 +24,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
 from investment_app.db.repositories import list_watchlist_active_companies
 from investment_app.db.supabase_client import get_supabase_client
+from investment_app.quality_matrix import build_quality_matrix_summary
 from investment_app.scoring.explanations import _has_valuation_concern
 from investment_app.scoring.probabilistic import (
     _STRONG_SELL_CONFIRMING_FLAGS,
@@ -315,6 +316,21 @@ def build_derived_fields(
     valuation_row = _build_valuation_row(row)
     valuation_bucket = _valuation_position_bucket(valuation_row)
     statement_age_days = _statement_age_days(row, export_date=export_date)
+    quality_matrix = build_quality_matrix_summary(
+        data_quality_warning_codes=row.get("data_quality_warning_codes"),
+        readiness_status=row.get("readiness_status"),
+        readiness_reason_codes=row.get("readiness_reason_codes"),
+        valuation_sanity_status=diagnostics.get("valuation_sanity_status"),
+        valuation_sanity_reason_codes=diagnostics.get("valuation_sanity_reason_codes"),
+        valuation_blockers=diagnostics.get("blockers"),
+        valuation_warnings=diagnostics.get("warnings"),
+        ratio_history_reason_codes=diagnostics.get("ratio_history_reason_codes"),
+        signal_confidence_limiter_codes=reasoning.get("confidence_limiter_codes"),
+        signal_red_flags=row.get("red_flags"),
+        can_run_valuation=row.get("can_run_valuation"),
+        can_run_signal=row.get("can_run_signal"),
+        limiting_domain=row.get("limiting_domain"),
+    )
 
     derived = {
         "price_to_iv_mid": price_to_iv_mid,
@@ -382,6 +398,11 @@ def build_derived_fields(
         "recommendation_language_warning": reasoning.get("recommendation_language_warning"),
         "probability_interpretation_note": reasoning.get("probability_interpretation_note"),
         "signal_display_state": _signal_display_state(row),
+        "quality_matrix_max_severity": quality_matrix["max_severity"],
+        "quality_matrix_blocking_domains": quality_matrix["blocking_domains"],
+        "quality_matrix_confidence_limited": quality_matrix["confidence_limited"],
+        "quality_matrix_codes_by_severity": quality_matrix["codes_by_severity"],
+        "quality_matrix_entries": quality_matrix["entries"],
     }
     derived.update(_distribution_stats(assumptions))
     return derived
